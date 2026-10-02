@@ -1,0 +1,253 @@
+// src/GameManager.js - Central Game Orchestrator, Loop, Rendering & State Hooks
+import { CONFIG } from './Config.js';
+import { AudioManager } from './AudioManager.js';
+import { CameraShake } from './CameraShake.js';
+import { VFXManager } from './VFXManager.js';
+import { ParallaxManager } from './ParallaxManager.js';
+import { MoleSpawner } from './MoleSpawner.js';
+import { HammerController } from './HammerController.js';
+import { InputManager } from './InputManager.js';
+
+export class GameManager {
+    constructor(canvasId) {
+        this.canvas = document.getElementById(canvasId);
+        this.ctx = this.canvas.getContext('2d');
+        this.config = { ...CONFIG };
+
+        // Game Loop Timers
+        this.lastTime = performance.now();
+        this.hitStopRemaining = 0; // Microfreeze timer
+        this.isRunning = false;
+
+        // Statistics tracking (Ready for future scoring / leaderboard system)
+        this.stats = {
+            totalHits: 0,
+            totalMisses: 0,
+            currentStreak: 0,
+            highestStreak: 0,
+            goldenHits: 0,
+            speedyHits: 0,
+            sessionTime: 0
+        };
+
+        // Loaded Assets
+        this.assets = {
+            moleSprite: null,
+            hammerSprite: null,
+            cheeseBg: null
+        };
+
+        // Subsystems
+        this.audioManager = new AudioManager(this.config);
+        this.cameraShake = new CameraShake(this.config);
+        this.vfxManager = new VFXManager(this.config);
+        this.parallaxManager = new ParallaxManager(this.config);
+        this.moleSpawner = null;
+        this.hammer = null;
+        this.inputManager = null;
+
+        this.init();
+    }
+
+    async init() {
+        this.setupCanvasResolution();
+        window.addEventListener('resize', () => this.setupCanvasResolution());
+
+        // Load visual sprites
+        await this.loadSprites();
+
+        // Initialize Spawner & Hammer
+        this.moleSpawner = new MoleSpawner(this.config, this.assets, this.audioManager, this.vfxManager);
+        this.hammer = new HammerController(this.config, this.assets, this.audioManager, this.cameraShake, this.vfxManager);
+
+        // Initialize Input Manager
+        this.inputManager = new InputManager(
+            this.canvas,
+            (x, y) => this.handlePointerMove(x, y),
+            (x, y) => this.handlePointerDown(x, y)
+        );
+
+        // Center hammer initially
+        this.hammer.setPointer(this.config.VIEWPORT_WIDTH / 2, this.config.VIEWPORT_HEIGHT / 2);
+
+        // Start Loop
+        this.isRunning = true;
+        this.lastTime = performance.now();
+        requestAnimationFrame((t) => this.gameLoop(t));
+
+        // Unlock WebAudio on first user interaction anywhere
+        const unlockAudio = () => {
+            this.audioManager.resume();
+            window.removeEventListener('pointerdown', unlockAudio);
+            window.removeEventListener('keydown', unlockAudio);
+        };
+        window.addEventListener('pointerdown', unlockAudio);
+        window.addEventListener('keydown', unlockAudio);
+    }
+
+    async loadSprites() {
+        const loadImg = (url) => new Promise((resolve) => {
+            const img = new Image();
+            img.src = url;
+            img.onload = () => resolve(img);
+            img.onerror = () => resolve(null);
+        });
+
+        // Load extracted clean assets
+        this.assets.moleSprite = await loadImg('assets/mole_clean/sprite_5.png');
+        this.assets.hammerSprite = await loadImg('assets/gavel_clean/sprite_0.png');
+    }
+
+    setupCanvasResolution() {
+        // High-DPI Retina support while maintaining fixed virtual coordinate space
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        this.canvas.width = this.config.VIEWPORT_WIDTH * dpr;
+        this.canvas.height = this.config.VIEWPORT_HEIGHT * dpr;
+        this.ctx.resetTransform?.();
+        this.ctx.scale(dpr, dpr);
+    }
+
+    handlePointerMove(x, y) {
+        if (this.hammer) {
+            this.hammer.setPointer(x, y);
+        }
+    }
+
+    handlePointerDown(x, y) {
+        if (!this.hammer) return;
+        this.audioManager.resume();
+
+        // Trigger fast hammer swing
+        this.hammer.triggerSwing(x, y, (hitX, hitY) => {
+            this.processHit(hitX, hitY);
+        });
+    }
+
+    processHit(hitX, hitY) {
+        // Check if any mole was hit
+        const result = this.moleSpawner.checkHit(hitX, hitY);
+
+        if (result.hit) {
+            // Stats update
+            this.stats.totalHits++;
+            this.stats.currentStreak++;
+            if (this.stats.currentStreak > this.stats.highestStreak) {
+                this.stats.highestStreak = this.stats.currentStreak;
+            }
+            if (result.mole.type === 'golden') this.stats.goldenHits++;
+            if (result.mole.type === 'speedy') this.stats.speedyHits++;
+
+            // Hit Stop Crunch (microfreeze for 35ms)
+            this.hitStopRemaining = this.config.HIT_STOP_MS / 1000;
+
+            // Audio & Camera Shake
+            this.audioManager.playHammerHit(result.isSpecial);
+            this.cameraShake.addTrauma(result.isSpecial ? 0.85 : 0.58, 0, 1);
+
+            // VFX Explosion
+            this.vfxManager.spawnHitVFX(result.x, result.y, result.depthScale, result.isSpecial);
+            
+            // Dispatch custom event for external hooks (score / streak hooks)
+            window.dispatchEvent(new CustomEvent('molehit', { detail: { ...result, stats: this.stats } }));
+        } else {
+            // Missed ground hit
+            this.stats.totalMisses++;
+            this.stats.currentStreak = 0;
+            this.cameraShake.addTrauma(0.18, 0, 1);
+            window.dispatchEvent(new CustomEvent('molemiss', { detail: { x: hitX, y: hitY, stats: this.stats } }));
+        }
+    }
+
+    gameLoop(now) {
+        if (!this.isRunning) return;
+
+        // Delta time calculation with 0.1s cap
+        const rawDt = (now - this.lastTime) / 1000;
+        const dt = Math.min(rawDt, 0.1);
+        this.lastTime = now;
+
+        this.stats.sessionTime += dt;
+
+        // Process Hit-Stop (brief game pause for impact crunch)
+        if (this.hitStopRemaining > 0) {
+            this.hitStopRemaining -= dt;
+            // Still update camera shake during hitstop for crunch feel
+            this.cameraShake.update(dt);
+            this.render();
+            requestAnimationFrame((t) => this.gameLoop(t));
+            return;
+        }
+
+        // 1. Update Subsystems
+        this.cameraShake.update(dt);
+        this.parallaxManager.update(dt);
+        this.moleSpawner.update(dt, this.parallaxManager.scrollY_Ground);
+        this.hammer.update(dt);
+        this.vfxManager.update(dt);
+
+        // 2. Render Scene
+        this.render();
+
+        requestAnimationFrame((t) => this.gameLoop(t));
+    }
+
+    render() {
+        const ctx = this.ctx;
+        const w = this.config.VIEWPORT_WIDTH;
+        const h = this.config.VIEWPORT_HEIGHT;
+        const theme = this.parallaxManager.theme;
+
+        ctx.clearRect(0, 0, w, h);
+
+        // --- CAMERA SHAKE CONTAINER BEGIN ---
+        ctx.save();
+        this.cameraShake.apply(ctx);
+
+        // 1. Sky & Distant Mountains
+        this.parallaxManager.drawSkyLayer(ctx);
+
+        // 2. Midground Rolling Hills & Trees
+        this.parallaxManager.drawMidgroundLayer(ctx);
+
+        // 3. 2.5D Ground Plane
+        this.parallaxManager.drawGroundPlane(ctx);
+
+        // 4. Ground VFX (expanding shockwaves)
+        this.vfxManager.drawGroundLayer(ctx);
+
+        // 5. Holes and Moles (sorted in depth order back-to-front)
+        this.moleSpawner.draw(ctx, theme);
+
+        // 6. Top VFX (impact flashes, sparks, dirt chunks, comic pop text)
+        this.vfxManager.drawTopLayer(ctx);
+
+        // 7. Player Hammer Mallet & Motion Trails
+        this.hammer.draw(ctx);
+
+        // --- CAMERA SHAKE CONTAINER END ---
+        ctx.restore();
+
+        // 8. Foreground drifting spores / ambient particles
+        this.vfxManager.drawAmbientForeground(ctx);
+
+        // 9. Foreground Corner Grass & Leaves
+        this.parallaxManager.drawForegroundLayer(ctx);
+    }
+
+    // Public API controls
+    setTheme(themeName) {
+        this.parallaxManager.setTheme(themeName);
+    }
+
+    toggleAudio() {
+        const next = !this.audioManager.isMuted;
+        this.audioManager.setMuted(next);
+        return !next;
+    }
+
+    toggleMusic() {
+        const next = !this.audioManager.isMusicMuted;
+        this.audioManager.setMusicMuted(next);
+        return !next;
+    }
+}
