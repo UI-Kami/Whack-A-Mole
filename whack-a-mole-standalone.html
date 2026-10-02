@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -3049,7 +3049,7 @@ class GameManager {
             const totalSec = Math.floor(s.sessionTime);
             const mins = String(Math.floor(totalSec / 60)).padStart(2, '0');
             const secs = String(totalSec % 60).padStart(2, '0');
-            document.getElementById('stat-time').textContent = ${mins}:;
+            document.getElementById('stat-time').textContent = `${mins}:${secs}`;
         }
 
         btnStats.addEventListener('click', () => {
