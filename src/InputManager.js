@@ -12,12 +12,18 @@ export class InputManager {
         this.pointerX = this.viewportWidth / 2;
         this.pointerY = this.viewportHeight / 2;
         this.isDown = false;
+        this.lastPointerDownTime = 0;
 
         this.init();
     }
 
+    updateDimensions(vw, vh) {
+        this.viewportWidth = vw;
+        this.viewportHeight = vh;
+    }
+
     init() {
-        // Prevent default gesture zooms, callout menus, and context menus
+        // Prevent default context menus
         this.canvas.addEventListener('contextmenu', e => e.preventDefault());
         this.canvas.style.touchAction = 'none';
 
@@ -27,60 +33,72 @@ export class InputManager {
         this.canvas.addEventListener('pointerup', e => this.handlePointerUp(e));
         this.canvas.addEventListener('pointercancel', e => this.handlePointerUp(e));
 
-        // Prevent iOS Safari and mobile Chrome gesture zooming/pull-to-refresh
+        // Touch fallback for maximum mobile cross-browser compatibility
         this.canvas.addEventListener('touchstart', e => {
-            if (e.cancelable) e.preventDefault();
-        }, { passive: false });
+            // Deduplicate if pointerdown already processed this interaction
+            if (Date.now() - this.lastPointerDownTime < 250) return;
+            if (e.changedTouches && e.changedTouches.length > 0) {
+                for (let i = 0; i < e.changedTouches.length; i++) {
+                    const t = e.changedTouches[i];
+                    const coords = this.getCanvasCoordinates(t);
+                    coords.isTouch = true;
+                    this.pointerX = coords.x;
+                    this.pointerY = coords.y;
+                    this.isDown = true;
+                    if (this.onPointerDown) {
+                        this.onPointerDown(coords.x, coords.y, true);
+                    }
+                }
+            }
+        }, { passive: true });
+
         this.canvas.addEventListener('touchmove', e => {
-            if (e.cancelable) e.preventDefault();
-        }, { passive: false });
+            if (e.changedTouches && e.changedTouches.length > 0) {
+                const t = e.changedTouches[0];
+                const coords = this.getCanvasCoordinates(t);
+                this.pointerX = coords.x;
+                this.pointerY = coords.y;
+                if (this.onPointerMove) {
+                    this.onPointerMove(coords.x, coords.y, true);
+                }
+            }
+        }, { passive: true });
+
+        this.canvas.addEventListener('touchend', () => {
+            this.isDown = false;
+        }, { passive: true });
     }
 
-    // Convert client coordinates to virtual canvas coordinate system with exact letterboxing/scaling compensation
+    // Convert screen coordinates to virtual canvas coordinate system with high precision
     getCanvasCoordinates(e) {
         const rect = this.canvas.getBoundingClientRect();
         if (!rect.width || !rect.height) {
             return { x: this.viewportWidth / 2, y: this.viewportHeight / 2, isTouch: false };
         }
 
-        const virtualW = this.viewportWidth;
-        const virtualH = this.viewportHeight;
-        const virtualAspect = virtualW / virtualH;
-        const elemAspect = rect.width / rect.height;
-
-        let renderedWidth = rect.width;
-        let renderedHeight = rect.height;
-        let offsetX = 0;
-        let offsetY = 0;
-
-        if (elemAspect > virtualAspect) {
-            // Pillarbox (bars on left/right)
-            renderedWidth = rect.height * virtualAspect;
-            offsetX = (rect.width - renderedWidth) / 2;
-        } else {
-            // Letterbox (bars on top/bottom)
-            renderedHeight = rect.width / virtualAspect;
-            offsetY = (rect.height - renderedHeight) / 2;
-        }
-
         let clientX = e.clientX;
         let clientY = e.clientY;
         const isTouch = e.pointerType === 'touch' || e.pointerType === 'pen' || (e.touches && e.touches.length > 0);
 
-        if (clientX === undefined && e.touches && e.touches.length > 0) {
-            clientX = e.touches[0].clientX;
-            clientY = e.touches[0].clientY;
-        } else if (clientX === undefined && e.changedTouches && e.changedTouches.length > 0) {
-            clientX = e.changedTouches[0].clientX;
-            clientY = e.changedTouches[0].clientY;
+        if (clientX === undefined) {
+            if (e.touches && e.touches.length > 0) {
+                clientX = e.touches[0].clientX;
+                clientY = e.touches[0].clientY;
+            } else if (e.changedTouches && e.changedTouches.length > 0) {
+                clientX = e.changedTouches[0].clientX;
+                clientY = e.changedTouches[0].clientY;
+            }
         }
 
-        const relX = clientX - rect.left - offsetX;
-        const relY = clientY - rect.top - offsetY;
+        const virtualW = this.viewportWidth;
+        const virtualH = this.viewportHeight;
 
-        // Map directly into virtual game coordinates and clamp to world bounds
-        const x = Math.max(0, Math.min(virtualW, (relX / renderedWidth) * virtualW));
-        const y = Math.max(0, Math.min(virtualH, (relY / renderedHeight) * virtualH));
+        // Map directly into virtual canvas game coordinates and clamp safely
+        const normX = Math.max(0, Math.min(1.0, (clientX - rect.left) / rect.width));
+        const normY = Math.max(0, Math.min(1.0, (clientY - rect.top) / rect.height));
+
+        const x = normX * virtualW;
+        const y = normY * virtualH;
 
         return { x, y, isTouch };
     }
@@ -98,6 +116,7 @@ export class InputManager {
     handlePointerDown(e) {
         // Only primary mouse button or touch
         if (e.button !== undefined && e.button !== 0) return;
+        this.lastPointerDownTime = Date.now();
 
         const { x, y, isTouch } = this.getCanvasCoordinates(e);
         this.pointerX = x;

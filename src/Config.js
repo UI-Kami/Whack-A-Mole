@@ -3,6 +3,7 @@ export const CONFIG = {
     // Canvas & World
     VIEWPORT_WIDTH: 1200,
     VIEWPORT_HEIGHT: 800,
+    IS_PORTRAIT: false,
     PERSPECTIVE_HORIZON_Y: 180, // Y where the 3D ground plane starts
     PERSPECTIVE_MIN_SCALE: 0.72, // Scale of objects near horizon
     PERSPECTIVE_MAX_SCALE: 1.18, // Scale of objects near bottom of screen

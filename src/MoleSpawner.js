@@ -127,8 +127,16 @@ export class MoleSpawner {
         this.gameTime = 0;
 
         // Grid calculation
-        this.cols = config.HOLE_COLUMNS; // 4 columns
-        this.rows = config.HOLE_ROWS;    // 5 rows
+        this.cols = config.HOLE_COLUMNS; // 4 columns (or 3 in portrait)
+        this.rows = config.HOLE_ROWS;    // 5 rows (or 6 in portrait)
+        this.initHoles();
+    }
+
+    rebuildGrid(config) {
+        this.config = config;
+        this.cols = config.HOLE_COLUMNS;
+        this.rows = config.HOLE_ROWS;
+        this.holes = [];
         this.initHoles();
     }
 
@@ -146,7 +154,7 @@ export class MoleSpawner {
                 const hole = new Hole(c, r, this.config, this.assets);
                 
                 // Stagger columns slightly for natural staggered arcade layout
-                const stagger = (r % 2 === 1) ? colWidth * 0.3 : -colWidth * 0.2;
+                const stagger = (r % 2 === 1) ? colWidth * 0.25 : -colWidth * 0.2;
                 hole.gridX = colWidth * (c + 1) + stagger;
                 hole.gridY = r * rowHeight;
 
@@ -180,9 +188,9 @@ export class MoleSpawner {
             hole.screenY = perspectiveY;
 
             // Perspective X spread: wider near bottom, narrower near horizon
-            const depthFactor = (perspectiveY - horizon) / (h - horizon);
+            const depthFactor = Math.max(0, Math.min(1.0, (perspectiveY - horizon) / (h - horizon)));
             const centerX = w * 0.5;
-            const spreadFactor = 0.55 + depthFactor * 0.65;
+            const spreadFactor = this.config.IS_PORTRAIT ? (0.68 + depthFactor * 0.45) : (0.55 + depthFactor * 0.65);
             hole.screenX = centerX + (hole.gridX - centerX) * spreadFactor;
 
             // Depth Scale

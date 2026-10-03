@@ -18,8 +18,8 @@ export class HammerController {
         // Pointer target and current hammer positions
         this.targetX = config.VIEWPORT_WIDTH / 2;
         this.targetY = config.VIEWPORT_HEIGHT / 2;
-        this.x = this.targetX;
-        this.y = this.targetY;
+        this.x = this.targetX + 65;
+        this.y = this.targetY + 45;
 
         // Swing state
         this.state = HAMMER_STATE.IDLE;
@@ -27,14 +27,14 @@ export class HammerController {
         this.swingProgress = 0; // 0 to 1
 
         // Transform properties
-        this.angle = this.config.HAMMER_IDLE_ANGLE; // in degrees
+        this.angle = this.config.HAMMER_IDLE_ANGLE || 0; // in degrees
         this.scaleX = 1;
         this.scaleY = 1;
         this.squashFactor = 1;
 
         // Swing target coordinate (where the click occurred)
-        this.hitTargetX = 0;
-        this.hitTargetY = 0;
+        this.hitTargetX = this.targetX;
+        this.hitTargetY = this.targetY;
         this.hitCallback = null;
 
         // Motion Trail buffer
@@ -48,7 +48,7 @@ export class HammerController {
     }
 
     triggerSwing(hitX, hitY, hitCallback, isTouch = false) {
-        // If an ongoing swing had an unfulfilled hit, complete it right away so rapid taps don't get lost
+        // If an ongoing swing had an unfulfilled hit, complete it right away so rapid multi-taps don't drop
         if ((this.state === HAMMER_STATE.SWING || this.state === HAMMER_STATE.ANTICIPATION) && this.hitCallback) {
             const pendingCb = this.hitCallback;
             const px = this.hitTargetX;
@@ -63,35 +63,45 @@ export class HammerController {
         this.hitTargetY = hitY;
         this.hitCallback = hitCallback;
 
-        // Position hammer directly above tapped location so the strike is instantaneous and accurate
-        const impactGripX = hitX + 88;
-        const impactGripY = hitY - 42;
-        const dist = Math.hypot(this.x - impactGripX, this.y - impactGripY);
+        // Exact impact grip position so head (-75, -75) lands precisely on hitTarget
+        const impactGripX = hitX + 98;
+        const impactGripY = hitY - 41;
 
-        if (dist > 90 || isTouch) {
-            this.x = hitX + 60;
-            this.y = hitY - 35;
+        if (isTouch) {
+            // Immediate snap to strike position on mobile touch
+            this.x = impactGripX + 15;
+            this.y = impactGripY - 25;
+            this.angle = 20;
+            this.state = HAMMER_STATE.ANTICIPATION;
+            this.phaseTimer = 0.02; // Ultra snappy 20ms anticipation on touch
+        } else {
+            const dist = Math.hypot(this.x - impactGripX, this.y - impactGripY);
+            if (dist > 180) {
+                this.x = hitX + 70;
+                this.y = hitY - 20;
+            }
+            this.state = HAMMER_STATE.ANTICIPATION;
+            this.phaseTimer = (this.config.HAMMER_ANTICIPATION_MS || 40) / 1000;
         }
 
-        // Start anticipation phase (snappier on touch for arcade feel)
-        const anticMs = isTouch ? 25 : this.config.HAMMER_ANTICIPATION_MS;
-        this.state = HAMMER_STATE.ANTICIPATION;
-        this.phaseTimer = anticMs / 1000;
         this.audioManager.playHammerSwing();
     }
 
     update(dt) {
-        this.idleBob += dt * 3;
+        this.idleBob += dt * 3.5;
 
-        // Determine handle grip target based on state
-        let desiredGripX = this.targetX + 60;
-        let desiredGripY = this.targetY + 25;
+        // Target grip offsets
+        const impactGripX = this.hitTargetX + 98;
+        const impactGripY = this.hitTargetY - 41;
 
-        // 2. Swing State Machine
+        let desiredGripX = this.targetX + 65;
+        let desiredGripY = this.targetY + 45;
+
+        // Swing State Machine
         switch (this.state) {
             case HAMMER_STATE.IDLE:
                 // Gentle floating breath
-                this.angle = this.config.HAMMER_IDLE_ANGLE + Math.sin(this.idleBob) * 2.5;
+                this.angle = (this.config.HAMMER_IDLE_ANGLE || 0) + Math.sin(this.idleBob) * 2.5;
                 this.scaleX = 1;
                 this.scaleY = 1;
                 this.trailPoints = [];
@@ -99,39 +109,37 @@ export class HammerController {
 
             case HAMMER_STATE.ANTICIPATION:
                 this.phaseTimer -= dt;
-                const anticTotal = this.config.HAMMER_ANTICIPATION_MS / 1000;
+                const anticTotal = 0.04;
                 const anticProg = 1 - Math.max(0, this.phaseTimer / anticTotal);
                 
                 // Lift / cock back & up for momentum
-                this.angle = this.config.HAMMER_IDLE_ANGLE + 
-                    (this.config.HAMMER_ANTICIPATION_ANGLE - this.config.HAMMER_IDLE_ANGLE) * anticProg;
+                this.angle = (this.config.HAMMER_IDLE_ANGLE || 0) + 
+                    ((this.config.HAMMER_ANTICIPATION_ANGLE || 26) - (this.config.HAMMER_IDLE_ANGLE || 0)) * anticProg;
 
-                desiredGripX = this.targetX + 60 + anticProg * 10;
-                desiredGripY = this.targetY + 25 - anticProg * 15;
+                desiredGripX = impactGripX + 15 + anticProg * 10;
+                desiredGripY = impactGripY - 25 - anticProg * 15;
 
                 if (this.phaseTimer <= 0) {
                     this.state = HAMMER_STATE.SWING;
-                    this.phaseTimer = this.config.HAMMER_SWING_MS / 1000;
+                    this.phaseTimer = (this.config.HAMMER_SWING_MS || 50) / 1000;
                 }
                 break;
 
             case HAMMER_STATE.SWING:
                 this.phaseTimer -= dt;
-                const swingTotal = this.config.HAMMER_SWING_MS / 1000;
+                const swingTotal = (this.config.HAMMER_SWING_MS || 50) / 1000;
                 const rawProg = 1 - Math.max(0, this.phaseTimer / swingTotal);
                 
-                // Explosive accelerating ease-in: downward swing arc
+                // Explosive accelerating ease-in downward smash
                 const easeInQuad = rawProg * rawProg;
-                this.angle = this.config.HAMMER_ANTICIPATION_ANGLE + 
-                    (this.config.HAMMER_IMPACT_ANGLE - this.config.HAMMER_ANTICIPATION_ANGLE) * easeInQuad;
+                const impactAngle = this.config.HAMMER_IMPACT_ANGLE || -68;
+                const anticAngle = this.config.HAMMER_ANTICIPATION_ANGLE || 26;
 
-                // Move grip so head lands directly on hitTarget
-                const impactGripX = this.hitTargetX + 88;
-                const impactGripY = this.hitTargetY - 42;
-                desiredGripX = (this.targetX + 70) + (impactGripX - (this.targetX + 70)) * easeInQuad;
-                desiredGripY = (this.targetY + 10) + (impactGripY - (this.targetY + 10)) * easeInQuad;
+                this.angle = anticAngle + (impactAngle - anticAngle) * easeInQuad;
 
-                // Record motion trail arc
+                desiredGripX = (impactGripX + 20) + (impactGripX - (impactGripX + 20)) * easeInQuad;
+                desiredGripY = (impactGripY - 35) + (impactGripY - (impactGripY - 35)) * easeInQuad;
+
                 this.recordTrailPoint();
 
                 if (this.phaseTimer <= 0) {
@@ -145,39 +153,38 @@ export class HammerController {
 
             case HAMMER_STATE.IMPACT:
                 this.phaseTimer -= dt;
-                this.angle = this.config.HAMMER_IMPACT_ANGLE;
+                this.angle = this.config.HAMMER_IMPACT_ANGLE || -68;
                 
                 // Squash mallet head against the ground
-                this.scaleX = 1.3;
-                this.scaleY = 0.72;
+                this.scaleX = 1.25;
+                this.scaleY = 0.76;
 
-                desiredGripX = this.hitTargetX + 88;
-                desiredGripY = this.hitTargetY - 42;
+                desiredGripX = impactGripX;
+                desiredGripY = impactGripY;
 
                 if (this.phaseTimer <= 0) {
                     this.state = HAMMER_STATE.RECOVERY;
-                    this.phaseTimer = this.config.HAMMER_RECOVERY_MS / 1000;
+                    this.phaseTimer = (this.config.HAMMER_RECOVERY_MS || 120) / 1000;
                 }
                 break;
 
             case HAMMER_STATE.RECOVERY:
                 this.phaseTimer -= dt;
-                const recovTotal = this.config.HAMMER_RECOVERY_MS / 1000;
+                const recovTotal = (this.config.HAMMER_RECOVERY_MS || 120) / 1000;
                 const recovProg = 1 - Math.max(0, this.phaseTimer / recovTotal);
                 
                 // Spring recovery back up to idle
                 const easeOutElastic = Math.sin(recovProg * Math.PI * 0.5);
-                this.angle = this.config.HAMMER_IMPACT_ANGLE + 
-                    (this.config.HAMMER_IDLE_ANGLE - this.config.HAMMER_IMPACT_ANGLE) * easeOutElastic;
-                
-                this.scaleX = 0.72 + 0.28 * easeOutElastic;
-                this.scaleY = 1.3 - 0.3 * easeOutElastic;
+                const startAngle = this.config.HAMMER_IMPACT_ANGLE || -68;
+                const endAngle = this.config.HAMMER_IDLE_ANGLE || 0;
 
-                // Interpolate grip back to resting cursor follow position
-                const startGripX = this.hitTargetX + 88;
-                const startGripY = this.hitTargetY - 42;
-                desiredGripX = startGripX + (this.targetX + 60 - startGripX) * easeOutElastic;
-                desiredGripY = startGripY + (this.targetY + 25 - startGripY) * easeOutElastic;
+                this.angle = startAngle + (endAngle - startAngle) * easeOutElastic;
+                
+                this.scaleX = 0.76 + 0.24 * easeOutElastic;
+                this.scaleY = 1.25 - 0.25 * easeOutElastic;
+
+                desiredGripX = impactGripX + (this.targetX + 65 - impactGripX) * easeOutElastic;
+                desiredGripY = impactGripY + (this.targetY + 45 - impactGripY) * easeOutElastic;
 
                 this.decayTrail(dt);
 
@@ -188,7 +195,7 @@ export class HammerController {
         }
 
         // Apply fast spring/lerp to desired grip position
-        const lerpFactor = Math.min(1.0, dt * 30);
+        const lerpFactor = Math.min(1.0, dt * 35);
         this.x += (desiredGripX - this.x) * lerpFactor;
         this.y += (desiredGripY - this.y) * lerpFactor;
     }
@@ -196,25 +203,26 @@ export class HammerController {
     onImpact() {
         if (this.hitCallback) {
             this.hitCallback(this.hitTargetX, this.hitTargetY);
+            this.hitCallback = null;
         }
         this.cameraShake.addTrauma(0.24, 0, 1);
     }
 
     recordTrailPoint() {
         const rad = (this.angle * Math.PI) / 180;
-        // Head coordinate relative to grip: approx (-85, -75)
-        const hx = this.x + Math.cos(rad) * (-85) - Math.sin(rad) * (-75);
-        const hy = this.y + Math.sin(rad) * (-85) + Math.cos(rad) * (-75);
+        // Head coordinate relative to grip: approx (-75, -75)
+        const hx = this.x + Math.cos(rad) * (-75) - Math.sin(rad) * (-75);
+        const hy = this.y + Math.sin(rad) * (-75) + Math.cos(rad) * (-75);
 
         this.trailPoints.push({ x: hx, y: hy, alpha: 0.75 });
-        if (this.trailPoints.length > 9) {
+        if (this.trailPoints.length > 8) {
             this.trailPoints.shift();
         }
     }
 
     decayTrail(dt) {
         for (let i = this.trailPoints.length - 1; i >= 0; i--) {
-            this.trailPoints[i].alpha -= dt * 4.5;
+            this.trailPoints[i].alpha -= dt * 5.0;
             if (this.trailPoints[i].alpha <= 0) {
                 this.trailPoints.splice(i, 1);
             }
@@ -225,20 +233,24 @@ export class HammerController {
         // 1. Draw motion blur arc swoosh
         this.drawMotionTrail(ctx);
 
-        // 2. Draw hammer
+        // 2. Realistic ground drop shadow beneath mallet head
+        const rad = (this.angle * Math.PI) / 180;
+        const headX = this.x + Math.cos(rad) * (-75) - Math.sin(rad) * (-75);
+        const headY = this.y + Math.sin(rad) * (-75) + Math.cos(rad) * (-75);
+
+        ctx.save();
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
+        ctx.beginPath();
+        const shadowScale = (this.state === HAMMER_STATE.IMPACT) ? 1.25 : 0.95;
+        ctx.ellipse(headX, headY + 16, 36 * shadowScale, 14 * shadowScale, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        // 3. Draw hammer
         ctx.save();
         ctx.translate(this.x, this.y);
         ctx.rotate((this.angle * Math.PI) / 180);
         ctx.scale(this.scaleX, this.scaleY);
-
-        // Drop shadow beneath hammer
-        ctx.save();
-        ctx.globalAlpha = 0.22;
-        ctx.fillStyle = '#000000';
-        ctx.beginPath();
-        ctx.ellipse(-40, 20, 42, 16, 0.15, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
 
         const sprite = this.assets.hammerSprite;
 
@@ -301,20 +313,16 @@ export class HammerController {
         ctx.fillStyle = headGrad;
         ctx.strokeStyle = '#0d47a1';
         ctx.lineWidth = 3;
+
         ctx.beginPath();
-        ctx.roundRect(75, -26, 36, 52, 8);
+        ctx.roundRect(75, -28, 40, 56, 10);
         ctx.fill();
         ctx.stroke();
 
-        // Red central accent ring
-        ctx.fillStyle = '#e53935';
-        ctx.fillRect(86, -26, 14, 52);
-
-        // Sheen highlight
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
-        ctx.beginPath();
-        ctx.roundRect(80, -22, 6, 44, 3);
-        ctx.fill();
+        // Striking face cushions (yellow rubber bumpers)
+        ctx.fillStyle = '#ffca28';
+        ctx.fillRect(75, -28, 6, 56);
+        ctx.fillRect(109, -28, 6, 56);
 
         ctx.restore();
     }

@@ -32,7 +32,8 @@ html, body {
 
 /* App Viewport Container */
 #game-container {
-    position: relative;
+    position: fixed;
+    inset: 0;
     width: 100vw;
     height: 100vh;
     height: 100dvh;
@@ -42,21 +43,19 @@ html, body {
     align-items: center;
     overflow: hidden;
     touch-action: none;
-    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    background: radial-gradient(circle at center, #1e293b 0%, #090d16 100%);
+    padding: 0;
 }
 
-/* Game Canvas */
+/* Game Canvas - Edge-to-edge Fullscreen */
 #game-canvas {
     display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
     width: 100%;
-    height: auto;
-    max-width: 1400px;
-    max-height: 100%;
-    aspect-ratio: 1200 / 800;
-    object-fit: contain;
+    height: 100%;
     cursor: crosshair;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), 0 0 100px rgba(0, 0, 0, 0.3);
-    border-radius: 12px;
     touch-action: none;
     -webkit-touch-callout: none;
 }
@@ -265,33 +264,37 @@ html, body {
 /* Responsive adjustments */
 @media (max-width: 768px) {
     .arcade-hud {
-        top: max(8px, env(safe-area-inset-top));
-        padding: 5px 10px;
+        top: max(10px, env(safe-area-inset-top));
+        padding: 6px 12px;
         gap: 6px;
-        max-width: calc(100vw - 16px);
+        max-width: calc(100vw - 20px);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
     }
     .brand-badge {
         display: none;
     }
     .hud-btn {
-        padding: 6px 9px;
+        padding: 6px 10px;
         font-size: 11px;
         gap: 4px;
+        min-height: 34px;
     }
     .bottom-tip {
-        bottom: max(10px, env(safe-area-inset-bottom));
+        bottom: max(12px, env(safe-area-inset-bottom));
         padding: 4px 12px;
         font-size: 11px;
+        background: rgba(15, 23, 42, 0.7);
     }
 }
 
 @media (max-width: 480px) {
     .arcade-hud {
-        padding: 4px 6px;
+        top: max(8px, env(safe-area-inset-top));
+        padding: 4px 8px;
         gap: 4px;
     }
     .hud-btn {
-        padding: 5px 7px;
-        font-size: 10px;
+        padding: 5px 8px;
+        font-size: 10.5px;
     }
 }

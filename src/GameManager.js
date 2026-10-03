@@ -107,12 +107,56 @@ export class GameManager {
     }
 
     setupCanvasResolution() {
-        // High-DPI Retina support while maintaining fixed virtual coordinate space
+        const container = this.canvas.parentElement || document.body;
+        const rect = container.getBoundingClientRect();
+        const screenW = rect.width || window.innerWidth || 1200;
+        const screenH = rect.height || window.innerHeight || 800;
+        const isPortrait = screenH > screenW;
+
+        if (isPortrait) {
+            // Mobile Portrait mode: width 720, height dynamically scales to exact phone screen aspect ratio
+            const baseW = 720;
+            const aspect = screenH / screenW;
+            this.config.VIEWPORT_WIDTH = baseW;
+            this.config.VIEWPORT_HEIGHT = Math.round(baseW * aspect);
+            this.config.IS_PORTRAIT = true;
+            this.config.PERSPECTIVE_HORIZON_Y = Math.round(this.config.VIEWPORT_HEIGHT * 0.22);
+            this.config.HOLE_COLUMNS = 3;
+            this.config.HOLE_ROWS = 6;
+            this.config.HOLE_BASE_RADIUS_X = 66;
+            this.config.HOLE_BASE_RADIUS_Y = 36;
+            this.config.HOLE_VERTICAL_SPACING = Math.round((this.config.VIEWPORT_HEIGHT - this.config.PERSPECTIVE_HORIZON_Y) / 5.4);
+        } else {
+            // Landscape mode (Desktop or rotated tablet/mobile)
+            const baseH = 800;
+            const aspect = screenW / screenH;
+            this.config.VIEWPORT_HEIGHT = baseH;
+            this.config.VIEWPORT_WIDTH = Math.max(1200, Math.round(baseH * aspect));
+            this.config.IS_PORTRAIT = false;
+            this.config.PERSPECTIVE_HORIZON_Y = 180;
+            this.config.HOLE_COLUMNS = 4;
+            this.config.HOLE_ROWS = 5;
+            this.config.HOLE_BASE_RADIUS_X = 62;
+            this.config.HOLE_BASE_RADIUS_Y = 34;
+            this.config.HOLE_VERTICAL_SPACING = 155;
+        }
+
+        // High-DPI Retina support while maintaining virtual coordinate space
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
-        this.canvas.width = this.config.VIEWPORT_WIDTH * dpr;
-        this.canvas.height = this.config.VIEWPORT_HEIGHT * dpr;
+        this.canvas.width = Math.round(this.config.VIEWPORT_WIDTH * dpr);
+        this.canvas.height = Math.round(this.config.VIEWPORT_HEIGHT * dpr);
         this.ctx.resetTransform?.();
         this.ctx.scale(dpr, dpr);
+
+        if (this.moleSpawner) {
+            this.moleSpawner.rebuildGrid(this.config);
+        }
+        if (this.parallaxManager) {
+            this.parallaxManager.resize(this.config);
+        }
+        if (this.inputManager) {
+            this.inputManager.updateDimensions(this.config.VIEWPORT_WIDTH, this.config.VIEWPORT_HEIGHT);
+        }
     }
 
     handlePointerMove(x, y, isTouch = false) {

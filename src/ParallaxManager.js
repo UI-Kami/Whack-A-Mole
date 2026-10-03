@@ -35,6 +35,19 @@ export class ParallaxManager {
         this.theme = theme;
     }
 
+    resize(config) {
+        this.config = config;
+        const w = this.config.VIEWPORT_WIDTH;
+        const h = this.config.VIEWPORT_HEIGHT;
+        for (let i = 0; i < this.clouds.length; i++) {
+            if (this.clouds[i].x > w) this.clouds[i].x = Math.random() * w;
+        }
+        for (let i = 0; i < this.floatingLeaves.length; i++) {
+            if (this.floatingLeaves[i].x > w) this.floatingLeaves[i].x = Math.random() * w;
+            if (this.floatingLeaves[i].y > h) this.floatingLeaves[i].y = Math.random() * h;
+        }
+    }
+
     initClouds() {
         const w = this.config.VIEWPORT_WIDTH;
         for (let i = 0; i < 7; i++) {
