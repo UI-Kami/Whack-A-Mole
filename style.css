@@ -103,6 +103,31 @@ html, body {
     font-size: 18px;
 }
 
+.hud-icon {
+    display: inline-block;
+    vertical-align: middle;
+    fill: currentColor;
+    flex-shrink: 0;
+}
+
+.brand-badge .hud-icon {
+    width: 18px;
+    height: 18px;
+    fill: #fde047;
+}
+
+.hud-btn .hud-icon {
+    width: 15px;
+    height: 15px;
+    fill: currentColor;
+}
+
+.bottom-tip .hud-icon {
+    width: 14px;
+    height: 14px;
+    fill: #f59e0b;
+}
+
 .hud-btn {
     background: rgba(255, 255, 255, 0.08);
     border: 1px solid rgba(255, 255, 255, 0.1);

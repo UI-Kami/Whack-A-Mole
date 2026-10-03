@@ -111,6 +111,31 @@ html, body {
     font-size: 18px;
 }
 
+.hud-icon {
+    display: inline-block;
+    vertical-align: middle;
+    fill: currentColor;
+    flex-shrink: 0;
+}
+
+.brand-badge .hud-icon {
+    width: 18px;
+    height: 18px;
+    fill: #fde047;
+}
+
+.hud-btn .hud-icon {
+    width: 15px;
+    height: 15px;
+    fill: currentColor;
+}
+
+.bottom-tip .hud-icon {
+    width: 14px;
+    height: 14px;
+    fill: #f59e0b;
+}
+
 .hud-btn {
     background: rgba(255, 255, 255, 0.08);
     border: 1px solid rgba(255, 255, 255, 0.1);
@@ -310,36 +335,53 @@ html, body {
     </style>
 </head>
 <body>
-    <div id="game-container">
+<div id="game-container">
         <!-- Floating Glassmorphism Arcade HUD -->
         <header class="arcade-hud" role="toolbar" aria-label="Game Controls">
             <div class="brand-badge">
-                <span>ðŸ”¨</span> WHACK-A-MOLE 2.5D
+                <svg class="hud-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                    <path d="M19.7 7.3l-2.4-2.4c-.4-.4-1-.4-1.4 0l-1.9 1.9 3.8 3.8 1.9-1.9c.4-.4.4-1 0-1.4zM4.3 18.3l8.8-8.8 1.4 1.4-8.8 8.8c-.4.4-1 .4-1.4 0l-.01-.01c-.39-.39-.39-1.02.01-1.39zM14 6l4 4-1 1-4-4 1-1z"/>
+                </svg>
+                WHACK-A-MOLE 2.5D
             </div>
 
             <!-- SFX Button -->
             <button id="btn-sfx" class="hud-btn active" title="Toggle Sound Effects" aria-label="Toggle Sound Effects">
-                <span id="icon-sfx">ðŸ”Š</span> SFX
+                <svg id="svg-sfx" class="hud-icon" viewBox="0 0 24 24" width="15" height="15" fill="currentColor">
+                    <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+                </svg>
+                <span id="text-sfx">SFX</span>
             </button>
 
             <!-- Music Button -->
             <button id="btn-music" class="hud-btn active" title="Toggle Background Music" aria-label="Toggle Background Music">
-                <span id="icon-music">ðŸŽµ</span> Music
+                <svg id="svg-music" class="hud-icon" viewBox="0 0 24 24" width="15" height="15" fill="currentColor">
+                    <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+                </svg>
+                <span id="text-music">Music</span>
             </button>
 
             <!-- Theme Switcher -->
             <button id="btn-theme" class="hud-btn" title="Switch Environment Theme" aria-label="Switch Environment Theme">
-                <span id="icon-theme">ðŸŒ¿</span> Garden
+                <svg id="svg-theme" class="hud-icon" viewBox="0 0 24 24" width="15" height="15" fill="currentColor">
+                    <path d="M17 8C8 10 5.9 16.17 3.82 21.34l1.89.66.95-2.3c.48.17.98.3 1.34.3C19 20 22 3 22 3c-1 2-8 2.25-13 3.25S2 11.5 2 13.5s1.75 3.75 1.75 3.75C7 8 17 8 17 8z"/>
+                </svg>
+                <span id="text-theme">Garden</span>
             </button>
 
             <!-- Session Stats -->
             <button id="btn-stats" class="hud-btn" title="View Session Stats" aria-label="View Session Stats">
-                <span>ðŸ“Š</span> Stats
+                <svg class="hud-icon" viewBox="0 0 24 24" width="15" height="15" fill="currentColor">
+                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
+                </svg>
+                <span>Stats</span>
             </button>
 
             <!-- Fullscreen -->
             <button id="btn-fullscreen" class="hud-btn" title="Toggle Fullscreen" aria-label="Toggle Fullscreen">
-                <span>â›¶</span>
+                <svg class="hud-icon" viewBox="0 0 24 24" width="15" height="15" fill="currentColor">
+                    <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
+                </svg>
             </button>
         </header>
 
@@ -348,7 +390,10 @@ html, body {
 
         <!-- Subtle Gameplay Instruction Tip -->
         <div class="bottom-tip">
-            <span>âš¡ Move hammer & tap/click moles to whack!</span>
+            <svg class="hud-icon" viewBox="0 0 24 24" width="14" height="14" fill="#f59e0b">
+                <path d="M7 2v11h3v9l7-12h-4l4-8z"/>
+            </svg>
+            <span>Move hammer & tap/click moles to whack!</span>
         </div>
 
         <!-- Backdrop & Session Stats Modal -->
@@ -356,7 +401,7 @@ html, body {
         <div id="stats-modal" class="stats-modal" role="dialog" aria-modal="true" aria-labelledby="stats-title">
             <div class="stats-modal-header">
                 <h2 id="stats-title">Session Statistics</h2>
-                <button id="btn-close-stats" class="stats-close-btn" aria-label="Close Stats">âœ•</button>
+                <button id="btn-close-stats" class="stats-close-btn" aria-label="Close Stats">&times;</button>
             </div>
             <div class="stats-grid">
                 <div class="stat-card">
@@ -381,6 +426,8 @@ html, body {
             </p>
         </div>
     </div>
+
+    
 
     <!-- Self-contained Game Engine & Assets -->
     <script>
@@ -3235,90 +3282,90 @@ class GameManager {
 }
 
 
-    // --- UI Controls & Modal Logic ---
-    const game = new GameManager('game-canvas');
-    window.game = game;
+// --- UI Controls & Event Listeners ---
+{ GameManager } from './src/GameManager.js';
 
-    const btnSfx = document.getElementById('btn-sfx');
-    const iconSfx = document.getElementById('icon-sfx');
-    const btnMusic = document.getElementById('btn-music');
-    const iconMusic = document.getElementById('icon-music');
-    const btnTheme = document.getElementById('btn-theme');
-    const btnStats = document.getElementById('btn-stats');
-    const btnCloseStats = document.getElementById('btn-close-stats');
-    const statsModal = document.getElementById('stats-modal');
-    const modalBackdrop = document.getElementById('modal-backdrop');
-    const btnFullscreen = document.getElementById('btn-fullscreen');
+        // Instantiate Game Engine
+        const game = new GameManager('game-canvas');
+        window.game = game; // Expose for debugging/inspection
 
-    if (btnSfx) {
+        // UI Element References
+        const btnSfx = document.getElementById('btn-sfx');
+        const btnMusic = document.getElementById('btn-music');
+        const btnTheme = document.getElementById('btn-theme');
+        const textTheme = document.getElementById('text-theme');
+        const btnStats = document.getElementById('btn-stats');
+        const btnCloseStats = document.getElementById('btn-close-stats');
+        const statsModal = document.getElementById('stats-modal');
+        const modalBackdrop = document.getElementById('modal-backdrop');
+        const btnFullscreen = document.getElementById('btn-fullscreen');
+
+        const pathSfxOn = 'M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z';
+        const pathSfxOff = 'M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z';
+        const pathMusicOn = 'M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z';
+        const pathMusicOff = 'M4.27 3L3 4.27l9 9v.28c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4v-1.73l5.73 5.73L21 19.73 4.27 3zM14 7h4V3h-6v5.18l2 2V7z';
+        const pathLeaf = 'M17 8C8 10 5.9 16.17 3.82 21.34l1.89.66.95-2.3c.48.17.98.3 1.34.3C19 20 22 3 22 3c-1 2-8 2.25-13 3.25S2 11.5 2 13.5s1.75 3.75 1.75 3.75C7 8 17 8 17 8z';
+        const pathCheese = 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z';
+
+        // Sound Toggle
         btnSfx.addEventListener('click', () => {
             const active = game.toggleAudio();
             btnSfx.classList.toggle('active', active);
-            if (iconSfx) iconSfx.textContent = active ? 'ðŸ”Š' : 'ðŸ”‡';
+            const pathEl = btnSfx.querySelector('path');
+            if (pathEl) pathEl.setAttribute('d', active ? pathSfxOn : pathSfxOff);
         });
-    }
 
-    if (btnMusic) {
+        // Music Toggle
         btnMusic.addEventListener('click', () => {
             const active = game.toggleMusic();
             btnMusic.classList.toggle('active', active);
-            if (iconMusic) iconMusic.textContent = active ? 'ðŸŽµ' : 'ðŸ’¤';
+            const pathEl = btnMusic.querySelector('path');
+            if (pathEl) pathEl.setAttribute('d', active ? pathMusicOn : pathMusicOff);
         });
-    }
 
-    let currentTheme = 'garden';
-    if (btnTheme) {
+        // Theme Toggle (Garden <-> Cheese Valley)
+        let currentTheme = 'garden';
         btnTheme.addEventListener('click', () => {
+            const pathEl = btnTheme.querySelector('path');
             if (currentTheme === 'garden') {
                 currentTheme = 'cheese';
-                btnTheme.innerHTML = '<span id=\"icon-theme\">ðŸ§€</span> Cheese';
+                if (textTheme) textTheme.textContent = 'Cheese';
+                if (pathEl) pathEl.setAttribute('d', pathCheese);
             } else {
                 currentTheme = 'garden';
-                btnTheme.innerHTML = '<span id=\"icon-theme\">ðŸŒ¿</span> Garden';
+                if (textTheme) textTheme.textContent = 'Garden';
+                if (pathEl) pathEl.setAttribute('d', pathLeaf);
             }
             game.setTheme(currentTheme);
         });
-    }
 
-    function updateStatsUI() {
-        const s = game.stats;
-        const statHits = document.getElementById('stat-hits');
-        const statStreak = document.getElementById('stat-streak');
-        const statGolden = document.getElementById('stat-golden');
-        const statTime = document.getElementById('stat-time');
-
-        if (statHits) statHits.textContent = s.totalHits;
-        if (statStreak) statStreak.textContent = s.highestStreak;
-        if (statGolden) statGolden.textContent = s.goldenHits;
-        
-        const totalSec = Math.floor(s.sessionTime);
-        const mins = String(Math.floor(totalSec / 60)).padStart(2, '0');
-        const secs = String(totalSec % 60).padStart(2, '0');
-        if (statTime) statTime.textContent = mins + ':' + secs;
-    }
-
-    window.addEventListener('molehit', () => {
-        if (statsModal && statsModal.classList.contains('show')) {
-            updateStatsUI();
+        // Stats Modal Logic
+        function updateStatsUI() {
+            const s = game.stats;
+            document.getElementById('stat-hits').textContent = s.totalHits;
+            document.getElementById('stat-streak').textContent = s.highestStreak;
+            document.getElementById('stat-golden').textContent = s.goldenHits;
+            
+            const totalSec = Math.floor(s.sessionTime);
+            const mins = String(Math.floor(totalSec / 60)).padStart(2, '0');
+            const secs = String(totalSec % 60).padStart(2, '0');
+            document.getElementById('stat-time').textContent = `${mins}:${secs}`;
         }
-    });
 
-    if (btnStats) {
         btnStats.addEventListener('click', () => {
             updateStatsUI();
-            if (statsModal) statsModal.classList.add('show');
-            if (modalBackdrop) modalBackdrop.classList.add('show');
+            statsModal.classList.add('show');
+            modalBackdrop.classList.add('show');
         });
-    }
 
-    const closeStats = () => {
-        if (statsModal) statsModal.classList.remove('show');
-        if (modalBackdrop) modalBackdrop.classList.remove('show');
-    };
-    if (btnCloseStats) btnCloseStats.addEventListener('click', closeStats);
-    if (modalBackdrop) modalBackdrop.addEventListener('click', closeStats);
+        const closeStats = () => {
+            statsModal.classList.remove('show');
+            modalBackdrop.classList.remove('show');
+        };
+        btnCloseStats.addEventListener('click', closeStats);
+        modalBackdrop.addEventListener('click', closeStats);
 
-    if (btnFullscreen) {
+        // Fullscreen Toggle (supports mobile Safari & WebKit prefixes)
         btnFullscreen.addEventListener('click', () => {
             const doc = document;
             const docEl = document.documentElement;
@@ -3331,7 +3378,7 @@ class GameManager {
                 if (efs) efs.call(doc).catch(() => {});
             }
         });
-    }
+    
 })();
 
     </script>
