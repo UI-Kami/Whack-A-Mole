@@ -3283,9 +3283,7 @@ class GameManager {
 
 
 // --- UI Controls & Event Listeners ---
-{ GameManager } from './src/GameManager.js';
-
-        // Instantiate Game Engine
+// Instantiate Game Engine
         const game = new GameManager('game-canvas');
         window.game = game; // Expose for debugging/inspection
 
@@ -3378,7 +3376,6 @@ class GameManager {
                 if (efs) efs.call(doc).catch(() => {});
             }
         });
-    
 })();
 
     </script>
