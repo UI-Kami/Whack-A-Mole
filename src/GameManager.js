@@ -52,6 +52,7 @@ export class GameManager {
     async init() {
         this.setupCanvasResolution();
         window.addEventListener('resize', () => this.setupCanvasResolution());
+        window.addEventListener('orientationchange', () => setTimeout(() => this.setupCanvasResolution(), 120));
 
         // Load visual sprites
         await this.loadSprites();
@@ -63,8 +64,9 @@ export class GameManager {
         // Initialize Input Manager
         this.inputManager = new InputManager(
             this.canvas,
-            (x, y) => this.handlePointerMove(x, y),
-            (x, y) => this.handlePointerDown(x, y)
+            (x, y, isTouch) => this.handlePointerMove(x, y, isTouch),
+            (x, y, isTouch) => this.handlePointerDown(x, y, isTouch),
+            this.config
         );
 
         // Center hammer initially
@@ -75,13 +77,19 @@ export class GameManager {
         this.lastTime = performance.now();
         requestAnimationFrame((t) => this.gameLoop(t));
 
-        // Unlock WebAudio on first user interaction anywhere
+        // Unlock WebAudio on first user interaction anywhere (fully iOS Safari and Android compatible)
         const unlockAudio = () => {
             this.audioManager.resume();
             window.removeEventListener('pointerdown', unlockAudio);
+            window.removeEventListener('touchstart', unlockAudio);
+            window.removeEventListener('touchend', unlockAudio);
+            window.removeEventListener('click', unlockAudio);
             window.removeEventListener('keydown', unlockAudio);
         };
         window.addEventListener('pointerdown', unlockAudio);
+        window.addEventListener('touchstart', unlockAudio);
+        window.addEventListener('touchend', unlockAudio);
+        window.addEventListener('click', unlockAudio);
         window.addEventListener('keydown', unlockAudio);
     }
 
@@ -107,48 +115,70 @@ export class GameManager {
         this.ctx.scale(dpr, dpr);
     }
 
-    handlePointerMove(x, y) {
+    handlePointerMove(x, y, isTouch = false) {
         if (this.hammer) {
             this.hammer.setPointer(x, y);
         }
     }
 
-    handlePointerDown(x, y) {
+    handlePointerDown(x, y, isTouch = false) {
         if (!this.hammer) return;
         this.audioManager.resume();
 
+        // Immediately update hammer pointer target so anticipation centers at touch
+        this.hammer.setPointer(x, y);
+
+        // Pre-check candidate hit at the exact instant of tap
+        const instantCandidate = this.moleSpawner.checkHit(x, y, isTouch, false);
+
         // Trigger fast hammer swing
         this.hammer.triggerSwing(x, y, (hitX, hitY) => {
-            this.processHit(hitX, hitY);
-        });
+            if (instantCandidate && instantCandidate.hit && !instantCandidate.mole.isHit && instantCandidate.mole.state !== 'HIDDEN') {
+                const hitSuccess = instantCandidate.mole.onHit();
+                if (hitSuccess) {
+                    this.executeHitSuccess(instantCandidate);
+                    return;
+                }
+            }
+            this.processHit(hitX, hitY, isTouch);
+        }, isTouch);
     }
 
-    processHit(hitX, hitY) {
-        // Check if any mole was hit
-        const result = this.moleSpawner.checkHit(hitX, hitY);
+    executeHitSuccess(result) {
+        // Stats update
+        this.stats.totalHits++;
+        this.stats.currentStreak++;
+        if (this.stats.currentStreak > this.stats.highestStreak) {
+            this.stats.highestStreak = this.stats.currentStreak;
+        }
+        if (result.mole.type === 'golden') this.stats.goldenHits++;
+        if (result.mole.type === 'speedy') this.stats.speedyHits++;
+
+        // Hit Stop Crunch (microfreeze for 35ms)
+        this.hitStopRemaining = this.config.HIT_STOP_MS / 1000;
+
+        // Audio & Camera Shake
+        this.audioManager.playHammerHit(result.isSpecial);
+        this.cameraShake.addTrauma(result.isSpecial ? 0.85 : 0.58, 0, 1);
+
+        // Mobile Haptic Feedback
+        if (navigator.vibrate) {
+            navigator.vibrate(result.isSpecial ? 40 : 22);
+        }
+
+        // VFX Explosion
+        this.vfxManager.spawnHitVFX(result.x, result.y, result.depthScale, result.isSpecial);
+
+        // Dispatch custom event for external hooks
+        window.dispatchEvent(new CustomEvent('molehit', { detail: { ...result, stats: this.stats } }));
+    }
+
+    processHit(hitX, hitY, isTouch = false) {
+        // Check if any mole was hit at impact time
+        const result = this.moleSpawner.checkHit(hitX, hitY, isTouch, true);
 
         if (result.hit) {
-            // Stats update
-            this.stats.totalHits++;
-            this.stats.currentStreak++;
-            if (this.stats.currentStreak > this.stats.highestStreak) {
-                this.stats.highestStreak = this.stats.currentStreak;
-            }
-            if (result.mole.type === 'golden') this.stats.goldenHits++;
-            if (result.mole.type === 'speedy') this.stats.speedyHits++;
-
-            // Hit Stop Crunch (microfreeze for 35ms)
-            this.hitStopRemaining = this.config.HIT_STOP_MS / 1000;
-
-            // Audio & Camera Shake
-            this.audioManager.playHammerHit(result.isSpecial);
-            this.cameraShake.addTrauma(result.isSpecial ? 0.85 : 0.58, 0, 1);
-
-            // VFX Explosion
-            this.vfxManager.spawnHitVFX(result.x, result.y, result.depthScale, result.isSpecial);
-            
-            // Dispatch custom event for external hooks (score / streak hooks)
-            window.dispatchEvent(new CustomEvent('molehit', { detail: { ...result, stats: this.stats } }));
+            this.executeHitSuccess(result);
         } else {
             // Missed ground hit
             this.stats.totalMisses++;

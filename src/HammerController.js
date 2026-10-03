@@ -47,19 +47,36 @@ export class HammerController {
         this.targetY = py;
     }
 
-    triggerSwing(hitX, hitY, hitCallback) {
-        // Can interrupt recovery, but not an ongoing forward strike
-        if (this.state === HAMMER_STATE.SWING || this.state === HAMMER_STATE.IMPACT) {
-            return;
+    triggerSwing(hitX, hitY, hitCallback, isTouch = false) {
+        // If an ongoing swing had an unfulfilled hit, complete it right away so rapid taps don't get lost
+        if ((this.state === HAMMER_STATE.SWING || this.state === HAMMER_STATE.ANTICIPATION) && this.hitCallback) {
+            const pendingCb = this.hitCallback;
+            const px = this.hitTargetX;
+            const py = this.hitTargetY;
+            this.hitCallback = null;
+            pendingCb(px, py);
         }
 
+        this.targetX = hitX;
+        this.targetY = hitY;
         this.hitTargetX = hitX;
         this.hitTargetY = hitY;
         this.hitCallback = hitCallback;
 
-        // Start anticipation phase
+        // Position hammer directly above tapped location so the strike is instantaneous and accurate
+        const impactGripX = hitX + 88;
+        const impactGripY = hitY - 42;
+        const dist = Math.hypot(this.x - impactGripX, this.y - impactGripY);
+
+        if (dist > 90 || isTouch) {
+            this.x = hitX + 60;
+            this.y = hitY - 35;
+        }
+
+        // Start anticipation phase (snappier on touch for arcade feel)
+        const anticMs = isTouch ? 25 : this.config.HAMMER_ANTICIPATION_MS;
         this.state = HAMMER_STATE.ANTICIPATION;
-        this.phaseTimer = this.config.HAMMER_ANTICIPATION_MS / 1000;
+        this.phaseTimer = anticMs / 1000;
         this.audioManager.playHammerSwing();
     }
 

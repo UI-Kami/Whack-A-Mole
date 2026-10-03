@@ -35,23 +35,30 @@ html, body {
     position: relative;
     width: 100vw;
     height: 100vh;
+    height: 100dvh;
+    min-height: -webkit-fill-available;
     display: flex;
     justify-content: center;
     align-items: center;
     overflow: hidden;
+    touch-action: none;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
 /* Game Canvas */
 #game-canvas {
     display: block;
     width: 100%;
-    height: 100%;
+    height: auto;
     max-width: 1400px;
-    max-height: 900px;
+    max-height: 100%;
+    aspect-ratio: 1200 / 800;
     object-fit: contain;
     cursor: crosshair;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), 0 0 100px rgba(0, 0, 0, 0.3);
     border-radius: 12px;
+    touch-action: none;
+    -webkit-touch-callout: none;
 }
 
 /* Floating Glassmorphism Arcade HUD */
@@ -256,17 +263,35 @@ html, body {
 }
 
 /* Responsive adjustments */
-@media (max-width: 600px) {
+@media (max-width: 768px) {
     .arcade-hud {
-        top: 10px;
-        padding: 6px 12px;
+        top: max(8px, env(safe-area-inset-top));
+        padding: 5px 10px;
         gap: 6px;
+        max-width: calc(100vw - 16px);
     }
     .brand-badge {
         display: none;
     }
     .hud-btn {
-        padding: 6px 10px;
-        font-size: 12px;
+        padding: 6px 9px;
+        font-size: 11px;
+        gap: 4px;
+    }
+    .bottom-tip {
+        bottom: max(10px, env(safe-area-inset-bottom));
+        padding: 4px 12px;
+        font-size: 11px;
+    }
+}
+
+@media (max-width: 480px) {
+    .arcade-hud {
+        padding: 4px 6px;
+        gap: 4px;
+    }
+    .hud-btn {
+        padding: 5px 7px;
+        font-size: 10px;
     }
 }

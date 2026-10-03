@@ -258,11 +258,13 @@ export class MoleSpawner {
     }
 
     // Check hit on any active mole
-    checkHit(hitX, hitY) {
+    checkHit(hitX, hitY, isTouch = false, applyHit = true) {
         // Sort holes from front (closest to camera, largest Y) to back
         const sortedHoles = [...this.holes]
             .filter(h => h.isVisible && h.mole.state !== MOLE_STATE.HIDDEN && !h.mole.isHit)
             .sort((a, b) => b.screenY - a.screenY);
+
+        const radiusMultiplier = isTouch ? 1.45 : 1.0;
 
         for (let i = 0; i < sortedHoles.length; i++) {
             const hole = sortedHoles[i];
@@ -274,16 +276,34 @@ export class MoleSpawner {
             const targetY = hole.screenY - (mole.riseProgress * moleH * 0.55);
 
             // Forgiving elliptical hit check
-            const radiusX = (hole.config.HAMMER_HIT_RADIUS * 0.85) * hole.depthScale;
-            const radiusY = (hole.config.HAMMER_HIT_RADIUS * 1.05) * hole.depthScale;
+            const radiusX = (hole.config.HAMMER_HIT_RADIUS * 0.85 * radiusMultiplier) * hole.depthScale;
+            const radiusY = (hole.config.HAMMER_HIT_RADIUS * 1.05 * radiusMultiplier) * hole.depthScale;
 
             const dx = (hitX - targetX) / radiusX;
             const dy = (hitY - targetY) / radiusY;
 
-            if (dx * dx + dy * dy <= 1.0) {
-                // Successful hit!
-                const hitSuccess = mole.onHit();
-                if (hitSuccess) {
+            // Also check if tap is directly on the hole mound opening
+            const holeRadX = hole.getRadiusX() * (isTouch ? 1.4 : 1.15);
+            const holeRadY = hole.getRadiusY() * (isTouch ? 1.8 : 1.3);
+            const hdx = (hitX - hole.screenX) / holeRadX;
+            const hdy = (hitY - hole.screenY) / holeRadY;
+            const inHole = (hdx * hdx + hdy * hdy) <= 1.0;
+
+            if ((dx * dx + dy * dy <= 1.0) || inHole) {
+                if (applyHit) {
+                    const hitSuccess = mole.onHit();
+                    if (hitSuccess) {
+                        return {
+                            hit: true,
+                            hole: hole,
+                            mole: mole,
+                            x: targetX,
+                            y: targetY,
+                            depthScale: hole.depthScale,
+                            isSpecial: mole.type !== 'normal'
+                        };
+                    }
+                } else {
                     return {
                         hit: true,
                         hole: hole,
