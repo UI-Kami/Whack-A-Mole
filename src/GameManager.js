@@ -19,6 +19,11 @@ export class GameManager {
         this.hitStopRemaining = 0; // Microfreeze timer
         this.isRunning = false;
 
+        // Health & Game Over State
+        this.maxHealth = this.config.MAX_HEALTH || 3;
+        this.health = this.maxHealth;
+        this.isGameOver = false;
+
         // Statistics tracking (Ready for future scoring / leaderboard system)
         this.stats = {
             totalHits: 0,
@@ -34,6 +39,8 @@ export class GameManager {
         this.assets = {
             moleSprite: null,
             hammerSprite: null,
+            humanIdleSprite: null,
+            humanHitSprite: null,
             cheeseBg: null
         };
 
@@ -104,6 +111,8 @@ export class GameManager {
         // Load extracted clean assets
         this.assets.moleSprite = await loadImg('assets/mole_clean/sprite_5.png');
         this.assets.hammerSprite = await loadImg('assets/gavel_clean/sprite_0.png');
+        this.assets.humanIdleSprite = await loadImg('assets/human_clean/human_idle.png');
+        this.assets.humanHitSprite = await loadImg('assets/human_clean/human_hit.png');
     }
 
     setupCanvasResolution() {
@@ -166,7 +175,7 @@ export class GameManager {
     }
 
     handlePointerDown(x, y, isTouch = false) {
-        if (!this.hammer) return;
+        if (!this.hammer || this.isGameOver) return;
         this.audioManager.resume();
 
         // Immediately update hammer pointer target so anticipation centers at touch
@@ -189,6 +198,12 @@ export class GameManager {
     }
 
     executeHitSuccess(result) {
+        // If player whacked the innocent human character -> WRONG HIT penalty!
+        if (result.isHuman || result.mole?.type === 'human') {
+            this.handleWrongHit(result);
+            return;
+        }
+
         // Stats update
         this.stats.totalHits++;
         this.stats.currentStreak++;
@@ -214,10 +229,100 @@ export class GameManager {
         this.vfxManager.spawnHitVFX(result.x, result.y, result.depthScale, result.isSpecial);
 
         // Dispatch custom event for external hooks
-        window.dispatchEvent(new CustomEvent('molehit', { detail: { ...result, stats: this.stats } }));
+        window.dispatchEvent(new CustomEvent('molehit', { detail: { ...result, stats: this.stats, health: this.health } }));
+    }
+
+    handleWrongHit(result) {
+        if (this.isGameOver) return;
+
+        // Deduct 1 heart
+        this.health = Math.max(0, this.health - 1);
+        this.stats.currentStreak = 0; // Reset streak
+
+        // Hit stop crunch (slightly longer for impact crunch)
+        this.hitStopRemaining = 0.06;
+
+        // Audio: Human "Ouch!" + Heart Lost warning buzzer
+        this.audioManager.playHumanHit();
+        this.audioManager.playHeartLost();
+
+        // Heavy camera shake
+        this.cameraShake.addTrauma(0.95, 0, 1);
+
+        // Mobile Haptic rumble
+        if (navigator.vibrate) {
+            navigator.vibrate([70, 40, 70]);
+        }
+
+        // Crimson wrong hit VFX & "OUCH! -1 ❤️" comic pop
+        this.vfxManager.spawnWrongHitVFX(result.x, result.y, result.depthScale);
+
+        // Dispatch playerhurt event for UI heart updates and screen red vignette flash
+        window.dispatchEvent(new CustomEvent('playerhurt', {
+            detail: {
+                health: this.health,
+                maxHealth: this.maxHealth,
+                stats: this.stats,
+                result: result
+            }
+        }));
+
+        // If 0 hearts remaining -> 3 wrong hits: Game Over!
+        if (this.health <= 0) {
+            this.triggerGameOver();
+        }
+    }
+
+    triggerGameOver() {
+        if (this.isGameOver) return;
+        this.isGameOver = true;
+
+        this.audioManager.playGameOver();
+
+        window.dispatchEvent(new CustomEvent('gameover', {
+            detail: {
+                stats: this.stats
+            }
+        }));
+    }
+
+    restartGame() {
+        this.health = this.maxHealth;
+        this.isGameOver = false;
+
+        // Reset stats
+        this.stats.totalHits = 0;
+        this.stats.totalMisses = 0;
+        this.stats.currentStreak = 0;
+        this.stats.goldenHits = 0;
+        this.stats.speedyHits = 0;
+        this.stats.sessionTime = 0;
+
+        // Reset holes & moles
+        if (this.moleSpawner) {
+            this.moleSpawner.holes.forEach(h => {
+                h.mole.state = 'HIDDEN';
+                h.mole.riseProgress = 0;
+                h.mole.isHit = false;
+            });
+            this.moleSpawner.spawnTimer = 0.6;
+            this.moleSpawner.gameTime = 0;
+        }
+
+        this.audioManager.playGameRestart();
+
+        window.dispatchEvent(new CustomEvent('gamerestart', {
+            detail: {
+                health: this.health,
+                maxHealth: this.maxHealth,
+                stats: this.stats
+            }
+        }));
     }
 
     processHit(hitX, hitY, isTouch = false) {
+        if (this.isGameOver) return;
+
         // Check if any mole was hit at impact time
         const result = this.moleSpawner.checkHit(hitX, hitY, isTouch, true);
 
@@ -240,7 +345,9 @@ export class GameManager {
         const dt = Math.min(rawDt, 0.1);
         this.lastTime = now;
 
-        this.stats.sessionTime += dt;
+        if (!this.isGameOver) {
+            this.stats.sessionTime += dt;
+        }
 
         // Process Hit-Stop (brief game pause for impact crunch)
         if (this.hitStopRemaining > 0) {
@@ -255,8 +362,10 @@ export class GameManager {
         // 1. Update Subsystems
         this.cameraShake.update(dt);
         this.parallaxManager.update(dt);
-        this.moleSpawner.update(dt, this.parallaxManager.scrollY_Ground);
-        this.hammer.update(dt);
+        if (!this.isGameOver) {
+            this.moleSpawner.update(dt, this.parallaxManager.scrollY_Ground);
+            this.hammer.update(dt);
+        }
         this.vfxManager.update(dt);
 
         // 2. Render Scene

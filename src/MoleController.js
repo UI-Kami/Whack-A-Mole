@@ -36,16 +36,21 @@ export class MoleController {
     spawn(type = 'normal') {
         this.type = type;
         this.state = MOLE_STATE.PEEKING;
-        this.timer = this.config.MOLE_PEEK_TIME * (type === 'speedy' ? 0.6 : 1.0);
+        this.timer = this.config.MOLE_PEEK_TIME * (type === 'speedy' ? 0.6 : (type === 'human' ? 1.2 : 1.0));
         this.riseProgress = 0.15; // Low peek
         this.isHit = false;
         this.scaleX = 1;
         this.scaleY = 1;
         this.idleBobTimer = Math.random() * Math.PI * 2;
 
-        const minIdle = this.config.MOLE_MIN_IDLE_TIME * (type === 'speedy' ? 0.65 : 1.0);
-        const maxIdle = this.config.MOLE_MAX_IDLE_TIME * (type === 'speedy' ? 0.75 : 1.0);
-        this.idleDuration = minIdle + Math.random() * (maxIdle - minIdle);
+        if (type === 'human') {
+            // Human lingers a bit longer so player has fair reaction window to NOT hit
+            this.idleDuration = 1.8 + Math.random() * 0.7;
+        } else {
+            const minIdle = this.config.MOLE_MIN_IDLE_TIME * (type === 'speedy' ? 0.65 : 1.0);
+            const maxIdle = this.config.MOLE_MAX_IDLE_TIME * (type === 'speedy' ? 0.75 : 1.0);
+            this.idleDuration = minIdle + Math.random() * (maxIdle - minIdle);
+        }
     }
 
     onHit() {
@@ -55,11 +60,12 @@ export class MoleController {
 
         this.isHit = true;
         this.state = MOLE_STATE.HIT;
-        this.timer = this.config.MOLE_HIT_RETREAT_TIME; // Fast 0.14s hit stun
+        // Human shows hurt/dizzy reaction for a moment before ducking
+        this.timer = this.type === 'human' ? 0.28 : this.config.MOLE_HIT_RETREAT_TIME;
         
         // Immediate punchy squash
-        this.scaleX = 1.45;
-        this.scaleY = 0.45;
+        this.scaleX = this.type === 'human' ? 1.25 : 1.45;
+        this.scaleY = this.type === 'human' ? 0.6 : 0.45;
         this.dizzyAngle = 0;
 
         return true;
@@ -166,24 +172,25 @@ export class MoleController {
         ctx.rect(-rx * 1.6, -300, rx * 3.2, 300 + rimY);
         ctx.clip();
 
-        const moleW = 88;
-        const moleH = 108;
+        const isHuman = this.type === 'human';
+        const charW = isHuman ? 96 : 88;
+        const charH = isHuman ? 116 : 108;
 
         // Anchor mole: when riseProgress = 1.0, paws are at rimY
         // When riseProgress = 0.0, mole is completely below rimY
-        const submergedY = (1 - this.riseProgress) * moleH;
+        const submergedY = (1 - this.riseProgress) * charH;
         ctx.translate(0, rimY + submergedY);
         ctx.scale(this.scaleX, this.scaleY);
 
         // Draw shadow cast inside hole
         this.drawMoleShadow(ctx);
 
-        // Draw the mole character
-        this.drawMoleBody(ctx, moleW, moleH);
+        // Draw the character
+        this.drawMoleBody(ctx, charW, charH);
 
         // If hit, draw dizzy comic stars
         if (this.state === MOLE_STATE.HIT) {
-            this.drawDizzyFX(ctx, moleH);
+            this.drawDizzyFX(ctx, charH);
         }
 
         ctx.restore();
@@ -200,6 +207,11 @@ export class MoleController {
     }
 
     drawMoleBody(ctx, w, h) {
+        if (this.type === 'human') {
+            this.drawHumanCharacter(ctx, w, h);
+            return;
+        }
+
         const sprite = this.assets.moleSprite;
 
         if (sprite && sprite.complete && sprite.naturalWidth > 0) {
@@ -221,6 +233,123 @@ export class MoleController {
         } else {
             this.drawProceduralMole(ctx, w, h);
         }
+    }
+
+    drawHumanCharacter(ctx, w, h) {
+        const isHurt = this.isHit || this.state === MOLE_STATE.HIT;
+        const sprite = isHurt ? this.assets.humanHitSprite : this.assets.humanIdleSprite;
+
+        if (sprite && sprite.complete && sprite.naturalWidth > 0) {
+            ctx.drawImage(sprite, -w / 2, -h, w, h);
+        } else {
+            this.drawProceduralHuman(ctx, w, h, isHurt);
+        }
+
+        // Warning speech pill above human head when emerging or idle
+        if (!isHurt && (this.state === MOLE_STATE.IDLE || this.state === MOLE_STATE.EMERGING)) {
+            this.drawHumanBadge(ctx, 0, -h - 6);
+        }
+    }
+
+    drawHumanBadge(ctx, x, y) {
+        ctx.save();
+        ctx.translate(x, y);
+        const bob = Math.sin(this.idleBobTimer * 3) * 2;
+        ctx.translate(0, bob);
+
+        // Warning pill badge
+        ctx.fillStyle = 'rgba(220, 38, 38, 0.94)';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        if (ctx.roundRect) {
+            ctx.roundRect(-42, -18, 84, 18, 9);
+        } else {
+            ctx.rect(-42, -18, 84, 18);
+        }
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.font = '800 10px "Outfit", sans-serif';
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText("DON'T HIT! ⚠️", 0, -9);
+        ctx.restore();
+    }
+
+    drawProceduralHuman(ctx, w, h, isHurt) {
+        ctx.save();
+        // Shirt
+        ctx.fillStyle = '#1e88e5';
+        ctx.beginPath();
+        ctx.ellipse(0, -h * 0.25, w * 0.42, h * 0.25, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Head
+        ctx.fillStyle = '#ffcc80';
+        ctx.beginPath();
+        ctx.ellipse(0, -h * 0.65, w * 0.35, h * 0.35, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Cheeks
+        ctx.fillStyle = '#ff8a80';
+        ctx.beginPath();
+        ctx.arc(-w * 0.22, -h * 0.6, 5, 0, Math.PI * 2);
+        ctx.arc(w * 0.22, -h * 0.6, 5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Eyes
+        if (isHurt) {
+            ctx.strokeStyle = '#212121';
+            ctx.lineWidth = 2;
+            [-w * 0.14, w * 0.14].forEach(ex => {
+                ctx.beginPath();
+                ctx.arc(ex, -h * 0.68, 6, 0, Math.PI * 2);
+                ctx.stroke();
+            });
+        } else {
+            ctx.fillStyle = '#212121';
+            ctx.beginPath();
+            ctx.arc(-w * 0.14, -h * 0.68, 4.5, 0, Math.PI * 2);
+            ctx.arc(w * 0.14, -h * 0.68, 4.5, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Mouth
+        if (isHurt) {
+            ctx.fillStyle = '#b71c1c';
+            ctx.beginPath();
+            ctx.ellipse(0, -h * 0.52, 9, 7, 0, 0, Math.PI * 2);
+            ctx.fill();
+        } else {
+            ctx.strokeStyle = '#b71c1c';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(0, -h * 0.54, 8, 0.1 * Math.PI, 0.9 * Math.PI);
+            ctx.stroke();
+        }
+
+        // Red Baseball Cap
+        ctx.fillStyle = '#e53935';
+        ctx.beginPath();
+        ctx.arc(0, -h * 0.78, w * 0.36, Math.PI, 0);
+        ctx.fill();
+
+        // Cap Visor
+        ctx.fillStyle = '#c62828';
+        ctx.beginPath();
+        ctx.ellipse(0, -h * 0.78, w * 0.42, 6, 0, 0, Math.PI);
+        ctx.fill();
+
+        // Gloves on rim
+        ctx.fillStyle = '#8d6e63';
+        ctx.beginPath();
+        ctx.ellipse(-w * 0.3, -4, 12, 7, 0, 0, Math.PI * 2);
+        ctx.ellipse(w * 0.3, -4, 12, 7, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
     }
 
     drawCrown(ctx, x, y) {

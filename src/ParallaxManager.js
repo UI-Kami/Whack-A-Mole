@@ -118,14 +118,36 @@ export class ParallaxManager {
     drawSkyLayer(ctx) {
         const w = this.config.VIEWPORT_WIDTH;
         const horizon = this.config.PERSPECTIVE_HORIZON_Y;
+        const theme = this.theme;
 
         // 1. Sky Gradient
         const skyGrad = ctx.createLinearGradient(0, 0, 0, horizon);
-        if (this.theme === 'cheese') {
-            skyGrad.addColorStop(0, '#ffcc80');
-            skyGrad.addColorStop(0.6, '#ffe082');
-            skyGrad.addColorStop(1, '#fff9c4');
+        if (theme === 'cheese') {
+            // Dreamy Twilight Sky to balance and complement golden cheese
+            skyGrad.addColorStop(0, '#1c1038');
+            skyGrad.addColorStop(0.35, '#3b2260');
+            skyGrad.addColorStop(0.7, '#792d64');
+            skyGrad.addColorStop(1, '#d97706');
+        } else if (theme === 'desert') {
+            // Arizona canyon dusk sunset
+            skyGrad.addColorStop(0, '#2e1065');
+            skyGrad.addColorStop(0.4, '#7f1d1d');
+            skyGrad.addColorStop(0.75, '#c2410c');
+            skyGrad.addColorStop(1, '#f59e0b');
+        } else if (theme === 'candy') {
+            // Pastel cotton candy fantasy
+            skyGrad.addColorStop(0, '#db2777');
+            skyGrad.addColorStop(0.4, '#c084fc');
+            skyGrad.addColorStop(0.8, '#7dd3fc');
+            skyGrad.addColorStop(1, '#fef08a');
+        } else if (theme === 'cyber') {
+            // Retro synthwave space
+            skyGrad.addColorStop(0, '#030712');
+            skyGrad.addColorStop(0.4, '#1e1b4b');
+            skyGrad.addColorStop(0.75, '#4a044e');
+            skyGrad.addColorStop(1, '#0891b2');
         } else {
+            // Lush Sunny Garden
             skyGrad.addColorStop(0, '#4fc3f7');
             skyGrad.addColorStop(0.5, '#81d4fa');
             skyGrad.addColorStop(1, '#e1f5fe');
@@ -133,31 +155,104 @@ export class ParallaxManager {
         ctx.fillStyle = skyGrad;
         ctx.fillRect(0, 0, w, horizon + 20);
 
-        // 2. Stylized Sun / Light Source
+        // 2. Celestial Body (Sun / Moon / Retro Sun)
         ctx.save();
         const sunX = w * 0.78;
         const sunY = 55;
-        const sunGlow = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, 80);
-        sunGlow.addColorStop(0, 'rgba(255, 253, 231, 0.95)');
-        sunGlow.addColorStop(0.4, 'rgba(255, 238, 88, 0.45)');
-        sunGlow.addColorStop(1, 'rgba(255, 238, 88, 0)');
-        ctx.fillStyle = sunGlow;
-        ctx.beginPath();
-        ctx.arc(sunX, sunY, 80, 0, Math.PI * 2);
-        ctx.fill();
 
-        ctx.fillStyle = '#fff9c4';
-        ctx.beginPath();
-        ctx.arc(sunX, sunY, 24, 0, Math.PI * 2);
-        ctx.fill();
+        if (theme === 'cheese') {
+            // Giant glowing Swiss Cheese Moon
+            const moonGlow = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, 70);
+            moonGlow.addColorStop(0, 'rgba(254, 240, 138, 0.9)');
+            moonGlow.addColorStop(0.5, 'rgba(245, 158, 11, 0.35)');
+            moonGlow.addColorStop(1, 'rgba(245, 158, 11, 0)');
+            ctx.fillStyle = moonGlow;
+            ctx.beginPath();
+            ctx.arc(sunX, sunY, 70, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Moon body
+            ctx.fillStyle = '#fef08a';
+            ctx.beginPath();
+            ctx.arc(sunX, sunY, 26, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Cheese craters on moon
+            ctx.fillStyle = '#f59e0b';
+            ctx.beginPath();
+            ctx.arc(sunX - 7, sunY - 6, 5, 0, Math.PI * 2);
+            ctx.arc(sunX + 8, sunY - 4, 3.5, 0, Math.PI * 2);
+            ctx.arc(sunX + 2, sunY + 8, 4.5, 0, Math.PI * 2);
+            ctx.arc(sunX - 10, sunY + 9, 2.5, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Twinkling stars in twilight sky
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+            const stars = [
+                { x: w * 0.15, y: 35, s: 2 },
+                { x: w * 0.32, y: 55, s: 1.5 },
+                { x: w * 0.45, y: 25, s: 2.2 },
+                { x: w * 0.62, y: 40, s: 1.8 },
+                { x: w * 0.90, y: 30, s: 2.5 }
+            ];
+            for (let i = 0; i < stars.length; i++) {
+                const st = stars[i];
+                ctx.beginPath();
+                ctx.arc(st.x, st.y, st.s, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        } else if (theme === 'cyber') {
+            // Retro 80s Synthwave sliced glowing sun
+            const cyberGlow = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, 80);
+            cyberGlow.addColorStop(0, 'rgba(244, 63, 94, 0.9)');
+            cyberGlow.addColorStop(0.5, 'rgba(236, 72, 153, 0.35)');
+            cyberGlow.addColorStop(1, 'rgba(236, 72, 153, 0)');
+            ctx.fillStyle = cyberGlow;
+            ctx.beginPath();
+            ctx.arc(sunX, sunY, 80, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Sun with horizontal scanline bars
+            const sunGrad = ctx.createLinearGradient(sunX, sunY - 30, sunX, sunY + 30);
+            sunGrad.addColorStop(0, '#fef08a');
+            sunGrad.addColorStop(0.5, '#f43f5e');
+            sunGrad.addColorStop(1, '#a855f7');
+            ctx.fillStyle = sunGrad;
+            ctx.beginPath();
+            ctx.arc(sunX, sunY, 30, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Horizontal slice cutouts
+            ctx.fillStyle = '#030712';
+            for (let bar = 0; bar < 4; bar++) {
+                const by = sunY + 2 + bar * 7;
+                const bh = 1.5 + bar * 0.8;
+                ctx.fillRect(sunX - 32, by, 64, bh);
+            }
+        } else {
+            // Golden Sun
+            const sunGlow = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, 80);
+            sunGlow.addColorStop(0, theme === 'desert' ? 'rgba(254, 215, 170, 0.95)' : 'rgba(255, 253, 231, 0.95)');
+            sunGlow.addColorStop(0.4, theme === 'desert' ? 'rgba(249, 115, 22, 0.45)' : 'rgba(255, 238, 88, 0.45)');
+            sunGlow.addColorStop(1, 'rgba(255, 238, 88, 0)');
+            ctx.fillStyle = sunGlow;
+            ctx.beginPath();
+            ctx.arc(sunX, sunY, 80, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = theme === 'desert' ? '#fed7aa' : (theme === 'candy' ? '#fce7f3' : '#fff9c4');
+            ctx.beginPath();
+            ctx.arc(sunX, sunY, 24, 0, Math.PI * 2);
+            ctx.fill();
+        }
         ctx.restore();
 
-        // 3. Clouds
+        // 3. Clouds (or cyber data grids)
         ctx.save();
         for (let i = 0; i < this.clouds.length; i++) {
             const c = this.clouds[i];
-            ctx.globalAlpha = c.alpha;
-            ctx.fillStyle = '#ffffff';
+            ctx.globalAlpha = c.alpha * (theme === 'cyber' ? 0.35 : 0.85);
+            ctx.fillStyle = theme === 'candy' ? '#fbcfe8' : (theme === 'cheese' ? 'rgba(255, 248, 225, 0.85)' : '#ffffff');
             this.drawStylizedCloud(ctx, c.x, c.y, c.scale);
         }
         ctx.restore();
@@ -165,10 +260,28 @@ export class ParallaxManager {
         // 4. Distant Mountains
         ctx.save();
         const mountainGrad = ctx.createLinearGradient(0, horizon - 90, 0, horizon);
-        if (this.theme === 'cheese') {
-            mountainGrad.addColorStop(0, '#ffb74d');
-            mountainGrad.addColorStop(1, '#ffe082');
+        if (theme === 'cheese') {
+            // Toasted biscuit & cracker ridges
+            mountainGrad.addColorStop(0, '#5d4037');
+            mountainGrad.addColorStop(0.6, '#8d6e63');
+            mountainGrad.addColorStop(1, '#b45309');
+        } else if (theme === 'desert') {
+            // Sandstone canyon buttes & plateaus
+            mountainGrad.addColorStop(0, '#7f1d1d');
+            mountainGrad.addColorStop(0.5, '#9a3412');
+            mountainGrad.addColorStop(1, '#c2410c');
+        } else if (theme === 'candy') {
+            // Sugar-frosted fudge peaks
+            mountainGrad.addColorStop(0, '#701a75');
+            mountainGrad.addColorStop(0.7, '#a21caf');
+            mountainGrad.addColorStop(1, '#f472b6');
+        } else if (theme === 'cyber') {
+            // Neon vector wireframe mountains
+            mountainGrad.addColorStop(0, '#3b0764');
+            mountainGrad.addColorStop(0.6, '#581c87');
+            mountainGrad.addColorStop(1, '#0e7490');
         } else {
+            // Alpine Garden
             mountainGrad.addColorStop(0, '#7986cb');
             mountainGrad.addColorStop(1, '#aed581');
         }
@@ -176,7 +289,6 @@ export class ParallaxManager {
         ctx.beginPath();
         ctx.moveTo(0, horizon);
 
-        // Infinite sine mountain ridge
         const mOffset = (this.scrollY_Mountains * 0.3) % 400;
         for (let x = 0; x <= w; x += 30) {
             const h1 = Math.sin((x + mOffset) * 0.007) * 45;
@@ -186,6 +298,31 @@ export class ParallaxManager {
         ctx.lineTo(w, horizon);
         ctx.closePath();
         ctx.fill();
+
+        // Cyber / Candy ridge highlights
+        if (theme === 'cyber') {
+            ctx.strokeStyle = '#06b6d4';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(0, horizon);
+            for (let x = 0; x <= w; x += 30) {
+                const h1 = Math.sin((x + mOffset) * 0.007) * 45;
+                const h2 = Math.cos((x + mOffset) * 0.015) * 22;
+                ctx.lineTo(x, horizon - 45 + h1 + h2);
+            }
+            ctx.stroke();
+        } else if (theme === 'candy') {
+            // White vanilla frosting dripping on mountain tops
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+            for (let x = 0; x <= w; x += 60) {
+                const h1 = Math.sin((x + mOffset) * 0.007) * 45;
+                const h2 = Math.cos((x + mOffset) * 0.015) * 22;
+                const my = horizon - 45 + h1 + h2;
+                ctx.beginPath();
+                ctx.arc(x, my + 6, 8, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
         ctx.restore();
     }
 
@@ -206,13 +343,28 @@ export class ParallaxManager {
     drawMidgroundLayer(ctx) {
         const w = this.config.VIEWPORT_WIDTH;
         const horizon = this.config.PERSPECTIVE_HORIZON_Y;
+        const theme = this.theme;
 
         ctx.save();
         const hillGrad = ctx.createLinearGradient(0, horizon - 30, 0, horizon + 30);
-        if (this.theme === 'cheese') {
-            hillGrad.addColorStop(0, '#ffa726');
-            hillGrad.addColorStop(1, '#ffb300');
+        if (theme === 'cheese') {
+            // Warm Cheddar Slopes with toasted edges
+            hillGrad.addColorStop(0, '#b45309');
+            hillGrad.addColorStop(1, '#d97706');
+        } else if (theme === 'desert') {
+            // Terracotta dunes
+            hillGrad.addColorStop(0, '#9a3412');
+            hillGrad.addColorStop(1, '#c2410c');
+        } else if (theme === 'candy') {
+            // Strawberry frosting hills
+            hillGrad.addColorStop(0, '#db2777');
+            hillGrad.addColorStop(1, '#ec4899');
+        } else if (theme === 'cyber') {
+            // Glowing neon grid ridge
+            hillGrad.addColorStop(0, '#1e1b4b');
+            hillGrad.addColorStop(1, '#0e7490');
         } else {
+            // Emerald lawn hills
             hillGrad.addColorStop(0, '#66bb6a');
             hillGrad.addColorStop(1, '#43a047');
         }
@@ -229,39 +381,104 @@ export class ParallaxManager {
         ctx.closePath();
         ctx.fill();
 
-        // Stylized cute cartoon trees on the hill ridge
+        // Stylized environmental objects on ridge
         const treeSpacing = 160;
         const treeBaseOffset = (this.scrollY_Midground * 0.6) % treeSpacing;
         for (let x = -treeSpacing + treeBaseOffset; x < w + treeSpacing; x += treeSpacing) {
             const wave = Math.sin((x + hillOffset) * 0.009) * 28 + Math.cos((x - hillOffset) * 0.016) * 12;
             const treeY = horizon - 8 + wave;
-            this.drawCartoonTree(ctx, x, treeY, 0.45);
+            this.drawSceneryFeature(ctx, x, treeY, 0.45, theme);
         }
 
         ctx.restore();
     }
 
-    drawCartoonTree(ctx, x, y, scale) {
+    drawSceneryFeature(ctx, x, y, scale, theme) {
         ctx.save();
         ctx.translate(x, y);
         ctx.scale(scale, scale);
 
-        // Trunk
-        ctx.fillStyle = '#5d4037';
-        ctx.fillRect(-4, 0, 8, 22);
+        if (theme === 'cheese') {
+            // Fresh Cartoon Broccoli Florets (healthy green contrast to golden cheese!)
+            ctx.fillStyle = '#451a03'; // Pretzel / stalk stem
+            ctx.fillRect(-3.5, 0, 7, 20);
 
-        // Foliage (stacked rounded triangles or puffs)
-        ctx.fillStyle = this.theme === 'cheese' ? '#ff9800' : '#2e7d32';
-        ctx.beginPath();
-        ctx.arc(0, -12, 18, 0, Math.PI * 2);
-        ctx.arc(-10, -5, 14, 0, Math.PI * 2);
-        ctx.arc(10, -5, 14, 0, Math.PI * 2);
-        ctx.fill();
+            ctx.fillStyle = '#15803d'; // Rich green broccoli floret
+            ctx.beginPath();
+            ctx.arc(0, -12, 17, 0, Math.PI * 2);
+            ctx.arc(-10, -5, 13, 0, Math.PI * 2);
+            ctx.arc(10, -5, 13, 0, Math.PI * 2);
+            ctx.fill();
 
-        ctx.fillStyle = this.theme === 'cheese' ? '#ffb74d' : '#4caf50';
-        ctx.beginPath();
-        ctx.arc(-3, -15, 10, 0, Math.PI * 2);
-        ctx.fill();
+            ctx.fillStyle = '#22c55e'; // Highlight floret texture
+            ctx.beginPath();
+            ctx.arc(-4, -14, 8, 0, Math.PI * 2);
+            ctx.arc(5, -11, 7, 0, Math.PI * 2);
+            ctx.fill();
+        } else if (theme === 'desert') {
+            // Saguaro Cactus
+            ctx.fillStyle = '#15803d';
+            // Main stem
+            ctx.beginPath();
+            ctx.roundRect ? ctx.roundRect(-5, -28, 10, 36, 4) : ctx.rect(-5, -28, 10, 36);
+            ctx.fill();
+
+            // Left arm
+            ctx.beginPath();
+            ctx.rect(-14, -18, 9, 5);
+            ctx.rect(-14, -26, 5, 13);
+            ctx.fill();
+
+            // Right arm
+            ctx.beginPath();
+            ctx.rect(5, -14, 9, 5);
+            ctx.rect(9, -22, 5, 13);
+            ctx.fill();
+        } else if (theme === 'candy') {
+            // Giant Swirled Lollipop
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(-2, 0, 4, 25);
+
+            // Candy disc
+            ctx.fillStyle = '#ef4444';
+            ctx.beginPath();
+            ctx.arc(0, -14, 16, 0, Math.PI * 2);
+            ctx.fill();
+
+            // White swirl
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(0, -14, 10, 0, 1.5 * Math.PI);
+            ctx.stroke();
+        } else if (theme === 'cyber') {
+            // Cyber Grid Beacon / Obelisk
+            ctx.fillStyle = '#06b6d4';
+            ctx.shadowColor = '#06b6d4';
+            ctx.shadowBlur = 8;
+            ctx.beginPath();
+            ctx.moveTo(0, -25);
+            ctx.lineTo(6, 10);
+            ctx.lineTo(-6, 10);
+            ctx.closePath();
+            ctx.fill();
+        } else {
+            // Classic Cartoon Tree
+            ctx.fillStyle = '#5d4037';
+            ctx.fillRect(-4, 0, 8, 22);
+
+            ctx.fillStyle = '#2e7d32';
+            ctx.beginPath();
+            ctx.arc(0, -12, 18, 0, Math.PI * 2);
+            ctx.arc(-10, -5, 14, 0, Math.PI * 2);
+            ctx.arc(10, -5, 14, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#4caf50';
+            ctx.beginPath();
+            ctx.arc(-3, -15, 10, 0, Math.PI * 2);
+            ctx.fill();
+        }
 
         ctx.restore();
     }
@@ -271,26 +488,55 @@ export class ParallaxManager {
         const w = this.config.VIEWPORT_WIDTH;
         const h = this.config.VIEWPORT_HEIGHT;
         const horizon = this.config.PERSPECTIVE_HORIZON_Y;
+        const theme = this.theme;
 
         ctx.save();
 
-        if (this.theme === 'cheese' && this.cheeseImg) {
-            // Cheese kingdom scrolling textured pattern
-            const grad = ctx.createLinearGradient(0, horizon, 0, h);
-            grad.addColorStop(0, '#fbc02d');
-            grad.addColorStop(0.5, '#fdd835');
-            grad.addColorStop(1, '#ffeb3b');
-            ctx.fillStyle = grad;
+        if (theme === 'cheese') {
+            // Rich appetizing Swiss & Gouda cheese ground (warm golden, NOT blinding lemon yellow)
+            const cheeseGrad = ctx.createLinearGradient(0, horizon, 0, h);
+            cheeseGrad.addColorStop(0, '#b45309');
+            cheeseGrad.addColorStop(0.2, '#d97706');
+            cheeseGrad.addColorStop(0.6, '#f59e0b');
+            cheeseGrad.addColorStop(1, '#fbbf24');
+            ctx.fillStyle = cheeseGrad;
             ctx.fillRect(0, horizon, w, h - horizon);
 
-            // Draw subtle scrolling cheese texture
-            ctx.globalAlpha = 0.28;
-            const tileH = 600;
-            const offsetY = (this.scrollY_Ground) % tileH;
-            for (let y = horizon - tileH + offsetY; y < h + tileH; y += tileH) {
-                ctx.drawImage(this.cheeseImg, 0, y, w, tileH);
-            }
-            ctx.globalAlpha = 1.0;
+            // Draw porous Swiss cheese crater bubbles on the plane
+            this.drawCheeseGroundTexture(ctx, w, h, horizon);
+        } else if (theme === 'desert') {
+            // Warm terracotta desert sand plane
+            const desertGrad = ctx.createLinearGradient(0, horizon, 0, h);
+            desertGrad.addColorStop(0, '#9a3412');
+            desertGrad.addColorStop(0.3, '#c2410c');
+            desertGrad.addColorStop(0.7, '#ea580c');
+            desertGrad.addColorStop(1, '#f97316');
+            ctx.fillStyle = desertGrad;
+            ctx.fillRect(0, horizon, w, h - horizon);
+
+            this.drawPerspectiveGrid(ctx, w, h, horizon, 'rgba(127, 29, 29, 0.16)');
+        } else if (theme === 'candy') {
+            // Strawberry frosting & waffle cone ground
+            const candyGrad = ctx.createLinearGradient(0, horizon, 0, h);
+            candyGrad.addColorStop(0, '#be185d');
+            candyGrad.addColorStop(0.3, '#db2777');
+            candyGrad.addColorStop(0.7, '#f472b6');
+            candyGrad.addColorStop(1, '#fbcfe8');
+            ctx.fillStyle = candyGrad;
+            ctx.fillRect(0, horizon, w, h - horizon);
+
+            // Colorful candy confetti on ground
+            this.drawCandyGroundSprinkles(ctx, w, h, horizon);
+        } else if (theme === 'cyber') {
+            // High-tech dark glossy synthwave grid
+            const cyberGrad = ctx.createLinearGradient(0, horizon, 0, h);
+            cyberGrad.addColorStop(0, '#030712');
+            cyberGrad.addColorStop(0.4, '#090d16');
+            cyberGrad.addColorStop(1, '#111827');
+            ctx.fillStyle = cyberGrad;
+            ctx.fillRect(0, horizon, w, h - horizon);
+
+            this.drawCyberGrid(ctx, w, h, horizon);
         } else {
             // Lush 2.5D Lawn / Meadow
             const groundGrad = ctx.createLinearGradient(0, horizon, 0, h);
@@ -301,28 +547,159 @@ export class ParallaxManager {
             ctx.fillStyle = groundGrad;
             ctx.fillRect(0, horizon, w, h - horizon);
 
-            // 2.5D Perspective Grid & Field Stripes scrolling upward
-            this.drawPerspectiveGrid(ctx, w, h, horizon);
+            this.drawPerspectiveGrid(ctx, w, h, horizon, 'rgba(27, 94, 32, 0.12)');
         }
 
         // Vignette & Horizon atmospheric haze
         const hazeGrad = ctx.createLinearGradient(0, horizon, 0, horizon + 65);
-        hazeGrad.addColorStop(0, 'rgba(255, 255, 255, 0.45)');
-        hazeGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        if (theme === 'cheese') {
+            hazeGrad.addColorStop(0, 'rgba(254, 240, 138, 0.35)');
+            hazeGrad.addColorStop(1, 'rgba(254, 240, 138, 0)');
+        } else if (theme === 'cyber') {
+            hazeGrad.addColorStop(0, 'rgba(6, 182, 212, 0.3)');
+            hazeGrad.addColorStop(1, 'rgba(6, 182, 212, 0)');
+        } else {
+            hazeGrad.addColorStop(0, 'rgba(255, 255, 255, 0.45)');
+            hazeGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        }
         ctx.fillStyle = hazeGrad;
         ctx.fillRect(0, horizon, w, 65);
 
         ctx.restore();
     }
 
-    drawPerspectiveGrid(ctx, w, h, horizon) {
+    // Realistic porous Swiss cheese details on ground plane
+    drawCheeseGroundTexture(ctx, w, h, horizon) {
         const groundHeight = h - horizon;
         const scroll = this.scrollY_Ground;
+
+        // Subtle baked cheese crust stripes
+        const stripeCount = 18;
+        for (let i = 0; i < stripeCount; i++) {
+            const norm1 = Math.pow(i / stripeCount, 2.1);
+            const norm2 = Math.pow((i + 1) / stripeCount, 2.1);
+            const y1 = horizon + norm1 * groundHeight;
+            const y2 = horizon + norm2 * groundHeight;
+
+            if (i % 2 === 0) {
+                ctx.fillStyle = 'rgba(217, 119, 6, 0.08)';
+                ctx.fillRect(0, y1, w, y2 - y1);
+            }
+        }
+
+        // 3D Porous cheese pores
+        const poreCols = 6;
+        const poreRows = 8;
+        const spacingY = 120;
+        const totalTileY = poreRows * spacingY;
+
+        for (let r = 0; r < poreRows; r++) {
+            for (let c = 0; c < poreCols; c++) {
+                let rawY = (r * spacingY - scroll * 0.7) % totalTileY;
+                if (rawY < 0) rawY += totalTileY;
+                const normY = rawY / totalTileY;
+                const py = horizon + Math.pow(normY, 1.5) * groundHeight;
+                if (py < horizon + 10 || py > h - 10) continue;
+
+                const scale = 0.5 + normY * 0.8;
+                const px = (w / (poreCols + 1)) * (c + 1) + ((r % 2 === 0) ? 25 : -25);
+
+                // Deep cheese cavity
+                ctx.fillStyle = 'rgba(120, 53, 15, 0.22)';
+                ctx.beginPath();
+                ctx.ellipse(px, py, 18 * scale, 9 * scale, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Creamy highlight rim
+                ctx.strokeStyle = 'rgba(254, 240, 138, 0.45)';
+                ctx.lineWidth = 1.5 * scale;
+                ctx.beginPath();
+                ctx.ellipse(px, py + 1.5 * scale, 17 * scale, 7.5 * scale, 0, 0, Math.PI);
+                ctx.stroke();
+            }
+        }
+    }
+
+    drawCandyGroundSprinkles(ctx, w, h, horizon) {
+        const groundHeight = h - horizon;
+        const scroll = this.scrollY_Ground;
+        const colors = ['#f43f5e', '#38bdf8', '#facc15', '#4ade80', '#ffffff'];
+
+        // Perspective waffle lines
+        ctx.strokeStyle = 'rgba(244, 114, 182, 0.2)';
+        ctx.lineWidth = 1.5;
+        const centerX = w * 0.5;
+        for (let col = -6; col <= 6; col++) {
+            const spread = col * (w * 0.12);
+            ctx.beginPath();
+            ctx.moveTo(centerX + spread * 0.15, horizon);
+            ctx.lineTo(centerX + spread * 1.6, h);
+            ctx.stroke();
+        }
+
+        // Rainbow sprinkles
+        for (let i = 0; i < 35; i++) {
+            const rawY = (i * 45 - scroll * 0.8) % groundHeight;
+            const normY = (rawY < 0 ? rawY + groundHeight : rawY) / groundHeight;
+            const py = horizon + Math.pow(normY, 1.4) * groundHeight;
+            const px = ((i * 137.5) % w);
+            const scale = 0.6 + normY * 0.7;
+
+            ctx.save();
+            ctx.translate(px, py);
+            ctx.rotate((i * 45) * Math.PI / 180);
+            ctx.fillStyle = colors[i % colors.length];
+            ctx.beginPath();
+            ctx.roundRect ? ctx.roundRect(-4 * scale, -1.5 * scale, 8 * scale, 3 * scale, 1.5) : ctx.rect(-4 * scale, -1.5 * scale, 8 * scale, 3 * scale);
+            ctx.fill();
+            ctx.restore();
+        }
+    }
+
+    drawCyberGrid(ctx, w, h, horizon) {
+        const groundHeight = h - horizon;
+        const scroll = this.scrollY_Ground;
+
+        // Glowing horizontal perspective grid rings
+        const ringCount = 14;
+        for (let i = 0; i < ringCount; i++) {
+            const rawI = (i - (scroll * 0.05)) % ringCount;
+            const norm = (rawI < 0 ? rawI + ringCount : rawI) / ringCount;
+            const y = horizon + Math.pow(norm, 2.2) * groundHeight;
+
+            ctx.strokeStyle = 'rgba(236, 72, 153, ' + (0.15 + norm * 0.45) + ')';
+            ctx.lineWidth = 1 + norm * 2.5;
+            ctx.shadowColor = '#ec4899';
+            ctx.shadowBlur = 6 * norm;
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(w, y);
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+        }
+
+        // Converging neon cyan perspective lines
+        ctx.strokeStyle = 'rgba(6, 182, 212, 0.4)';
+        ctx.lineWidth = 2;
+        ctx.shadowColor = '#06b6d4';
+        ctx.shadowBlur = 6;
+        const centerX = w * 0.5;
+        for (let col = -6; col <= 6; col++) {
+            const spread = col * (w * 0.12);
+            ctx.beginPath();
+            ctx.moveTo(centerX + spread * 0.12, horizon);
+            ctx.lineTo(centerX + spread * 1.6, h);
+            ctx.stroke();
+        }
+        ctx.shadowBlur = 0;
+    }
+
+    drawPerspectiveGrid(ctx, w, h, horizon, lineColor = 'rgba(27, 94, 32, 0.12)') {
+        const groundHeight = h - horizon;
 
         // Subtle alternating rolling turf stripes flowing upward
         const stripeCount = 20;
         for (let i = 0; i < stripeCount; i++) {
-            // Non-linear perspective spacing
             const norm1 = Math.pow(i / stripeCount, 2.1);
             const norm2 = Math.pow((i + 1) / stripeCount, 2.1);
             const y1 = horizon + norm1 * groundHeight;
@@ -335,7 +712,7 @@ export class ParallaxManager {
         }
 
         // Perspective longitudinal depth lines converging towards horizon vanishing point
-        ctx.strokeStyle = 'rgba(27, 94, 32, 0.12)';
+        ctx.strokeStyle = lineColor;
         ctx.lineWidth = 1.5;
         const centerX = w * 0.5;
         for (let col = -5; col <= 5; col++) {
@@ -347,45 +724,90 @@ export class ParallaxManager {
         }
     }
 
-    // Layer 4: Foreground Elements (Floating Leaves, Corner Grass)
+    // Layer 4: Foreground Elements (Floating Leaves / Particles, Corner Grass)
     drawForegroundLayer(ctx) {
         const w = this.config.VIEWPORT_WIDTH;
         const h = this.config.VIEWPORT_HEIGHT;
+        const theme = this.theme;
 
         ctx.save();
 
-        // 1. Drifting leaves
+        // 1. Drifting particles / leaves
         for (let i = 0; i < this.floatingLeaves.length; i++) {
             const leaf = this.floatingLeaves[i];
             ctx.save();
             ctx.translate(leaf.x, leaf.y);
             ctx.rotate(leaf.angle);
-            ctx.fillStyle = leaf.color;
-            ctx.globalAlpha = 0.75;
-            ctx.beginPath();
-            // Leaf shape
-            ctx.ellipse(0, 0, leaf.size, leaf.size * 0.45, 0, 0, Math.PI * 2);
-            ctx.fill();
+
+            if (theme === 'cheese') {
+                ctx.fillStyle = '#fde047';
+                ctx.globalAlpha = 0.65;
+                // Golden cheese sparkle star
+                ctx.beginPath();
+                const s = leaf.size * 0.6;
+                ctx.moveTo(0, -s);
+                ctx.lineTo(s * 0.3, -s * 0.3);
+                ctx.lineTo(s, 0);
+                ctx.lineTo(s * 0.3, s * 0.3);
+                ctx.lineTo(0, s);
+                ctx.lineTo(-s * 0.3, s * 0.3);
+                ctx.lineTo(-s, 0);
+                ctx.lineTo(-s * 0.3, -s * 0.3);
+                ctx.closePath();
+                ctx.fill();
+            } else if (theme === 'cyber') {
+                ctx.fillStyle = '#06b6d4';
+                ctx.globalAlpha = 0.7;
+                ctx.fillRect(-leaf.size * 0.4, -leaf.size * 0.4, leaf.size * 0.8, leaf.size * 0.8);
+            } else if (theme === 'desert') {
+                ctx.fillStyle = '#fb923c';
+                ctx.globalAlpha = 0.55;
+                ctx.beginPath();
+                ctx.arc(0, 0, leaf.size * 0.4, 0, Math.PI * 2);
+                ctx.fill();
+            } else if (theme === 'candy') {
+                ctx.fillStyle = i % 2 === 0 ? '#f43f5e' : '#38bdf8';
+                ctx.globalAlpha = 0.75;
+                ctx.beginPath();
+                ctx.arc(0, 0, leaf.size * 0.45, 0, Math.PI * 2);
+                ctx.fill();
+            } else {
+                ctx.fillStyle = leaf.color;
+                ctx.globalAlpha = 0.75;
+                ctx.beginPath();
+                ctx.ellipse(0, 0, leaf.size, leaf.size * 0.45, 0, 0, Math.PI * 2);
+                ctx.fill();
+            }
             ctx.restore();
         }
 
-        // 2. Corner Foreground Grass Blades with soft depth-of-field blur
-        this.drawCornerGrass(ctx, 0, h, false);
-        this.drawCornerGrass(ctx, w, h, true);
+        // 2. Corner Foreground Blades
+        this.drawCornerGrass(ctx, 0, h, false, theme);
+        this.drawCornerGrass(ctx, w, h, true, theme);
 
         ctx.restore();
     }
 
-    drawCornerGrass(ctx, x, y, flip = false) {
+    drawCornerGrass(ctx, x, y, flip = false, theme = 'garden') {
         ctx.save();
         ctx.translate(x, y);
         if (flip) ctx.scale(-1, 1);
 
-        const grassColors = ['#1b5e20', '#2e7d32', '#388e3c'];
+        let colors = ['#1b5e20', '#2e7d32', '#388e3c'];
+        if (theme === 'cheese') {
+            colors = ['#78350f', '#b45309', '#d97706']; // Toasted pretzel & biscuit crust blades
+        } else if (theme === 'desert') {
+            colors = ['#7c2d12', '#9a3412', '#c2410c']; // Dry canyon grasses
+        } else if (theme === 'candy') {
+            colors = ['#be185d', '#db2777', '#f472b6']; // Pink frosting swirls
+        } else if (theme === 'cyber') {
+            colors = ['#0891b2', '#06b6d4', '#22d3ee']; // Glowing neon data blades
+        }
+
         const sway = Math.sin(Date.now() * 0.003) * 6;
 
         for (let i = 0; i < 7; i++) {
-            ctx.fillStyle = grassColors[i % grassColors.length];
+            ctx.fillStyle = colors[i % colors.length];
             ctx.beginPath();
             ctx.moveTo(i * 14, 0);
             ctx.quadraticCurveTo(i * 14 + 10 + sway, -60 - i * 12, i * 14 + 25 + sway * 1.5, -95 - i * 15);

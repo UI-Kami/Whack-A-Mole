@@ -62,6 +62,12 @@ export const CONFIG = {
     SFX_VOLUME: 0.9,
     MUSIC_VOLUME: 0.45,
     
-    // Themes: 'garden' | 'cheese'
-    DEFAULT_THEME: 'garden'
+    // Health & Penalty System
+    MAX_HEALTH: 3,
+    HUMAN_SPAWN_CHANCE: 0.22, // ~22% of spawns are human innocent characters
+
+    // Themes: 'garden' | 'cheese' | 'desert' | 'candy' | 'cyber'
+    DEFAULT_THEME: 'garden',
+    AVAILABLE_THEMES: ['garden', 'cheese', 'desert', 'candy', 'cyber']
 };
+

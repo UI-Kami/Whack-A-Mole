@@ -409,6 +409,58 @@ export class VFXManager {
         }
     }
 
+    // Trigger penalty wrong hit VFX (when hitting innocent human character)
+    spawnWrongHitVFX(x, y, depthScale = 1.0) {
+        // 1. Red impact flash
+        this.impactFlashes.get(x, y, 110 * depthScale, '#ff1744');
+
+        // 2. Crimson shockwave
+        this.shockwaves.get(x, y + 10 * depthScale, 150 * depthScale, '#ef4444');
+
+        // 3. Red & crimson sparks
+        const sparkCount = Math.floor(this.config.PARTICLE_COUNT_HIT * depthScale * 1.2);
+        for (let i = 0; i < sparkCount; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 150 + Math.random() * 280;
+            const vx = Math.cos(angle) * speed;
+            const vy = Math.sin(angle) * speed * 0.7 - 70;
+            const color = ['#ef4444', '#dc2626', '#b91c1c', '#f87171', '#ffffff'][Math.floor(Math.random() * 5)];
+            this.particles.get(
+                x, y,
+                vx, vy,
+                (3 + Math.random() * 3.5) * depthScale,
+                color,
+                0.4 + Math.random() * 0.35,
+                380,
+                'spark'
+            );
+        }
+
+        // 4. Dizzy bonk stars
+        for (let i = 0; i < 7; i++) {
+            const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.2;
+            const speed = 130 + Math.random() * 190;
+            const vx = Math.cos(angle) * speed;
+            const vy = Math.sin(angle) * speed - 60;
+            this.particles.get(
+                x, y - 20 * depthScale,
+                vx, vy,
+                (7 + Math.random() * 5) * depthScale,
+                '#ffeb3b',
+                0.55 + Math.random() * 0.3,
+                420,
+                'star'
+            );
+        }
+
+        // 5. Floating Warning Text
+        if (this.config.FLOATING_TEXT_ENABLED) {
+            const phrases = ['OUCH! -1 ❤️', 'WRONG! -1 ❤️', 'DON\'T HIT! -1 ❤️', 'NOOO! -1 ❤️'];
+            const phrase = phrases[Math.floor(Math.random() * phrases.length)];
+            this.floatingTexts.get(x, y - 40 * depthScale, phrase, '#ff4d4f', '#450a0a');
+        }
+    }
+
     // Dirt puff when mole emerges from hole
     spawnMoleEmergeVFX(x, y, depthScale = 1.0) {
         for (let i = 0; i < 8; i++) {

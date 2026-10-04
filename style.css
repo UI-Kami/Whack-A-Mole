@@ -273,12 +273,12 @@ html, body {
 .modal-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(4px);
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(6px);
     z-index: 150;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.2s;
+    transition: opacity 0.25s;
 }
 
 .modal-backdrop.show {
@@ -286,23 +286,204 @@ html, body {
     pointer-events: auto;
 }
 
+/* HUD Score & Health Status Pills */
+.hud-pill {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 9999px;
+    padding: 6px 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 700;
+}
+
+.hud-score-pill {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(217, 119, 6, 0.15));
+    border-color: rgba(245, 158, 11, 0.45);
+}
+
+.hud-pill-label {
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: #fde047;
+    text-transform: uppercase;
+}
+
+.hud-pill-val {
+    font-size: 16px;
+    font-weight: 900;
+    color: #fff;
+    min-width: 22px;
+    text-shadow: 0 0 10px rgba(253, 224, 71, 0.6);
+}
+
+.hud-health-pill {
+    background: rgba(239, 68, 68, 0.14);
+    border-color: rgba(239, 68, 68, 0.38);
+    gap: 5px;
+    padding: 6px 12px;
+}
+
+.hud-heart {
+    font-size: 15px;
+    transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.25s, filter 0.25s;
+    display: inline-block;
+}
+
+.hud-heart.active {
+    filter: drop-shadow(0 0 6px rgba(239, 68, 68, 0.8));
+    animation: heartBeat 2.4s infinite ease-in-out;
+}
+
+.hud-heart.broken {
+    opacity: 0.35;
+    filter: grayscale(1);
+    transform: scale(0.85);
+    animation: none;
+}
+
+@keyframes heartBeat {
+    0%, 100% { transform: scale(1); }
+    12% { transform: scale(1.18); }
+    24% { transform: scale(1); }
+    36% { transform: scale(1.12); }
+    48% { transform: scale(1); }
+}
+
+/* Red Hurt Vignette Flash */
+.hurt-overlay {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 120;
+    box-shadow: inset 0 0 0 rgba(239, 68, 68, 0);
+    transition: box-shadow 0.08s ease-out, background-color 0.08s ease-out;
+}
+
+.hurt-overlay.flash {
+    box-shadow: inset 0 0 160px 70px rgba(239, 68, 68, 0.85);
+    background-color: rgba(239, 68, 68, 0.2);
+}
+
+/* Game Over Modal */
+.gameover-modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.88);
+    background: linear-gradient(180deg, rgba(30, 15, 20, 0.96) 0%, rgba(15, 10, 15, 0.98) 100%);
+    backdrop-filter: blur(28px);
+    -webkit-backdrop-filter: blur(28px);
+    border: 2px solid rgba(239, 68, 68, 0.55);
+    padding: 28px 30px;
+    border-radius: 28px;
+    box-shadow: 0 25px 65px rgba(0, 0, 0, 0.85), 0 0 50px rgba(239, 68, 68, 0.45);
+    z-index: 200;
+    width: 90%;
+    max-width: 400px;
+    opacity: 0;
+    pointer-events: none;
+    text-align: center;
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.gameover-modal.show {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translate(-50%, -50%) scale(1);
+}
+
+.gameover-badge {
+    display: inline-block;
+    background: rgba(239, 68, 68, 0.25);
+    border: 1px solid rgba(239, 68, 68, 0.6);
+    color: #fca5a5;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    padding: 4px 12px;
+    border-radius: 9999px;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+}
+
+.gameover-title {
+    font-size: 32px;
+    font-weight: 900;
+    color: #ef4444;
+    text-shadow: 0 0 20px rgba(239, 68, 68, 0.6);
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+}
+
+.gameover-sub {
+    font-size: 13px;
+    color: #cbd5e1;
+    margin-bottom: 20px;
+}
+
+.btn-restart {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    border: 1px solid #fca5a5;
+    color: #fff;
+    border-radius: 9999px;
+    padding: 12px 28px;
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    box-shadow: 0 8px 25px rgba(239, 68, 68, 0.45);
+    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    width: 100%;
+    margin-top: 14px;
+}
+
+.btn-restart:hover {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 12px 30px rgba(239, 68, 68, 0.6);
+    background: linear-gradient(135deg, #f87171, #ef4444);
+}
+
+.btn-restart:active {
+    transform: translateY(0) scale(0.97);
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
     .arcade-hud {
         top: max(10px, env(safe-area-inset-top));
-        padding: 6px 12px;
-        gap: 6px;
-        max-width: calc(100vw - 20px);
+        padding: 5px 10px;
+        gap: 5px;
+        max-width: calc(100vw - 16px);
         box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
     }
     .brand-badge {
         display: none;
     }
-    .hud-btn {
-        padding: 6px 10px;
-        font-size: 11px;
+    .hud-pill {
+        padding: 4px 8px;
         gap: 4px;
-        min-height: 34px;
+    }
+    .hud-pill-label {
+        font-size: 9px;
+    }
+    .hud-pill-val {
+        font-size: 13px;
+    }
+    .hud-heart {
+        font-size: 13px;
+    }
+    .hud-btn {
+        padding: 5px 8px;
+        font-size: 11px;
+        gap: 3px;
+        min-height: 32px;
     }
     .bottom-tip {
         bottom: max(12px, env(safe-area-inset-bottom));
@@ -314,12 +495,16 @@ html, body {
 
 @media (max-width: 480px) {
     .arcade-hud {
-        top: max(8px, env(safe-area-inset-top));
-        padding: 4px 8px;
+        top: max(6px, env(safe-area-inset-top));
+        padding: 4px 6px;
         gap: 4px;
     }
+    .hud-btn span:not(#text-theme) {
+        display: none;
+    }
     .hud-btn {
-        padding: 5px 8px;
-        font-size: 10.5px;
+        padding: 4px 6px;
+        font-size: 10px;
     }
 }
+

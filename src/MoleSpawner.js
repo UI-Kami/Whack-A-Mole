@@ -42,7 +42,13 @@ export class Hole {
         const ry = this.getRadiusY();
 
         // 3D Mound dirt back shadow
-        ctx.fillStyle = theme === 'cheese' ? 'rgba(216, 138, 24, 0.45)' : 'rgba(27, 94, 32, 0.4)';
+        let moundShadow = 'rgba(27, 94, 32, 0.4)';
+        if (theme === 'cheese') moundShadow = 'rgba(180, 83, 9, 0.38)';
+        else if (theme === 'desert') moundShadow = 'rgba(127, 29, 29, 0.4)';
+        else if (theme === 'candy') moundShadow = 'rgba(190, 24, 93, 0.35)';
+        else if (theme === 'cyber') moundShadow = 'rgba(6, 182, 212, 0.35)';
+
+        ctx.fillStyle = moundShadow;
         ctx.beginPath();
         ctx.ellipse(0, 4 * this.depthScale, rx * 1.22, ry * 1.25, 0, 0, Math.PI * 2);
         ctx.fill();
@@ -50,9 +56,21 @@ export class Hole {
         // Deep hole cavity
         const holeGrad = ctx.createRadialGradient(0, -ry * 0.2, 0, 0, 0, rx);
         if (theme === 'cheese') {
-            holeGrad.addColorStop(0, '#5d4037');
-            holeGrad.addColorStop(0.7, '#ffb300');
-            holeGrad.addColorStop(1, '#ffa000');
+            holeGrad.addColorStop(0, '#451a03');
+            holeGrad.addColorStop(0.7, '#b45309');
+            holeGrad.addColorStop(1, '#d97706');
+        } else if (theme === 'desert') {
+            holeGrad.addColorStop(0, '#260803');
+            holeGrad.addColorStop(0.65, '#7c2d12');
+            holeGrad.addColorStop(1, '#9a3412');
+        } else if (theme === 'candy') {
+            holeGrad.addColorStop(0, '#3b0764');
+            holeGrad.addColorStop(0.65, '#831843');
+            holeGrad.addColorStop(1, '#be185d');
+        } else if (theme === 'cyber') {
+            holeGrad.addColorStop(0, '#030712');
+            holeGrad.addColorStop(0.65, '#1e1b4b');
+            holeGrad.addColorStop(1, '#0891b2');
         } else {
             holeGrad.addColorStop(0, '#1a1006');
             holeGrad.addColorStop(0.65, '#3e2723');
@@ -90,24 +108,47 @@ export class Hole {
         const ry = this.getRadiusY();
 
         // Lower rim lip (mound in front)
-        ctx.fillStyle = theme === 'cheese' ? '#ffc107' : '#5d4037';
+        let rimFill = '#5d4037';
+        let rimStroke = '#8d6e63';
+        if (theme === 'cheese') {
+            rimFill = '#d97706';
+            rimStroke = '#fde047';
+        } else if (theme === 'desert') {
+            rimFill = '#9a3412';
+            rimStroke = '#fb923c';
+        } else if (theme === 'candy') {
+            rimFill = '#be185d';
+            rimStroke = '#f472b6';
+        } else if (theme === 'cyber') {
+            rimFill = '#0e7490';
+            rimStroke = '#22d3ee';
+        }
+
+        ctx.fillStyle = rimFill;
         ctx.beginPath();
         ctx.ellipse(0, ry * 0.35, rx, ry * 0.75, 0, 0, Math.PI);
         ctx.fill();
 
         // Highlight rim edge
-        ctx.strokeStyle = theme === 'cheese' ? '#ffe082' : '#8d6e63';
+        ctx.strokeStyle = rimStroke;
         ctx.lineWidth = 3.5 * this.depthScale;
         ctx.beginPath();
         ctx.ellipse(0, ry * 0.2, rx * 0.98, ry * 0.65, 0, 0.15 * Math.PI, 0.85 * Math.PI);
         ctx.stroke();
 
-        // Small pebbles / grass tufts on mound front
-        if (theme !== 'cheese') {
+        // Small pebbles / details on mound front
+        if (theme === 'garden') {
             ctx.fillStyle = '#4e342e';
             ctx.beginPath();
             ctx.arc(-rx * 0.5, ry * 0.5, 3 * this.depthScale, 0, Math.PI * 2);
             ctx.arc(rx * 0.45, ry * 0.6, 2.5 * this.depthScale, 0, Math.PI * 2);
+            ctx.fill();
+        } else if (theme === 'cyber') {
+            // Neon accent nodes
+            ctx.fillStyle = '#67e8f9';
+            ctx.beginPath();
+            ctx.arc(-rx * 0.5, ry * 0.45, 2.5 * this.depthScale, 0, Math.PI * 2);
+            ctx.arc(rx * 0.5, ry * 0.45, 2.5 * this.depthScale, 0, Math.PI * 2);
             ctx.fill();
         }
 
@@ -236,20 +277,28 @@ export class MoleSpawner {
         // Choose random hole
         const selectedHole = eligibleHoles[Math.floor(Math.random() * eligibleHoles.length)];
 
-        // Choose mole type
+        // Count active humans to avoid multiple humans at once
+        const activeHumans = this.holes.filter(h => h.mole.state !== MOLE_STATE.HIDDEN && h.mole.type === 'human').length;
+        const humanChance = this.config.HUMAN_SPAWN_CHANCE || 0.22;
+
+        // Choose mole/character type
         let moleType = 'normal';
-        const roll = Math.random();
-        if (roll < 0.12) {
-            moleType = 'golden';
-        } else if (roll < 0.32) {
-            moleType = 'speedy';
+        if (this.gameTime > 2.5 && activeHumans === 0 && Math.random() < humanChance) {
+            moleType = 'human';
+        } else {
+            const roll = Math.random();
+            if (roll < 0.12) {
+                moleType = 'golden';
+            } else if (roll < 0.32) {
+                moleType = 'speedy';
+            }
         }
 
         selectedHole.mole.spawn(moleType);
         this.audioManager.playMolePop();
         this.vfxManager.spawnMoleEmergeVFX(selectedHole.screenX, selectedHole.screenY, selectedHole.depthScale);
 
-        // Occasional double spawn during higher intensity
+        // Occasional double spawn during higher intensity (second spawn is always a mole, never human)
         if (progress > 0.4 && Math.random() < 0.28 && activeCount + 1 < this.config.MAX_SIMULTANEOUS_MOLES) {
             const secondHoles = eligibleHoles.filter(h => h !== selectedHole);
             if (secondHoles.length > 0) {
@@ -298,6 +347,7 @@ export class MoleSpawner {
             const inHole = (hdx * hdx + hdy * hdy) <= 1.0;
 
             if ((dx * dx + dy * dy <= 1.0) || inHole) {
+                const isHuman = mole.type === 'human';
                 if (applyHit) {
                     const hitSuccess = mole.onHit();
                     if (hitSuccess) {
@@ -308,7 +358,8 @@ export class MoleSpawner {
                             x: targetX,
                             y: targetY,
                             depthScale: hole.depthScale,
-                            isSpecial: mole.type !== 'normal'
+                            isSpecial: mole.type !== 'normal' && !isHuman,
+                            isHuman: isHuman
                         };
                     }
                 } else {
@@ -319,7 +370,8 @@ export class MoleSpawner {
                         x: targetX,
                         y: targetY,
                         depthScale: hole.depthScale,
-                        isSpecial: mole.type !== 'normal'
+                        isSpecial: mole.type !== 'normal' && !isHuman,
+                        isHuman: isHuman
                     };
                 }
             }

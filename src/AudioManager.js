@@ -239,6 +239,127 @@ export class AudioManager {
         osc.stop(t + 0.05);
     }
 
+    // --- SFX: Human "Ouch!" Vocal Tone & Error Buzz ---
+    playHumanHit() {
+        if (!this.initialized || this.isMuted) return;
+        this.resume();
+        const t = this.ctx.currentTime;
+
+        // Comical cartoon "Ouch!" vocal slide
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(580, t);
+        osc.frequency.exponentialRampToValueAtTime(980, t + 0.06);
+        osc.frequency.exponentialRampToValueAtTime(310, t + 0.28);
+
+        // Low-pass to soften the vocal timbre
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(1400, t);
+
+        gain.gain.setValueAtTime(0.01, t);
+        gain.gain.linearRampToValueAtTime(0.4, t + 0.04);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.sfxGain);
+        osc.start(t);
+        osc.stop(t + 0.28);
+
+        // Low mistake thud
+        const thud = this.ctx.createOscillator();
+        const thudGain = this.ctx.createGain();
+        thud.type = 'sine';
+        thud.frequency.setValueAtTime(120, t);
+        thud.frequency.exponentialRampToValueAtTime(40, t + 0.22);
+        thudGain.gain.setValueAtTime(0.65, t);
+        thudGain.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+        thud.connect(thudGain);
+        thudGain.connect(this.sfxGain);
+        thud.start(t);
+        thud.stop(t + 0.22);
+    }
+
+    // --- SFX: Lost Heart Warning Buzz ---
+    playHeartLost() {
+        if (!this.initialized || this.isMuted) return;
+        this.resume();
+        const t = this.ctx.currentTime;
+
+        // Double urgent buzz
+        [0, 0.11].forEach((delay, i) => {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(140 - i * 25, t + delay);
+
+            const filter = this.ctx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(600, t + delay);
+
+            gain.gain.setValueAtTime(0.35, t + delay);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + delay + 0.09);
+
+            osc.connect(filter);
+            filter.connect(gain);
+            gain.connect(this.sfxGain);
+            osc.start(t + delay);
+            osc.stop(t + delay + 0.09);
+        });
+    }
+
+    // --- SFX: Game Over Fanfare (Sad Descending Chimes) ---
+    playGameOver() {
+        if (!this.initialized || this.isMuted) return;
+        this.resume();
+        const t = this.ctx.currentTime;
+        const notes = [349.23, 329.63, 311.13, 293.66]; // F4, E4, Eb4, D4
+
+        notes.forEach((freq, idx) => {
+            const start = t + idx * 0.2;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(freq, start);
+
+            gain.gain.setValueAtTime(0.01, start);
+            gain.gain.linearRampToValueAtTime(0.4, start + 0.04);
+            gain.gain.exponentialRampToValueAtTime(0.001, start + (idx === 3 ? 0.7 : 0.22));
+
+            osc.connect(gain);
+            gain.connect(this.sfxGain);
+            osc.start(start);
+            osc.stop(start + (idx === 3 ? 0.7 : 0.22));
+        });
+    }
+
+    // --- SFX: Game Restart / Revive Chime ---
+    playGameRestart() {
+        if (!this.initialized || this.isMuted) return;
+        this.resume();
+        const t = this.ctx.currentTime;
+        const notes = [261.63, 329.63, 392.00, 523.25]; // C4, E4, G4, C5
+
+        notes.forEach((freq, idx) => {
+            const start = t + idx * 0.07;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, start);
+
+            gain.gain.setValueAtTime(0.01, start);
+            gain.gain.linearRampToValueAtTime(0.35, start + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, start + 0.18);
+
+            osc.connect(gain);
+            gain.connect(this.sfxGain);
+            osc.start(start);
+            osc.stop(start + 0.18);
+        });
+    }
+
     // --- Ambient / Arcade Background Music Synthesizer ---
     startBackgroundMusic() {
         if (this.bgmPlaying || !this.ctx) return;
