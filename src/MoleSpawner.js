@@ -1,17 +1,21 @@
-// src/MoleSpawner.js - Fullscreen 3-Row Grid (Max 9 or 12 Holes), Layered Rim & Paws
+// src/MoleSpawner.js - Centered 9-Hole Background Integration & Crawling Paws
 import { MoleController, MOLE_STATE } from './MoleController.js';
+import { NATIVE_HOLES } from './ParallaxManager.js';
 
 export class Hole {
-    constructor(col, row, screenX, screenY, radiusX, radiusY, config, assets) {
+    constructor(col, row, nativeHole, config, assets, parallaxManager = null) {
         this.col = col;
         this.row = row;
-        this.screenX = screenX;
-        this.screenY = screenY;
-        this.radiusX = radiusX;
-        this.radiusY = radiusY;
-        this.depthScale = 1.0;
+        this.nativeHole = nativeHole;
         this.config = config;
         this.assets = assets;
+        this.parallaxManager = parallaxManager;
+
+        this.screenX = 0;
+        this.screenY = 0;
+        this.radiusX = nativeHole.rx || 84;
+        this.radiusY = nativeHole.ry || 42;
+        this.depthScale = nativeHole.depthScale || 1.0;
         this.isVisible = true;
 
         this.mole = new MoleController(this, config, assets);
@@ -25,35 +29,29 @@ export class Hole {
         return this.radiusY;
     }
 
-    // Complete 3D Layered Hole Rendering (Requirements 1 & 2):
-    // Layer 1: Hole Pad & dark cavity
-    // Layer 2: Mole emerging upwards (clipped so feet/lower body stay inside cavity)
-    // Layer 3: Front silver rim of hole (drawn over lower torso)
-    // Layer 4: Mole paws/hands resting around the front rim!
+    // 3D Layered Hole Rendering:
+    // Background already draws the stone mound, bevels, and dark cavity (zero stretching!).
+    // 1. Mole emerges upwards (clipped so lower body stays inside hole cavity)
+    // 2. Character paws/hands gripping over the front rim!
     draw(ctx) {
         if (!this.isVisible) return;
 
         const rx = this.radiusX;
         const ry = this.radiusY;
-        const padW = rx * 2.32;
-        const padH = ry * 2.36;
 
-        // --- Layer 1: Hole Pad (Stone mound, 3D silver beveled rim, deep black cavity) ---
-        if (this.assets.holePad && this.assets.holePad.complete && this.assets.holePad.naturalWidth > 0) {
-            ctx.drawImage(this.assets.holePad, this.screenX - padW * 0.5, this.screenY - padH * 0.5, padW, padH);
-        } else {
-            // High-quality procedural fallback hole
+        // If background image is missing, render procedural fallback hole
+        if (!this.assets.bgImg || !this.assets.bgImg.complete || this.assets.bgImg.naturalWidth === 0) {
             this.drawProceduralHole(ctx, rx, ry);
         }
 
-        // --- Layer 2: Mole Emerging from cavity (with bottom mask) ---
+        // --- Layer 1: Mole Emerging from cavity (with bottom ellipse mask) ---
         if (this.mole.state !== MOLE_STATE.HIDDEN && this.mole.riseProgress > 0.01) {
             ctx.save();
             ctx.beginPath();
             ctx.moveTo(this.screenX - rx * 2.5, this.screenY - 500);
             ctx.lineTo(this.screenX + rx * 2.5, this.screenY - 500);
-            ctx.lineTo(this.screenX + rx * 1.04, this.screenY);
-            ctx.ellipse(this.screenX, this.screenY, rx * 1.04, ry * 0.44, 0, 0, Math.PI, false);
+            ctx.lineTo(this.screenX + rx * 1.02, this.screenY);
+            ctx.ellipse(this.screenX, this.screenY, rx * 1.02, ry * 0.44, 0, 0, Math.PI, false);
             ctx.closePath();
             ctx.clip();
 
@@ -61,14 +59,7 @@ export class Hole {
             ctx.restore();
         }
 
-        // --- Layer 3: Front Silver Rim of Hole (masks character waist/torso) ---
-        if (this.mole.state !== MOLE_STATE.HIDDEN && this.mole.riseProgress > 0.05) {
-            if (this.assets.holeRim && this.assets.holeRim.complete && this.assets.holeRim.naturalWidth > 0) {
-                ctx.drawImage(this.assets.holeRim, this.screenX - padW * 0.5, this.screenY - padH * 0.5, padW, padH);
-            }
-        }
-
-        // --- Layer 4: Character Paws / Hands gripping over the front rim! (Requirement 2) ---
+        // --- Layer 2: Character Paws / Hands gripping over the front rim! (Requirement 2) ---
         // Showing like it crawled out of the hole like a mole!
         if (this.mole.state !== MOLE_STATE.HIDDEN && this.mole.riseProgress > 0.05) {
             this.mole.drawCharacterPaws(ctx, this.screenX, this.screenY, rx, ry);
@@ -120,58 +111,37 @@ export class MoleSpawner {
     rebuildGrid(config) {
         this.config = config;
         this.cycleLength = this.config.RED_TRIGGER_COUNT || 4;
-        this.initHoles();
+        this.updateHolePositions();
     }
 
-    // Requirement 1: Only max 9 or 12 Hole to show in full screen in Row (3) and Column (3 or 4)
-    // with padding from Up, Down, Left, and Right!
     initHoles() {
         this.holes = [];
-        const W = this.config.VIEWPORT_WIDTH || 1200;
-        const H = this.config.VIEWPORT_HEIGHT || 800;
-        const isPortrait = H > W;
-
-        const rows = 3; // Strictly 3 rows!
-        let cols = 4;   // 3 or 4 columns (max 9 or 12 holes)
-
-        if (this.config.GRID_MODE === 9) {
-            cols = 3;
-        } else if (this.config.GRID_MODE === 12) {
-            cols = 4;
-        } else {
-            // 'auto' mode: 3 cols in portrait (9 holes), 4 cols in landscape (12 holes)
-            cols = isPortrait ? 3 : 4;
+        for (let i = 0; i < NATIVE_HOLES.length; i++) {
+            const nh = NATIVE_HOLES[i];
+            const hole = new Hole(nh.col, nh.row, nh, this.config, this.assets, this.parallaxManager);
+            hole.id = i;
+            this.holes.push(hole);
         }
-
-        // Padding from (Up, down, left and right)
-        const padTop = this.config.PADDING_TOP || (isPortrait ? 120 : 130);
-        const padBottom = this.config.PADDING_BOTTOM || (isPortrait ? 65 : 75);
-        const padX = this.config.PADDING_HORIZONTAL || (isPortrait ? 45 : 75);
-
-        const availW = W - (padX * 2);
-        const availH = H - padTop - padBottom;
-
-        const stepX = availW / (cols - 1);
-        const stepY = availH / (rows - 1);
-
-        // Optimal hole proportions fitting padded layout comfortably
-        const radiusX = Math.min(108, Math.round(stepX * 0.38));
-        const radiusY = Math.round(radiusX * 0.52);
-
-        let id = 0;
-        for (let r = 0; r < rows; r++) {
-            const y = Math.round(padTop + r * stepY);
-            for (let c = 0; c < cols; c++) {
-                const x = Math.round(padX + c * stepX);
-                const hole = new Hole(c, r, x, y, radiusX, radiusY, this.config, this.assets);
-                hole.id = id++;
-                this.holes.push(hole);
-            }
-        }
+        this.updateHolePositions();
     }
 
     updateHolePositions() {
-        // Holes are cleanly anchored in the 3-row fullscreen grid
+        if (!this.parallaxManager) return;
+        const b = this.parallaxManager.bounds;
+        const scale = b.scale;
+        const ox = b.offsetX;
+        const oy = b.offsetY;
+
+        for (let i = 0; i < this.holes.length; i++) {
+            const hole = this.holes[i];
+            const nh = hole.nativeHole;
+            hole.screenX = Math.round(ox + nh.x * scale);
+            hole.screenY = Math.round(oy + nh.y * scale);
+            hole.radiusX = Math.round(nh.rx * scale);
+            hole.radiusY = Math.round(nh.ry * scale);
+            hole.depthScale = nh.depthScale * scale;
+            hole.isVisible = true;
+        }
     }
 
     getHitsUntilRed() {

@@ -5,12 +5,12 @@ export const CONFIG = {
     VIEWPORT_HEIGHT: 800,
     IS_PORTRAIT: false,
 
-    // Fullscreen 3-Row Grid (Requirement 1: max 9 or 12 holes, 3 rows, 3 or 4 columns with padding)
-    GRID_MODE: 'auto',         // 'auto' (3x3 portrait = 9, 3x4 landscape = 12) | 9 | 12
-    HOLE_ROWS: 3,              // Strictly 3 rows!
-    HOLE_COLUMNS: 4,           // 3 or 4 columns (max 9 or 12 holes)
-    PADDING_TOP: 115,          // Padding from top (below HUD bar)
-    PADDING_BOTTOM: 65,        // Padding from bottom of screen
+    // 9 Holes (3 Rows x 3 Columns) Centered Layout with Corner Padding
+    GRID_MODE: 9,              // 9 holes (3x3)
+    HOLE_ROWS: 3,              // 3 rows
+    HOLE_COLUMNS: 3,           // 3 columns
+    PADDING_TOP: 110,          // Padding from top (below HUD bar)
+    PADDING_BOTTOM: 55,        // Padding from bottom of screen
     PADDING_HORIZONTAL: 75,    // Padding from left and right edges
 
     // Hole Proportions

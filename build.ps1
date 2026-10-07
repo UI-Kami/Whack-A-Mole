@@ -86,23 +86,7 @@ $uiWiring = @'
         });
     }
 
-    // --- Grid Layout Toggle (Auto / 9 Holes / 12 Holes) (Requirement 1) ---
-    const btnGridMode = document.getElementById('btn-grid-mode');
-    const textGridMode = document.getElementById('text-grid-mode');
-    const gridOptions = [
-        { id: 'auto', label: 'GRID: AUTO' },
-        { id: 9, label: 'GRID: 9 HOLES' },
-        { id: 12, label: 'GRID: 12 HOLES' }
-    ];
-    let currentGridIdx = 0;
-    if (btnGridMode) {
-        btnGridMode.addEventListener('click', () => {
-            currentGridIdx = (currentGridIdx + 1) % gridOptions.length;
-            const current = gridOptions[currentGridIdx];
-            if (textGridMode) textGridMode.textContent = current.label;
-            game.setGridMode(current.id);
-        });
-    }
+
 
     // --- Audio and SFX Toggles ---
     const pathSfxOn = 'M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z';
@@ -296,12 +280,6 @@ $middleHtml = @'
         <button id="btn-hand-mode" class="hud-btn btn-hand-mode" title="Switch Hand Mode" aria-label="Switch Hand Mode">
             <span id="icon-hand-mode"><svg class="hud-mode-icon" viewBox="0 0 24 24"><path d="M7 2v11h3v9l7-12h-4l4-8z"/></svg></span>
             <span id="text-hand-mode">COMBO</span>
-        </button>
-
-        <!-- Grid Layout Toggle (Auto / 9 Holes / 12 Holes) (Requirement 1) -->
-        <button id="btn-grid-mode" class="hud-btn" title="Toggle 9 or 12 Holes Grid" aria-label="Toggle 9 or 12 Holes Grid">
-            <svg class="hud-icon" viewBox="0 0 24 24"><path d="M4 4h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 10h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 16h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4z"/></svg>
-            <span id="text-grid-mode">GRID</span>
         </button>
 
         <!-- Score Display Pill -->

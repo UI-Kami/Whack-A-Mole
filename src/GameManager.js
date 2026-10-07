@@ -128,7 +128,7 @@ export class GameManager {
             this.assets.redCharacter = await loadImg('assets/clean_sprites/red_character.png');
             this.assets.punchSprite = await loadImg('assets/clean_sprites/punch_hand.png');
             this.assets.slapSprite = await loadImg('assets/clean_sprites/slap_hand.png');
-            this.assets.bgImg = await loadImg('assets/clean_sprites/arena_bg.jpg');
+            this.assets.bgImg = await loadImg('assets/BG_NEW/Background_New.jpg');
             this.assets.holePad = await loadImg('assets/clean_sprites/hole_pad.png');
             this.assets.holeRim = await loadImg('assets/clean_sprites/hole_front_rim.png');
         }
@@ -153,10 +153,10 @@ export class GameManager {
             this.config.VIEWPORT_WIDTH = baseW;
             this.config.VIEWPORT_HEIGHT = Math.round(baseW * aspect);
             this.config.IS_PORTRAIT = true;
-            this.config.HOLE_COLUMNS = 3; // 3 columns in portrait = 9 holes max!
-            this.config.HOLE_ROWS = 3;    // Strictly 3 rows!
-            this.config.PADDING_TOP = 120;
-            this.config.PADDING_BOTTOM = 65;
+            this.config.HOLE_COLUMNS = 3; // 3 columns in portrait = 9 holes
+            this.config.HOLE_ROWS = 3;    // 3 rows
+            this.config.PADDING_TOP = 110;
+            this.config.PADDING_BOTTOM = 55;
             this.config.PADDING_HORIZONTAL = 50;
         } else {
             const baseH = 800;
@@ -164,10 +164,10 @@ export class GameManager {
             this.config.VIEWPORT_HEIGHT = baseH;
             this.config.VIEWPORT_WIDTH = Math.max(1200, Math.round(baseH * aspect));
             this.config.IS_PORTRAIT = false;
-            this.config.HOLE_COLUMNS = 4; // 4 columns in landscape = 12 holes max!
-            this.config.HOLE_ROWS = 3;    // Strictly 3 rows!
-            this.config.PADDING_TOP = 130;
-            this.config.PADDING_BOTTOM = 75;
+            this.config.HOLE_COLUMNS = 3; // 3 columns in landscape = 9 holes
+            this.config.HOLE_ROWS = 3;    // 3 rows
+            this.config.PADDING_TOP = 110;
+            this.config.PADDING_BOTTOM = 55;
             this.config.PADDING_HORIZONTAL = 75;
         }
 

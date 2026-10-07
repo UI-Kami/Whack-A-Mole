@@ -276,15 +276,7 @@ html, body {
     background: rgba(245, 158, 11, 0.3);
 }
 
-#btn-grid-mode {
-    background: rgba(56, 189, 248, 0.15);
-    border-color: rgba(56, 189, 248, 0.4);
-    color: #38bdf8;
-}
 
-#btn-grid-mode:hover {
-    background: rgba(56, 189, 248, 0.3);
-}
 
 .hurt-overlay {
     position: absolute;
