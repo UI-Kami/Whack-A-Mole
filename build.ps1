@@ -276,67 +276,71 @@ $middleHtml = @'
             WHACK-A-MOLE
         </div>
 
-        <!-- Hand Attack Mode Toggle (Combo / Punch / Slap) -->
-        <button id="btn-hand-mode" class="hud-btn btn-hand-mode" title="Switch Hand Mode" aria-label="Switch Hand Mode">
-            <span id="icon-hand-mode"><svg class="hud-mode-icon" viewBox="0 0 24 24"><path d="M7 2v11h3v9l7-12h-4l4-8z"/></svg></span>
-            <span id="text-hand-mode">COMBO</span>
-        </button>
+        <div class="hud-row-top">
+            <!-- Score Display Pill -->
+            <div class="hud-pill hud-score-pill" title="Moles Whacked">
+                <span class="hud-pill-label">SCORE</span>
+                <span id="hud-score-val" class="hud-pill-val">0</span>
+            </div>
 
-        <!-- Score Display Pill -->
-        <div class="hud-pill hud-score-pill" title="Moles Whacked">
-            <span class="hud-pill-label">SCORE</span>
-            <span id="hud-score-val" class="hud-pill-val">0</span>
+            <!-- Red Rage Predictor Pill -->
+            <div class="hud-pill hud-predictor-pill" id="hud-predictor-pill" title="Predicts when Yellow mole will turn RED and explode!">
+                <span class="hud-pill-label">RAGE</span>
+                <span class="hud-pill-val" id="hud-predictor-val-wrap"><span id="hud-predictor-dot" class="rage-indicator-dot"></span><span id="hud-predictor-val">IN: 4</span></span>
+            </div>
+
+            <!-- 3 Hearts Health Bar -->
+            <div class="hud-pill hud-health-pill" id="hud-health-bar" title="3 Lives - Exploding Red Mole loses 1 heart!">
+                <span class="hud-heart active" id="heart-0" aria-label="Heart 1">
+                    <svg class="heart-svg" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                </span>
+                <span class="hud-heart active" id="heart-1" aria-label="Heart 2">
+                    <svg class="heart-svg" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                </span>
+                <span class="hud-heart active" id="heart-2" aria-label="Heart 3">
+                    <svg class="heart-svg" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                </span>
+            </div>
         </div>
 
-        <!-- Red Rage Predictor Pill (Requirement 3: Yellow turns RED and explodes!) -->
-        <div class="hud-pill hud-predictor-pill" id="hud-predictor-pill" title="Predicts when Yellow mole will turn RED and explode!">
-            <span class="hud-pill-label">RAGE</span>
-            <span class="hud-pill-val" id="hud-predictor-val-wrap"><span id="hud-predictor-dot" class="rage-indicator-dot"></span><span id="hud-predictor-val">IN: 4</span></span>
+        <div class="hud-row-bottom">
+            <!-- Hand Attack Mode Toggle (Combo / Punch / Slap) -->
+            <button id="btn-hand-mode" class="hud-btn btn-hand-mode" title="Switch Hand Mode" aria-label="Switch Hand Mode">
+                <span id="icon-hand-mode"><svg class="hud-mode-icon" viewBox="0 0 24 24"><path d="M7 2v11h3v9l7-12h-4l4-8z"/></svg></span>
+                <span id="text-hand-mode">COMBO</span>
+            </button>
+
+            <!-- SFX Button -->
+            <button id="btn-sfx" class="hud-btn active" title="Toggle Sound Effects" aria-label="Toggle Sound Effects">
+                <svg id="svg-sfx" class="hud-icon" viewBox="0 0 24 24">
+                    <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+                </svg>
+                <span>SFX</span>
+            </button>
+
+            <!-- Music Button -->
+            <button id="btn-music" class="hud-btn active" title="Toggle Music" aria-label="Toggle Music">
+                <svg id="svg-music" class="hud-icon" viewBox="0 0 24 24">
+                    <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+                </svg>
+                <span>Music</span>
+            </button>
+
+            <!-- Stats Button -->
+            <button id="btn-stats" class="hud-btn" title="View Stats" aria-label="View Stats">
+                <svg class="hud-icon" viewBox="0 0 24 24">
+                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
+                </svg>
+                <span>Stats</span>
+            </button>
+
+            <!-- Fullscreen Button -->
+            <button id="btn-fullscreen" class="hud-btn" title="Fullscreen" aria-label="Fullscreen">
+                <svg class="hud-icon" viewBox="0 0 24 24">
+                    <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
+                </svg>
+            </button>
         </div>
-
-        <!-- 3 Hearts Health Bar -->
-        <div class="hud-pill hud-health-pill" id="hud-health-bar" title="3 Lives - Exploding Red Mole loses 1 heart!">
-            <span class="hud-heart active" id="heart-0" aria-label="Heart 1">
-                <svg class="heart-svg" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
-            </span>
-            <span class="hud-heart active" id="heart-1" aria-label="Heart 2">
-                <svg class="heart-svg" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
-            </span>
-            <span class="hud-heart active" id="heart-2" aria-label="Heart 3">
-                <svg class="heart-svg" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
-            </span>
-        </div>
-
-        <!-- SFX Button -->
-        <button id="btn-sfx" class="hud-btn active" title="Toggle Sound Effects" aria-label="Toggle Sound Effects">
-            <svg id="svg-sfx" class="hud-icon" viewBox="0 0 24 24">
-                <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
-            </svg>
-            <span>SFX</span>
-        </button>
-
-        <!-- Music Button -->
-        <button id="btn-music" class="hud-btn active" title="Toggle Music" aria-label="Toggle Music">
-            <svg id="svg-music" class="hud-icon" viewBox="0 0 24 24">
-                <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
-            </svg>
-            <span>Music</span>
-        </button>
-
-        <!-- Stats Button -->
-        <button id="btn-stats" class="hud-btn" title="View Stats" aria-label="View Stats">
-            <svg class="hud-icon" viewBox="0 0 24 24">
-                <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
-            </svg>
-            <span>Stats</span>
-        </button>
-
-        <!-- Fullscreen Button -->
-        <button id="btn-fullscreen" class="hud-btn" title="Fullscreen" aria-label="Fullscreen">
-            <svg class="hud-icon" viewBox="0 0 24 24">
-                <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
-            </svg>
-        </button>
     </header>
 
     <!-- Red Screen Hurt Flash Overlay -->

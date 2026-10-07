@@ -1,10 +1,11 @@
-// src/MoleController.js - Yellow Mole & Red Mole State Machine, Animations & Paws Around Hole
+// src/MoleController.js - Yellow & Red Mole State Machine, Clean Sprite Animation & Delayed Explosion
 export const MOLE_STATE = {
     HIDDEN: 'HIDDEN',
     PEEKING: 'PEEKING',
     EMERGING: 'EMERGING',
     IDLE: 'IDLE',
     HIT: 'HIT',
+    TRANSFORMING_RED: 'TRANSFORMING_RED',
     ENRAGED_RED: 'ENRAGED_RED',
     DUCKING: 'DUCKING'
 };
@@ -36,9 +37,11 @@ export class MoleController {
         this.glanceY = 0;
 
         // Predictable Red Pattern properties
-        this.isPatternTrigger = false; // When true, hitting this Yellow mole turns it RED and immediately explodes!
+        this.isPatternTrigger = false;
         this.rageShakeTimer = 0;
         this.steamTimer = 0;
+        this.detonationTimer = 0;
+        this.onDetonate = null;
     }
 
     spawn(type = 'yellow', isPatternTrigger = false) {
@@ -46,7 +49,7 @@ export class MoleController {
         this.isPatternTrigger = isPatternTrigger;
         this.state = MOLE_STATE.PEEKING;
         this.timer = this.config.MOLE_PEEK_TIME || 0.22;
-        this.riseProgress = 0.24; // Low peek: hair, eyes, and fingers visible
+        this.riseProgress = 0.25; // Clean head peek
         this.isHit = false;
         this.scaleX = 1;
         this.scaleY = 1;
@@ -58,6 +61,8 @@ export class MoleController {
         this.glanceY = 0;
         this.rageShakeTimer = 0;
         this.steamTimer = 0;
+        this.detonationTimer = 0;
+        this.onDetonate = null;
 
         const minIdle = this.config.MOLE_MIN_IDLE_TIME || 1.1;
         const maxIdle = this.config.MOLE_MAX_IDLE_TIME || 1.8;
@@ -69,34 +74,45 @@ export class MoleController {
         this.state = MOLE_STATE.HIDDEN;
         this.riseProgress = 0;
         this.isHit = false;
+        this.detonationTimer = 0;
     }
 
     onHit(hitType = 'punch') {
-        if (this.state === MOLE_STATE.HIDDEN || this.isHit) {
+        if (this.state === MOLE_STATE.HIDDEN || this.isHit || this.state === MOLE_STATE.TRANSFORMING_RED) {
             return false;
         }
 
-        // Requirement 3: If this Yellow mole is the PATTERN TRIGGER mole:
-        // Turns RED and IMMEDIATELY DETONATES without needing a second touch!
+        // Requirement 2: On tapping the Yellow player, it turns RED first, then explodes!
         if (this.isPatternTrigger && this.type === 'yellow') {
             this.type = 'red';
             this.isHit = true;
-            this.explode(); // Instantly vanishes into explosion VFX
+            this.state = MOLE_STATE.TRANSFORMING_RED;
+            this.detonationTimer = 0.38; // 380ms visual anger reaction
+            this.rageShakeTimer = 0.38;
+            this.scaleX = 1.16;
+            this.scaleY = 0.90;
+
             return {
                 success: true,
                 transformedToRed: true,
+                delayedExplosion: true,
                 penalty: true,
                 type: 'red',
                 hitType: hitType
             };
         }
 
-        // If directly in ENRAGED_RED state (e.g. from debug or dodge):
+        // If directly in ENRAGED_RED state
         if (this.state === MOLE_STATE.ENRAGED_RED) {
             this.isHit = true;
-            this.explode();
+            this.state = MOLE_STATE.TRANSFORMING_RED;
+            this.detonationTimer = 0.32;
+            this.rageShakeTimer = 0.32;
+
             return {
                 success: true,
+                transformedToRed: true,
+                delayedExplosion: true,
                 penalty: true,
                 type: 'red',
                 hitType: hitType
@@ -115,6 +131,7 @@ export class MoleController {
             success: true,
             penalty: false,
             transformedToRed: false,
+            delayedExplosion: false,
             type: 'yellow',
             hitType: hitType
         };
@@ -167,10 +184,6 @@ export class MoleController {
                 const emergeTotal = this.config.MOLE_POP_DURATION || 0.26;
                 const p = Math.max(0, Math.min(1.0, 1 - (this.timer / emergeTotal)));
 
-                // 3-Phase Juicy Disney/Pixar Pop Curve (Requirement 2):
-                // Phase 1 (0.0 to 0.18): Coiling down into hole
-                // Phase 2 (0.18 to 0.65): Rocket upward emergence
-                // Phase 3 (0.65 to 1.0): Elastic settle and clamp onto rim
                 if (p < 0.18) {
                     const sub = p / 0.18;
                     this.riseProgress = 0.25 - 0.08 * Math.sin(sub * Math.PI);
@@ -214,6 +227,22 @@ export class MoleController {
                 }
                 break;
 
+            case MOLE_STATE.TRANSFORMING_RED:
+                this.detonationTimer -= dt;
+                // Violent comic vibration / shake
+                this.scaleX = 1.06 + (Math.random() - 0.5) * 0.18;
+                this.scaleY = 1.06 + (Math.random() - 0.5) * 0.18;
+                this.riseProgress = 1.0;
+
+                // When detonation timer runs out: trigger explosion callback!
+                if (this.detonationTimer <= 0) {
+                    this.explode();
+                    if (this.onDetonate) {
+                        this.onDetonate();
+                    }
+                }
+                break;
+
             case MOLE_STATE.ENRAGED_RED:
                 this.timer -= dt;
                 if (this.rageShakeTimer > 0) {
@@ -224,7 +253,6 @@ export class MoleController {
                 this.scaleY = 1.06 + (Math.random() - 0.5) * shakeAmp;
                 this.riseProgress = 1.0;
 
-                // If player dodged the Red mole, it ducks safely underground (Red dodge reward)
                 if (this.timer <= 0) {
                     this.state = MOLE_STATE.DUCKING;
                     this.timer = this.config.MOLE_DUCK_DURATION || 0.20;
@@ -278,7 +306,7 @@ export class MoleController {
             if (this.state === MOLE_STATE.DUCKING) {
                 return (this.riseProgress > 0.45) ? (this.assets.red_push || this.assets.redCharacter) : (this.assets.red_peek || this.assets.redCharacter);
             }
-            // IDLE / ENRAGED_RED
+            // IDLE / TRANSFORMING_RED / ENRAGED_RED
             return this.assets.red_idle || this.assets.redCharacter;
         } else {
             if (this.state === MOLE_STATE.HIT) {
@@ -298,11 +326,11 @@ export class MoleController {
         }
     }
 
-    // Draw Character with integrated Animated Sprite Frames
+    // Draw Character with clean Animated Sprite Frames
     draw(ctx, screenX, screenY, holeRadiusX, holeRadiusY) {
         if (this.state === MOLE_STATE.HIDDEN || this.riseProgress <= 0.01) return;
 
-        const isRed = (this.type === 'red' || this.state === MOLE_STATE.ENRAGED_RED);
+        const isRed = (this.type === 'red' || this.state === MOLE_STATE.TRANSFORMING_RED || this.state === MOLE_STATE.ENRAGED_RED);
         const sprite = this.getSpriteFrame(isRed);
 
         if (!sprite || !sprite.complete || sprite.naturalWidth === 0) {
@@ -323,7 +351,6 @@ export class MoleController {
         const bob = (this.state === MOLE_STATE.IDLE) ? Math.sin(this.idleBobTimer * 2.4) * 2.5 : 0;
 
         if (this.state === MOLE_STATE.PEEKING) {
-            // Hands sit right on the hole rim
             anchorY = screenY + (holeRadiusY * 0.14);
         } else if (this.state === MOLE_STATE.EMERGING) {
             const emergeOffset = (1.0 - this.riseProgress) * (holeRadiusY * 1.5);
@@ -334,32 +361,34 @@ export class MoleController {
         } else if (this.state === MOLE_STATE.HIT) {
             anchorY = screenY - (holeRadiusY * 0.05);
         } else {
-            // IDLE / ENRAGED_RED
+            // IDLE / TRANSFORMING_RED / ENRAGED_RED
             anchorY = screenY - (holeRadiusY * 0.10) + bob;
         }
 
         ctx.save();
         ctx.translate(screenX, anchorY);
 
-        // Warning tell: subtle pulse before hit so player can predict explosion!
-        if (this.isPatternTrigger && !isRed && this.state === MOLE_STATE.IDLE) {
-            this.drawPredictorAura(ctx, charW * 1.10, charH * 0.95);
+        // Warning tell: Subtle indicator placed safely ABOVE the head, with zero overlap on the character!
+        if (this.isPatternTrigger && !isRed && (this.state === MOLE_STATE.IDLE || this.state === MOLE_STATE.EMERGING)) {
+            this.drawPredictorAura(ctx, charW, charH, holeRadiusX, holeRadiusY);
         }
 
         ctx.scale(this.scaleX, this.scaleY);
 
-        // Red Enraged subtle glow
+        // Red Enraged fiery aura glow
         if (isRed) {
-            ctx.fillStyle = 'rgba(239, 68, 68, 0.22)';
+            ctx.fillStyle = (this.state === MOLE_STATE.TRANSFORMING_RED) 
+                ? 'rgba(239, 68, 68, 0.45)' 
+                : 'rgba(239, 68, 68, 0.25)';
             ctx.beginPath();
-            ctx.arc(0, -charH * 0.5, charW * 0.55, 0, Math.PI * 2);
+            ctx.arc(0, -charH * 0.5, charW * 0.60, 0, Math.PI * 2);
             ctx.fill();
         }
 
         // Draw animated sprite frame anchored horizontally centered and vertically from bottom
         ctx.drawImage(sprite, -charW * 0.5, -charH, charW, charH);
 
-        // Dizzy stars on hit
+        // Dizzy stars on yellow hit
         if (this.state === MOLE_STATE.HIT) {
             this.drawDizzyFX(ctx, charH);
         }
@@ -367,70 +396,28 @@ export class MoleController {
         ctx.restore();
     }
 
-    // Cartoon KO "X X" eyes when yellow character is hit
-    drawKOEyes(ctx, s = 1.0) {
+    // Predictor Glow: subtle ground tell and floating badge safely ABOVE head (zero facial overlap!)
+    drawPredictorAura(ctx, charW, charH, holeRadiusX, holeRadiusY) {
         ctx.save();
-        ctx.strokeStyle = '#1e1b4b';
-        ctx.lineWidth = 4.2 * s;
-        ctx.lineCap = 'round';
-
-        const ey = 6 * s;
-        ctx.beginPath();
-        ctx.moveTo(-24 * s, ey - 9 * s);
-        ctx.lineTo(-6 * s, ey + 9 * s);
-        ctx.moveTo(-6 * s, ey - 9 * s);
-        ctx.lineTo(-24 * s, ey + 9 * s);
-        ctx.stroke();
-
-        ctx.beginPath();
-        ctx.moveTo(6 * s, ey - 9 * s);
-        ctx.lineTo(24 * s, ey + 9 * s);
-        ctx.moveTo(24 * s, ey - 9 * s);
-        ctx.lineTo(6 * s, ey + 9 * s);
-        ctx.stroke();
-        ctx.restore();
-    }
-
-    // Angry angled eyebrows for Red character
-    drawAngryEyebrows(ctx, s = 1.0) {
-        ctx.save();
-        ctx.strokeStyle = '#450a0a';
-        ctx.lineWidth = 4.5 * s;
-        ctx.lineCap = 'round';
-
-        const ey = 2 * s;
-        ctx.beginPath();
-        ctx.moveTo(-25 * s, ey - 10 * s);
-        ctx.lineTo(-6 * s, ey - 2 * s);
-        ctx.stroke();
-
-        ctx.beginPath();
-        ctx.moveTo(25 * s, ey - 10 * s);
-        ctx.lineTo(6 * s, ey - 2 * s);
-        ctx.stroke();
-        ctx.restore();
-    }
-
-    // Predictor Glow: pulsing warning ring and banner so player predicts the dangerous mole!
-    drawPredictorAura(ctx, w, h) {
-        ctx.save();
+        // 1. Subtle ground warning pulse beneath hole rim
         const pulse = 0.5 + Math.sin(Date.now() * 0.008) * 0.4;
-        ctx.strokeStyle = `rgba(239, 68, 68, ${pulse * 0.85})`;
-        ctx.lineWidth = 3.5;
-        ctx.setLineDash([6, 4]);
+        ctx.strokeStyle = `rgba(239, 68, 68, ${pulse * 0.75})`;
+        ctx.lineWidth = 2.5;
+        ctx.setLineDash([5, 4]);
         ctx.beginPath();
-        ctx.ellipse(0, 0, w * 0.58, h * 0.58, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, 0, holeRadiusX * 1.05, holeRadiusY * 0.70, 0, 0, Math.PI * 2);
         ctx.stroke();
 
-        // Warning badge overhead: "WILL EXPLODE!"
+        // 2. Warning badge positioned safely ABOVE the head/hair (no face overlap!)
+        const badgeY = -charH - 24;
         ctx.fillStyle = 'rgba(239, 68, 68, 0.95)';
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 1.5;
         ctx.beginPath();
         if (ctx.roundRect) {
-            ctx.roundRect(-50, -h * 0.62, 100, 18, 9);
+            ctx.roundRect(-44, badgeY - 10, 88, 20, 10);
         } else {
-            ctx.rect(-50, -h * 0.62, 100, 18);
+            ctx.rect(-44, badgeY - 10, 88, 20);
         }
         ctx.fill();
         ctx.stroke();
@@ -439,7 +426,7 @@ export class MoleController {
         ctx.fillStyle = '#ffffff';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText("WILL EXPLODE!", 0, -h * 0.62 + 9);
+        ctx.fillText("⚠️ DANGER!", 0, badgeY);
         ctx.restore();
     }
 

@@ -1,20 +1,20 @@
-// src/MoleSpawner.js - Centered 9-Hole Background Integration & Crawling Paws
+// src/MoleSpawner.js - Scrolling Hole Alignment, Mole Emergence & Hit Detection
 import { MoleController, MOLE_STATE } from './MoleController.js';
 import { NATIVE_HOLES } from './ParallaxManager.js';
 
 export class Hole {
-    constructor(col, row, nativeHole, config, assets, parallaxManager = null) {
+    constructor(tileIndex, col, row, nativeHole, config, assets) {
+        this.tileIndex = tileIndex;
         this.col = col;
         this.row = row;
         this.nativeHole = nativeHole;
         this.config = config;
         this.assets = assets;
-        this.parallaxManager = parallaxManager;
 
         this.screenX = 0;
         this.screenY = 0;
-        this.radiusX = nativeHole.rx || 84;
-        this.radiusY = nativeHole.ry || 42;
+        this.radiusX = (nativeHole.rx || 90);
+        this.radiusY = (nativeHole.ry || 41);
         this.depthScale = nativeHole.depthScale || 1.0;
         this.isVisible = true;
 
@@ -29,56 +29,26 @@ export class Hole {
         return this.radiusY;
     }
 
-    // 3D Layered Hole Rendering:
-    // Background already draws the stone mound, bevels, and dark cavity (zero stretching!).
-    // 1. Mole emerges upwards (clipped so lower body stays inside hole cavity)
-    // 2. Character paws/hands gripping over the front rim!
-    draw(ctx) {
-        if (!this.isVisible) return;
+    // Draw Mole emerging from the background hole cavity (with bottom rim clipping)
+    drawMole(ctx) {
+        if (!this.isVisible || this.mole.state === MOLE_STATE.HIDDEN || this.mole.riseProgress <= 0.01) return;
 
+        ctx.save();
+        // Continuous single closed polygon clip path:
+        // Free emergence upwards for head, hair, badges and FX.
+        // Strictly masked by the bottom ellipse rim so lower body stays neatly inside the cavity!
         const rx = this.radiusX;
         const ry = this.radiusY;
 
-        // If background image is missing, render procedural fallback hole
-        if (!this.assets.bgImg || !this.assets.bgImg.complete || this.assets.bgImg.naturalWidth === 0) {
-            this.drawProceduralHole(ctx, rx, ry);
-        }
-
-        // Draw Animated Mole emerging from cavity (with bottom ellipse mask)
-        if (this.mole.state !== MOLE_STATE.HIDDEN && this.mole.riseProgress > 0.01) {
-            ctx.save();
-            ctx.beginPath();
-            ctx.moveTo(this.screenX - rx * 2.5, this.screenY - 500);
-            ctx.lineTo(this.screenX + rx * 2.5, this.screenY - 500);
-            ctx.lineTo(this.screenX + rx * 1.05, this.screenY);
-            ctx.ellipse(this.screenX, this.screenY, rx * 1.05, ry * 0.44, 0, 0, Math.PI, false);
-            ctx.closePath();
-            ctx.clip();
-
-            this.mole.draw(ctx, this.screenX, this.screenY, rx, ry);
-            ctx.restore();
-        }
-    }
-
-    drawProceduralHole(ctx, rx, ry) {
-        ctx.save();
-        // Stone pad mound
-        ctx.fillStyle = '#f1ece4';
         ctx.beginPath();
-        ctx.ellipse(this.screenX, this.screenY, rx * 1.35, ry * 1.35, 0, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.moveTo(this.screenX - rx * 2.5, this.screenY - 500);
+        ctx.lineTo(this.screenX + rx * 2.5, this.screenY - 500);
+        ctx.lineTo(this.screenX + rx * 1.04, this.screenY);
+        ctx.ellipse(this.screenX, this.screenY, rx * 1.04, ry * 0.44, 0, 0, Math.PI, false);
+        ctx.closePath();
+        ctx.clip();
 
-        // Outer silver rim
-        ctx.fillStyle = '#b0b3b8';
-        ctx.beginPath();
-        ctx.ellipse(this.screenX, this.screenY, rx * 1.12, ry * 1.12, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Inner dark hole cavity
-        ctx.fillStyle = '#111317';
-        ctx.beginPath();
-        ctx.ellipse(this.screenX, this.screenY, rx * 0.94, ry * 0.94, 0, 0, Math.PI * 2);
-        ctx.fill();
+        this.mole.draw(ctx, this.screenX, this.screenY, rx, ry);
         ctx.restore();
     }
 }
@@ -95,11 +65,26 @@ export class MoleSpawner {
         this.spawnTimer = 0.5;
         this.gameTime = 0;
 
-        // Predictable Red Mole cycle (4th hit turns yellow to red and explodes!)
+        // Predictable Red Mole cycle (4th hit turns yellow to red)
         this.hitCount = 0;
         this.cycleLength = this.config.RED_TRIGGER_COUNT || 4;
 
+        if (this.parallaxManager) {
+            this.parallaxManager.onTileRecycled = (tileIdx) => this.onTileRecycled(tileIdx);
+        }
+
         this.initHoles();
+    }
+
+    onTileRecycled(tileIdx) {
+        for (let i = 0; i < this.holes.length; i++) {
+            const h = this.holes[i];
+            if (h.tileIndex === tileIdx && h.mole.state !== MOLE_STATE.HIDDEN) {
+                h.mole.state = MOLE_STATE.HIDDEN;
+                h.mole.riseProgress = 0;
+                h.mole.isHit = false;
+            }
+        }
     }
 
     rebuildGrid(config) {
@@ -110,31 +95,44 @@ export class MoleSpawner {
 
     initHoles() {
         this.holes = [];
-        for (let i = 0; i < NATIVE_HOLES.length; i++) {
-            const nh = NATIVE_HOLES[i];
-            const hole = new Hole(nh.col, nh.row, nh, this.config, this.assets, this.parallaxManager);
-            hole.id = i;
-            this.holes.push(hole);
+        // 3 repeating tile instances (conveyor belt)
+        // 3 tiles x 18 native holes = 54 hole objects seamlessly moving with the background
+        const tileCount = 3;
+        for (let t = 0; t < tileCount; t++) {
+            for (let i = 0; i < NATIVE_HOLES.length; i++) {
+                const nh = NATIVE_HOLES[i];
+                const hole = new Hole(t, nh.col, nh.row, nh, this.config, this.assets);
+                hole.id = t * NATIVE_HOLES.length + i;
+                this.holes.push(hole);
+            }
         }
         this.updateHolePositions();
     }
 
     updateHolePositions() {
         if (!this.parallaxManager) return;
-        const b = this.parallaxManager.bounds;
-        const scale = b.scale;
-        const ox = b.offsetX;
-        const oy = b.offsetY;
+        const scale = this.parallaxManager.bounds.scale;
+        const offsetX = this.parallaxManager.bounds.offsetX;
+        const H = this.config.VIEWPORT_HEIGHT;
 
         for (let i = 0; i < this.holes.length; i++) {
             const hole = this.holes[i];
-            const nh = hole.nativeHole;
-            hole.screenX = Math.round(ox + nh.x * scale);
-            hole.screenY = Math.round(oy + nh.y * scale);
-            hole.radiusX = Math.round(nh.rx * scale);
-            hole.radiusY = Math.round(nh.ry * scale);
-            hole.depthScale = nh.depthScale * scale;
-            hole.isVisible = true;
+            const tileY = this.parallaxManager.getTileOffsetY(hole.tileIndex);
+            hole.screenX = Math.round(offsetX + hole.nativeHole.x * scale);
+            hole.screenY = Math.round(tileY + hole.nativeHole.y * scale);
+            hole.radiusX = Math.round(hole.nativeHole.rx * scale);
+            hole.radiusY = Math.round(hole.nativeHole.ry * scale);
+            hole.depthScale = hole.nativeHole.depthScale * scale;
+
+            // Hole visibility
+            hole.isVisible = (hole.screenY >= -80 && hole.screenY <= H + 80);
+
+            // Cleanly reset mole when hole scrolls past bottom of screen
+            if (hole.screenY > H + 50 && hole.mole.state !== MOLE_STATE.HIDDEN) {
+                hole.mole.state = MOLE_STATE.HIDDEN;
+                hole.mole.riseProgress = 0;
+                hole.mole.isHit = false;
+            }
         }
     }
 
@@ -146,6 +144,9 @@ export class MoleSpawner {
     update(dt) {
         this.gameTime += dt;
         this.spawnTimer -= dt;
+
+        // Update positions locked to scrolling background
+        this.updateHolePositions();
 
         for (let i = 0; i < this.holes.length; i++) {
             this.holes[i].mole.update(dt);
@@ -165,7 +166,15 @@ export class MoleSpawner {
 
         this.spawnTimer = currentInterval * (0.85 + Math.random() * 0.3);
 
-        const eligibleHoles = this.holes.filter(h => h.mole.state === MOLE_STATE.HIDDEN);
+        const H = this.config.VIEWPORT_HEIGHT;
+        // Eligible holes: visible, hidden, comfortably inside active play area (below HUD, above bottom)
+        const eligibleHoles = this.holes.filter(h => 
+            h.isVisible && 
+            h.screenY >= 90 && 
+            h.screenY <= H - 80 &&
+            h.mole.state === MOLE_STATE.HIDDEN
+        );
+
         if (eligibleHoles.length === 0) return;
 
         const maxSimultaneous = this.config.MAX_SIMULTANEOUS_MOLES || 3;
@@ -174,7 +183,8 @@ export class MoleSpawner {
 
         const selectedHole = eligibleHoles[Math.floor(Math.random() * eligibleHoles.length)];
 
-        // Predictable Red Pattern: Is this the mole that will turn Red and explode when hit?
+        // Predictable Red Pattern: Is this the mole that will turn Red when hit?
+        // When remaining === 1, the next hit turns Red!
         const isPatternTrigger = (this.getHitsUntilRed() === 1);
 
         selectedHole.mole.spawn('yellow', isPatternTrigger);
@@ -182,30 +192,32 @@ export class MoleSpawner {
         this.vfxManager.spawnMoleEmergeVFX(selectedHole.screenX, selectedHole.screenY, selectedHole.depthScale);
     }
 
-    // Check hit on active moles
+    // Check hit on any active moving mole
     checkHit(hitX, hitY, isTouch = false, applyHit = true, hitType = 'punch') {
+        // Sort visible active holes front-to-back (higher screenY = closer to player)
         const activeHoles = [...this.holes]
-            .filter(h => h.mole.state !== MOLE_STATE.HIDDEN && !h.mole.isHit)
+            .filter(h => h.isVisible && h.mole.state !== MOLE_STATE.HIDDEN && !h.mole.isHit)
             .sort((a, b) => b.screenY - a.screenY);
 
-        const radiusMult = isTouch ? 1.45 : 1.15;
+        const radiusMult = isTouch ? 1.4 : 1.1;
 
         for (let i = 0; i < activeHoles.length; i++) {
             const hole = activeHoles[i];
             const mole = hole.mole;
 
             const targetX = hole.screenX;
-            const targetY = hole.screenY - (mole.riseProgress * 42) - 10;
+            // Target center of visible character head/face matching emergence
+            const targetY = hole.screenY - (mole.riseProgress * 46 * hole.depthScale) - 10;
 
-            const hitRadiusX = (this.config.HAND_HIT_RADIUS || 100) * radiusMult;
-            const hitRadiusY = (this.config.HAND_HIT_RADIUS || 100) * 1.25 * radiusMult;
+            const hitRadiusX = ((this.config.HAND_HIT_RADIUS || 105) * radiusMult) * hole.depthScale;
+            const hitRadiusY = ((this.config.HAND_HIT_RADIUS || 105) * 1.25 * radiusMult) * hole.depthScale;
 
             const dx = (hitX - targetX) / hitRadiusX;
             const dy = (hitY - targetY) / hitRadiusY;
 
             // Also check hole rim area
-            const holeRadX = hole.getRadiusX() * (isTouch ? 1.4 : 1.2);
-            const holeRadY = hole.getRadiusY() * (isTouch ? 1.5 : 1.3);
+            const holeRadX = hole.getRadiusX() * (isTouch ? 1.35 : 1.15);
+            const holeRadY = hole.getRadiusY() * (isTouch ? 1.5 : 1.25);
             const hdx = (hitX - hole.screenX) / holeRadX;
             const hdy = (hitY - hole.screenY) / holeRadY;
             const inHoleMound = (hdx * hdx + hdy * hdy) <= 1.0;
@@ -223,7 +235,7 @@ export class MoleSpawner {
                             mole: mole,
                             x: targetX,
                             y: targetY,
-                            depthScale: 1.0,
+                            depthScale: hole.depthScale,
                             penalty: !!hitResult.penalty,
                             transformedToRed: !!hitResult.transformedToRed,
                             moleType: hitResult.type,
@@ -237,7 +249,7 @@ export class MoleSpawner {
                         mole: mole,
                         x: targetX,
                         y: targetY,
-                        depthScale: 1.0,
+                        depthScale: hole.depthScale,
                         penalty: mole.state === MOLE_STATE.ENRAGED_RED || (mole.isPatternTrigger && mole.type === 'yellow'),
                         moleType: mole.type,
                         hitType: hitType
@@ -250,10 +262,13 @@ export class MoleSpawner {
     }
 
     draw(ctx) {
-        // Draw 3 rows sorted top-to-bottom so foreground holes naturally overlap background holes
-        const sortedHoles = [...this.holes].sort((a, b) => a.screenY - b.screenY);
+        // Draw moving holes sorted top-to-bottom so foreground moles overlap background moles properly
+        const sortedHoles = [...this.holes]
+            .filter(h => h.isVisible)
+            .sort((a, b) => a.screenY - b.screenY);
+
         for (let i = 0; i < sortedHoles.length; i++) {
-            sortedHoles[i].draw(ctx);
+            sortedHoles[i].drawMole(ctx);
         }
     }
 }

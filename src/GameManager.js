@@ -34,7 +34,7 @@ export class GameManager {
             sessionTime: 0
         };
 
-        // Loaded Assets (including full Character Sprite Animations)
+        // Loaded Assets
         this.assets = {
             yellowCharacter: null,
             redCharacter: null,
@@ -116,7 +116,6 @@ export class GameManager {
 
     async loadSprites() {
         const loadImg = (url) => new Promise((resolve) => {
-            if (!url) return resolve(null);
             const img = new Image();
             img.src = url;
             img.onload = () => resolve(img);
@@ -152,7 +151,7 @@ export class GameManager {
             this.assets.red_hit = await loadImg('assets/clean_sprites/red_hit.png');
             this.assets.punchSprite = await loadImg('assets/clean_sprites/punch_hand.png');
             this.assets.slapSprite = await loadImg('assets/clean_sprites/slap_hand.png');
-            this.assets.bgImg = await loadImg('assets/BG_NEW/Background_New.jpg');
+            this.assets.bgImg = await loadImg('assets/BG_NEW/Background_Seamless.jpg');
             this.assets.holePad = await loadImg('assets/clean_sprites/hole_pad.png');
             this.assets.holeRim = await loadImg('assets/clean_sprites/hole_front_rim.png');
         }
@@ -160,6 +159,9 @@ export class GameManager {
         if (this.parallaxManager && this.assets.bgImg) {
             this.parallaxManager.bgImg = this.assets.bgImg;
             this.parallaxManager.calculateBounds();
+            if (this.moleSpawner) {
+                this.moleSpawner.updateHolePositions();
+            }
         }
     }
 
@@ -177,25 +179,24 @@ export class GameManager {
             this.config.VIEWPORT_WIDTH = baseW;
             this.config.VIEWPORT_HEIGHT = Math.round(baseW * aspect);
             this.config.IS_PORTRAIT = true;
-            this.config.HOLE_COLUMNS = 3; // 3 columns in portrait = 9 holes
-            this.config.HOLE_ROWS = 3;    // 3 rows
+            this.config.PERSPECTIVE_HORIZON_Y = Math.round(this.config.VIEWPORT_HEIGHT * 0.16);
+            this.config.HOLE_COLUMNS = 3;
             this.config.PADDING_TOP = 110;
             this.config.PADDING_BOTTOM = 55;
-            this.config.PADDING_HORIZONTAL = 50;
+            this.config.PADDING_HORIZONTAL = 45;
         } else {
             const baseH = 800;
             const aspect = screenW / screenH;
             this.config.VIEWPORT_HEIGHT = baseH;
             this.config.VIEWPORT_WIDTH = Math.max(1200, Math.round(baseH * aspect));
             this.config.IS_PORTRAIT = false;
-            this.config.HOLE_COLUMNS = 3; // 3 columns in landscape = 9 holes
-            this.config.HOLE_ROWS = 3;    // 3 rows
+            this.config.PERSPECTIVE_HORIZON_Y = Math.round(baseH * 0.18);
+            this.config.HOLE_COLUMNS = 3;
             this.config.PADDING_TOP = 110;
             this.config.PADDING_BOTTOM = 55;
-            this.config.PADDING_HORIZONTAL = 75;
+            this.config.PADDING_HORIZONTAL = 70;
         }
 
-        // Mobile performance optimization: clamp DPR to 1.5 on mobile to avoid fillrate lag
         const dpr = Math.min(window.devicePixelRatio || 1, isMobile ? 1.5 : 2);
         this.canvas.width = Math.round(this.config.VIEWPORT_WIDTH * dpr);
         this.canvas.height = Math.round(this.config.VIEWPORT_HEIGHT * dpr);
@@ -271,7 +272,43 @@ export class GameManager {
         }));
     }
 
-    // Requirement 3: Immediate Red Explosion without needing a second touch!
+    // Requirement 2: Yellow mole turns RED first on tap, shakes furiously, and then detonates!
+    triggerRedTransformation(result) {
+        if (this.isGameOver) return;
+
+        this.stats.currentStreak = 0;
+
+        // Immediate angry warning screech / alarm
+        this.audioManager.playRedWarning();
+        this.cameraShake.addTrauma(0.35, 0, 1);
+
+        // Rage sparks & hit reaction VFX at the mole
+        this.vfxManager.spawnHitVFX(result.x, result.y, 1.0, true, result.hitType, 0);
+
+        const hitsUntilRed = this.moleSpawner ? this.moleSpawner.getHitsUntilRed() : 4;
+
+        window.dispatchEvent(new CustomEvent('molehit', {
+            detail: {
+                ...result,
+                stats: this.stats,
+                health: this.health,
+                hitsUntilRed: hitsUntilRed,
+                handMode: this.hammer?.handMode || 'combo'
+            }
+        }));
+
+        // Attach delayed detonation callback to the mole:
+        // When mole's anger countdown finishes (380ms), handleWrongHit executes!
+        if (result.hole && result.hole.mole) {
+            result.hole.mole.onDetonate = () => {
+                this.handleWrongHit(result);
+            };
+        } else {
+            setTimeout(() => this.handleWrongHit(result), 380);
+        }
+    }
+
+    // Heavy detonation aftermath: Full-screen explosion, screen trauma, heart deducted!
     handleWrongHit(result) {
         if (this.isGameOver) return;
 
@@ -298,7 +335,7 @@ export class GameManager {
             try { navigator.vibrate([70, 40, 70]); } catch (e) {}
         }
 
-        // Requirement 3: Massive FULL-SCREEN Explosion VFX covering whole screen!
+        // Full-screen explosion VFX covering the entire screen
         this.vfxManager.spawnFullScreenExplosionVFX(result.x, result.y);
 
         const hitsUntilRed = this.moleSpawner ? this.moleSpawner.getHitsUntilRed() : 4;
@@ -374,9 +411,9 @@ export class GameManager {
         const result = this.moleSpawner.checkHit(hitX, hitY, isTouch, true, attackType);
 
         if (result.hit) {
-            // Requirement 3: The yellow character that turns red IMMEDIATELY EXPLODES without needing a second touch!
+            // Requirement 2: Yellow that is about to explode turns RED first upon tapping, then explodes!
             if (result.penalty || result.transformedToRed) {
-                this.handleWrongHit(result);
+                this.triggerRedTransformation(result);
             } else {
                 this.executeHitSuccess(result);
             }
@@ -442,13 +479,13 @@ export class GameManager {
         ctx.save();
         this.cameraShake.apply(ctx);
 
-        // 1. Clean fullscreen arena ground plane
+        // 1. Clean fullscreen arena ground plane (seamless scrolling)
         this.parallaxManager.drawGroundPlane(ctx);
 
         // 2. Ground VFX (shockwaves, cracks)
         this.vfxManager.drawGroundLayer(ctx);
 
-        // 3. Holes (with hole pad, emerging mole, front rim, and gripping paws!)
+        // 3. Holes (with emerging moles clipped neatly to cavities)
         this.moleSpawner.draw(ctx);
 
         // 4. Top VFX (impact flashes, sparks)
@@ -457,7 +494,7 @@ export class GameManager {
         // 5. Player Hand (Punch & Slap animations)
         this.hammer.draw(ctx);
 
-        // 6. REQUIREMENT 4: Floating Insult Text Messages (Idiot, Namoona, Chomu, etc.)
+        // 6. Floating Insult Text Messages (Idiot, Namoona, Chomu, etc.)
         // ALWAYS DRAWN IN FRONT OF THE HAND!
         this.vfxManager.drawFloatingTexts(ctx);
 
@@ -466,7 +503,7 @@ export class GameManager {
 
         ctx.restore();
 
-        // 8. Full-viewport screen impact flash & whole-screen explosion vignette (Requirement 3)
+        // 8. Full-viewport screen impact flash & whole-screen explosion vignette
         this.vfxManager.drawScreenFlash(ctx);
     }
 

@@ -78,6 +78,12 @@ html, body {
     transition: all 0.25s ease;
 }
 
+.hud-row-top, .hud-row-bottom {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
 .brand-badge {
     display: flex;
     align-items: center;
@@ -425,13 +431,52 @@ html, body {
 
 @media (max-width: 768px) {
     .arcade-hud {
-        top: max(8px, env(safe-area-inset-top));
-        padding: 5px 10px;
+        top: max(6px, env(safe-area-inset-top));
+        width: calc(100% - 16px);
+        max-width: 440px;
+        padding: 6px 10px;
+        border-radius: 18px;
+        flex-direction: column;
         gap: 6px;
-        max-width: calc(100vw - 16px);
+        align-items: stretch;
     }
     .brand-badge {
         display: none;
+    }
+    .hud-row-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        gap: 6px;
+    }
+    .hud-row-bottom {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        gap: 5px;
+    }
+    .hud-row-top .hud-pill {
+        flex: 1;
+        justify-content: center;
+        padding: 4px 6px;
+        min-width: 0;
+    }
+    .hud-pill-label {
+        font-size: 10px;
+    }
+    .hud-pill-val {
+        font-size: 13px;
+    }
+    .heart-svg {
+        width: 14px;
+        height: 14px;
+    }
+    .hud-row-bottom .hud-btn {
+        padding: 5px 8px;
+        font-size: 11px;
+        flex-shrink: 0;
     }
     .hud-btn span:not(#text-hand-mode) {
         display: none;
