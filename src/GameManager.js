@@ -278,24 +278,42 @@ export class GameManager {
 
         this.stats.currentStreak = 0;
 
-        // Immediate angry warning screech / alarm
-        this.audioManager.playRedWarning();
-        this.cameraShake.addTrauma(0.35, 0, 1);
+        // Reset hitCount in moleSpawner so next cycle restarts!
+        if (this.moleSpawner) {
+            this.moleSpawner.hitCount = 0;
+        }
 
-        // Rage sparks & hit reaction VFX at the mole
-        this.vfxManager.spawnHitVFX(result.x, result.y, 1.0, true, result.hitType, 0);
+        // Immediate angry warning screech / alarm with safe fallbacks
+        try {
+            if (this.audioManager && typeof this.audioManager.playRedWarning === 'function') {
+                this.audioManager.playRedWarning();
+            } else if (this.audioManager && typeof this.audioManager.playHeartLost === 'function') {
+                this.audioManager.playHeartLost();
+            }
+        } catch (e) {
+            console.warn('Error playing red warning sound', e);
+        }
+
+        try {
+            this.cameraShake?.addTrauma(0.35, 0, 1);
+            this.vfxManager?.spawnHitVFX(result.x, result.y, 1.0, true, result.hitType, 0);
+        } catch (e) {
+            console.warn('Error in red transformation effects', e);
+        }
 
         const hitsUntilRed = this.moleSpawner ? this.moleSpawner.getHitsUntilRed() : 4;
 
-        window.dispatchEvent(new CustomEvent('molehit', {
-            detail: {
-                ...result,
-                stats: this.stats,
-                health: this.health,
-                hitsUntilRed: hitsUntilRed,
-                handMode: this.hammer?.handMode || 'combo'
-            }
-        }));
+        try {
+            window.dispatchEvent(new CustomEvent('molehit', {
+                detail: {
+                    ...result,
+                    stats: this.stats,
+                    health: this.health,
+                    hitsUntilRed: hitsUntilRed,
+                    handMode: this.hammer?.handMode || 'combo'
+                }
+            }));
+        } catch (e) {}
 
         // Attach delayed detonation callback to the mole:
         // When mole's anger countdown finishes (380ms), handleWrongHit executes!

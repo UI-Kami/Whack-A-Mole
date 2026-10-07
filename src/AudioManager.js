@@ -417,6 +417,32 @@ export class AudioManager {
         }
     }
 
+    // --- SFX: Red Mole Warning Alert (Anger Transformation) ---
+    playRedWarning() {
+        if (!this.initialized || this.isMuted) return;
+        this.resume();
+        const t = this.ctx.currentTime;
+
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(260, t);
+        osc.frequency.exponentialRampToValueAtTime(750, t + 0.18);
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(1400, t);
+
+        gain.gain.setValueAtTime(0.4, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.20);
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.sfxGain);
+        osc.start(t);
+        osc.stop(t + 0.20);
+    }
+
     // --- SFX: Wrong Hit Alias (fixes freeze bug) ---
     playWrongHit() {
         this.playRedExplosion();

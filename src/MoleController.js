@@ -236,9 +236,15 @@ export class MoleController {
 
                 // When detonation timer runs out: trigger explosion callback!
                 if (this.detonationTimer <= 0) {
+                    const cb = this.onDetonate;
+                    this.onDetonate = null;
                     this.explode();
-                    if (this.onDetonate) {
-                        this.onDetonate();
+                    if (cb) {
+                        try {
+                            cb();
+                        } catch (e) {
+                            console.error("Error executing detonation callback", e);
+                        }
                     }
                 }
                 break;
