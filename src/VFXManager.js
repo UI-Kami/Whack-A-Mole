@@ -1,7 +1,7 @@
-// src/VFXManager.js - Visual Effects, Particle Systems, Shockwaves, and Impact Juice
+// src/VFXManager.js - Visual Effects, Particle Systems, Full-Screen Explosion & Floating Text in Front of Hand
 import { ObjectPool } from './ObjectPool.js';
 
-// Particle definition
+// Particle definition (Optimized: No expensive Canvas shadowBlur for mobile 60 FPS)
 class Particle {
     constructor() {
         this.x = 0;
@@ -67,7 +67,6 @@ class Particle {
         } else if (this.type === 'spore') {
             this.vx += Math.sin(this.life * 4) * 5 * dt;
         } else if (this.type === 'confetti') {
-            // Air friction slows down horizontal speed
             this.vx *= 0.96;
         }
 
@@ -80,10 +79,10 @@ class Particle {
         ctx.translate(this.x, this.y);
         ctx.rotate(this.rotation);
 
+        // Mobile Optimization: Zero shadowBlur for silky smooth 60 FPS
         if (this.type === 'spark') {
+            // Crisp dual-layer glow circle (100x faster than canvas blur)
             ctx.fillStyle = this.color;
-            ctx.shadowColor = this.color;
-            ctx.shadowBlur = 8;
             ctx.beginPath();
             ctx.arc(0, 0, this.size, 0, Math.PI * 2);
             ctx.fill();
@@ -99,8 +98,6 @@ class Particle {
             ctx.fill();
         } else if (this.type === 'star') {
             ctx.fillStyle = this.color;
-            ctx.shadowColor = '#fff';
-            ctx.shadowBlur = 6;
             ctx.beginPath();
             const s = this.size;
             ctx.moveTo(0, -s);
@@ -110,33 +107,24 @@ class Particle {
             ctx.quadraticCurveTo(0, 0, 0, -s);
             ctx.fill();
         } else if (this.type === 'droplet') {
-            // Cartoon sweat/tear droplet
             ctx.fillStyle = this.color;
-            ctx.shadowColor = '#60a5fa';
-            ctx.shadowBlur = 4;
             ctx.beginPath();
             const s = this.size;
             ctx.moveTo(0, -s * 1.5);
             ctx.quadraticCurveTo(s, 0, 0, s);
             ctx.quadraticCurveTo(-s, 0, 0, -s * 1.5);
             ctx.fill();
-            // Tiny white glint
             ctx.fillStyle = '#ffffff';
             ctx.beginPath();
             ctx.arc(-s * 0.25, -s * 0.2, s * 0.3, 0, Math.PI * 2);
             ctx.fill();
         } else if (this.type === 'confetti') {
-            // Tumbling 3D confetti ribbon
             ctx.fillStyle = this.color;
-            ctx.shadowColor = this.color;
-            ctx.shadowBlur = 4;
             const w = this.size * 1.4;
             const h = Math.max(1.5, Math.abs(this.size * 0.6 * Math.cos(this.rotation * 2.5)));
             ctx.fillRect(-w * 0.5, -h * 0.5, w, h);
         } else if (this.type === 'spore') {
             ctx.fillStyle = this.color;
-            ctx.shadowColor = this.color;
-            ctx.shadowBlur = 4;
             ctx.beginPath();
             ctx.arc(0, 0, this.size, 0, Math.PI * 2);
             ctx.fill();
@@ -146,94 +134,92 @@ class Particle {
     }
 }
 
-// Shockwave definition
+// Shockwave Ring
 class Shockwave {
     constructor() {
         this.x = 0;
         this.y = 0;
         this.radius = 0;
-        this.maxRadius = 120;
+        this.maxRadius = 160;
         this.color = '#fff';
-        this.lineWidth = 6;
-        this.life = 0.35;
+        this.life = 0;
         this.maxLife = 0.35;
         this.active = false;
-        this.aspectY = 0.55; // 2.5D perspective ellipse flattening
     }
 
-    reset(x, y, maxRadius = 130, color = '#ffffff', maxLife = 0.38) {
+    reset(x, y, maxRadius = 160, color = '#fff', maxLife = 0.35) {
         this.x = x;
         this.y = y;
-        this.radius = 10;
         this.maxRadius = maxRadius;
         this.color = color;
         this.maxLife = maxLife;
         this.life = maxLife;
+        this.radius = 10;
     }
 
     update(dt) {
         this.life -= dt;
         if (this.life <= 0) return false;
         const progress = 1 - (this.life / this.maxLife);
-        const ease = 1 - Math.pow(1 - progress, 3);
-        this.radius = 10 + (this.maxRadius - 10) * ease;
-        this.lineWidth = Math.max(1, 8 * (1 - progress));
+        // Exponential ease-out expansion
+        this.radius = 10 + (this.maxRadius - 10) * Math.sin(progress * Math.PI * 0.5);
         return true;
     }
 
     draw(ctx) {
         const progress = 1 - (this.life / this.maxLife);
+        const alpha = Math.max(0, 1 - progress);
         ctx.save();
-        ctx.globalAlpha = Math.max(0, (1 - progress) * 0.9);
+        ctx.globalAlpha = alpha;
         ctx.strokeStyle = this.color;
-        ctx.lineWidth = this.lineWidth;
-        ctx.shadowColor = this.color;
-        ctx.shadowBlur = 12;
+        ctx.lineWidth = Math.max(1.5, 6 * (1 - progress));
         ctx.beginPath();
-        ctx.ellipse(this.x, this.y, this.radius, this.radius * this.aspectY, 0, 0, Math.PI * 2);
+        // 2.5D perspective ellipse
+        ctx.ellipse(this.x, this.y, this.radius, this.radius * 0.65, 0, 0, Math.PI * 2);
         ctx.stroke();
         ctx.restore();
     }
 }
 
-// Comic Floating Pop Text with 12-Point Jagged Starburst Explosion Backdrop
+// Floating Comic Insult & Score Text (Requirement 4: Drawn IN FRONT of Hand!)
 class FloatingText {
     constructor() {
         this.x = 0;
         this.y = 0;
-        this.text = 'BONK!';
-        this.life = 0.65;
-        this.maxLife = 0.65;
-        this.color = '#ffeb3b';
-        this.strokeColor = '#b71c1c';
-        this.bannerColor = '#fde047';
+        this.text = 'IDIOt!';
+        this.life = 0.75;
+        this.maxLife = 0.75;
+        this.color = '#ffffff';
+        this.strokeColor = '#1e1b4b';
+        this.bannerColor = '#facc15';
         this.scale = 1;
-        this.vy = -70;
+        this.vy = -85;
         this.rotation = 0;
         this.isScore = false;
         this.active = false;
     }
 
-    reset(x, y, text, color = '#ffeb3b', strokeColor = '#212121', bannerColor = '#fde047', isScore = false) {
+    reset(x, y, text, color = '#ffffff', strokeColor = '#1e1b4b', bannerColor = '#facc15', isScore = false) {
         this.x = x;
-        this.y = y - 20;
+        // Spawns higher above the hit point so it is never obstructed
+        this.y = y - 48;
         this.text = text;
         this.color = color;
         this.strokeColor = strokeColor;
         this.bannerColor = bannerColor;
         this.isScore = isScore;
-        this.maxLife = isScore ? 0.85 : 0.72;
+        this.maxLife = isScore ? 0.85 : 0.80;
         this.life = this.maxLife;
-        this.vy = isScore ? -105 : -80;
+        this.vy = isScore ? -110 : -95;
         this.scale = 0.3;
-        this.rotation = isScore ? 0 : (Math.random() - 0.5) * 0.28;
+        this.rotation = isScore ? 0 : (Math.random() - 0.5) * 0.22;
     }
 
     update(dt) {
         this.life -= dt;
         if (this.life <= 0) return false;
         const progress = 1 - (this.life / this.maxLife);
-        
+
         // Elastic pop scale: fast overshoot and spring settle
         if (progress < 0.22) {
             this.scale = 0.3 + (progress / 0.22) * 1.05;
@@ -250,7 +236,7 @@ class FloatingText {
 
     draw(ctx) {
         const progress = 1 - (this.life / this.maxLife);
-        const alpha = progress > 0.65 ? Math.max(0, 1 - (progress - 0.65) / 0.35) : 1;
+        const alpha = progress > 0.68 ? Math.max(0, 1 - (progress - 0.68) / 0.32) : 1;
 
         ctx.save();
         ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
@@ -259,17 +245,14 @@ class FloatingText {
         ctx.scale(this.scale, this.scale);
 
         if (!this.isScore && this.bannerColor) {
-            // Draw 12-point jagged comic explosion starburst backdrop
+            // 12-point jagged comic explosion starburst banner
             ctx.save();
             ctx.fillStyle = this.bannerColor;
             ctx.strokeStyle = '#0f172a';
             ctx.lineWidth = 3.5;
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
-            ctx.shadowBlur = 8;
-            ctx.shadowOffsetY = 3;
 
             const points = 12;
-            const textWidth = Math.max(92, this.text.length * 17);
+            const textWidth = Math.max(96, this.text.length * 18);
             const outerR = textWidth * 0.62;
             const innerR = outerR * 0.68;
             ctx.beginPath();
@@ -277,7 +260,7 @@ class FloatingText {
                 const angle = (i * Math.PI) / points;
                 const r = (i % 2 === 0) ? outerR : innerR;
                 const px = Math.cos(angle) * r;
-                const py = Math.sin(angle) * (r * 0.62); // 2.5D oval perspective
+                const py = Math.sin(angle) * (r * 0.62);
                 if (i === 0) ctx.moveTo(px, py);
                 else ctx.lineTo(px, py);
             }
@@ -287,22 +270,23 @@ class FloatingText {
             ctx.restore();
         }
 
-        ctx.font = '900 28px "Outfit", "Arial Black", sans-serif';
+        ctx.font = '900 30px "Outfit", "Arial Black", sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
 
-        // Outer cartoon stroke with clean round joins for crisp readability
+        // High performance cartoon drop shadow (offset fill without blur)
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+        ctx.fillText(this.text, 2, 4);
+
+        // Thick comic cartoon stroke
         ctx.strokeStyle = this.strokeColor;
-        ctx.lineWidth = 6.5;
+        ctx.lineWidth = 7.0;
         ctx.lineJoin = 'round';
         ctx.lineCap = 'round';
         ctx.strokeText(this.text, 0, 0);
 
-        // Bright high-contrast fill
+        // Crisp white / bright fill
         ctx.fillStyle = this.color;
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
-        ctx.shadowOffsetY = 2;
-        ctx.shadowBlur = 4;
         ctx.fillText(this.text, 0, 0);
 
         ctx.restore();
@@ -356,7 +340,7 @@ class ImpactFlash {
     }
 }
 
-// Hole Crack VFX - Jagged stone fracture lines radiating from hole rim on hit (Point 4)
+// Hole Crack VFX - Stone fracture lines on hit
 export class HoleCrack {
     constructor() {
         this.reset(0, 0, 50, 25);
@@ -368,25 +352,24 @@ export class HoleCrack {
         this.rx = rx;
         this.ry = ry;
         this.hole = hole;
-        this.life = 2.4;
-        this.maxLife = 2.4;
+        this.life = 2.0;
+        this.maxLife = 2.0;
         this.branches = [];
 
-        // Generate 5-7 jagged fracture branches radiating out from the rim
-        const count = 5 + Math.floor(Math.random() * 3);
+        const count = 5;
         for (let i = 0; i < count; i++) {
-            const baseAngle = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.45;
+            const baseAngle = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
             const startX = Math.cos(baseAngle) * (rx * 0.95);
             const startY = Math.sin(baseAngle) * (ry * 0.95);
 
             const segs = [];
             let cx = startX;
             let cy = startY;
-            const segCount = 3 + Math.floor(Math.random() * 3);
-            const totalLen = 22 + Math.random() * 28;
+            const segCount = 3;
+            const totalLen = 22 + Math.random() * 20;
 
             for (let j = 0; j < segCount; j++) {
-                const ang = baseAngle + (Math.random() - 0.5) * 0.8;
+                const ang = baseAngle + (Math.random() - 0.5) * 0.7;
                 const len = totalLen / segCount;
                 cx += Math.cos(ang) * len;
                 cy += Math.sin(ang) * len * 0.65;
@@ -413,10 +396,8 @@ export class HoleCrack {
         ctx.translate(drawX, drawY);
         ctx.globalAlpha = alpha;
         ctx.lineCap = 'round';
-        ctx.lineJoin = 'miter';
 
-        // Outer dark fissure
-        ctx.strokeStyle = 'rgba(25, 30, 40, 0.9)';
+        ctx.strokeStyle = 'rgba(25, 30, 40, 0.85)';
         ctx.lineWidth = 2.4;
         ctx.beginPath();
         for (const b of this.branches) {
@@ -427,7 +408,6 @@ export class HoleCrack {
         }
         ctx.stroke();
 
-        // Inner stone highlight line
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
         ctx.lineWidth = 1.0;
         ctx.beginPath();
@@ -438,12 +418,15 @@ export class HoleCrack {
             }
         }
         ctx.stroke();
-
         ctx.restore();
     }
 }
 
+// User Requested Insult Texts (Requirement 4)
 export const INSULT_TEXTS = [
+    'Idiot',
+    'Namoona',
+    'Chomu',
     'Bewakoof',
     'Gadhay',
     'Nalaiq',
@@ -452,25 +435,22 @@ export const INSULT_TEXTS = [
     'Ullu',
     'Jahil',
     'Pagal',
-    'Namoona',
     'Bakwas',
     'Noob',
-    'Idiot',
     'Stupid',
-    'Moron',
-    'Chomu'
+    'Moron'
 ];
 
 export class VFXManager {
     constructor(config) {
         this.config = config;
 
-        // Pools
-        this.particles = new ObjectPool(() => new Particle(), (p, ...args) => p.reset(...args), 150);
-        this.shockwaves = new ObjectPool(() => new Shockwave(), (s, ...args) => s.reset(...args), 25);
+        // Optimized Object Pools
+        this.particles = new ObjectPool(() => new Particle(), (p, ...args) => p.reset(...args), 120);
+        this.shockwaves = new ObjectPool(() => new Shockwave(), (s, ...args) => s.reset(...args), 20);
         this.floatingTexts = new ObjectPool(() => new FloatingText(), (t, ...args) => t.reset(...args), 20);
         this.impactFlashes = new ObjectPool(() => new ImpactFlash(), (f, ...args) => f.reset(...args), 15);
-        this.holeCracks = new ObjectPool(() => new HoleCrack(), (c, ...args) => c.reset(...args), 25);
+        this.holeCracks = new ObjectPool(() => new HoleCrack(), (c, ...args) => c.reset(...args), 20);
 
         // Screen Impact Flash System
         this.screenFlash = {
@@ -481,20 +461,29 @@ export class VFXManager {
             timer: 0
         };
 
-        // Ambient drifting spores / pollen
+        // Full Screen Explosion Vignette (Requirement 3)
+        this.fullScreenExplosion = {
+            active: false,
+            timer: 0,
+            duration: 0.65,
+            color: '220, 38, 38'
+        };
+
+        // Ambient drifting spores
         this.ambientParticles = [];
         this.initAmbientParticles();
     }
 
     initAmbientParticles() {
-        for (let i = 0; i < 40; i++) {
+        const count = 25; // Mobile-friendly count
+        for (let i = 0; i < count; i++) {
             this.ambientParticles.push({
                 x: Math.random() * this.config.VIEWPORT_WIDTH,
                 y: Math.random() * this.config.VIEWPORT_HEIGHT,
-                speedY: -(20 + Math.random() * 40),
-                speedX: (Math.random() - 0.5) * 15,
-                size: 1.5 + Math.random() * 3,
-                baseAlpha: 0.2 + Math.random() * 0.45,
+                speedY: -(20 + Math.random() * 35),
+                speedX: (Math.random() - 0.5) * 12,
+                size: 1.5 + Math.random() * 2.5,
+                baseAlpha: 0.2 + Math.random() * 0.4,
                 phase: Math.random() * Math.PI * 2,
                 color: Math.random() > 0.5 ? '#fff9c4' : '#b2dfdb'
             });
@@ -522,282 +511,210 @@ export class VFXManager {
         this.floatingTexts.get(x, y, label, col, '#090d16', null, true);
     }
 
-    spawnComboConfetti(x, y, count = 28) {
+    spawnComboConfetti(x, y, count = 20) {
         const colors = ['#f43f5e', '#3b82f6', '#10b981', '#fbbf24', '#a855f7', '#ec4899', '#ffffff'];
         for (let i = 0; i < count; i++) {
             const angle = Math.random() * Math.PI * 2;
-            const speed = 120 + Math.random() * 260;
+            const speed = 120 + Math.random() * 220;
             const vx = Math.cos(angle) * speed;
-            const vy = Math.sin(angle) * speed * 0.7 - 90;
-            const color = colors[Math.floor(Math.random() * colors.length)];
+            const vy = Math.sin(angle) * speed * 0.7 - 50;
             this.particles.get(
-                x + (Math.random() - 0.5) * 30,
-                y + (Math.random() - 0.5) * 20,
+                x, y,
                 vx, vy,
-                5 + Math.random() * 4,
-                color,
-                0.65 + Math.random() * 0.4,
-                380,
+                3 + Math.random() * 4,
+                colors[Math.floor(Math.random() * colors.length)],
+                0.6 + Math.random() * 0.4,
+                350,
                 'confetti'
             );
         }
     }
 
-    // Trigger full satisfying hit VFX bundle with HumanHit(TEXT) insults & juice
+    // Regular Hit VFX
     spawnHitVFX(x, y, depthScale = 1.0, isSpecial = false, hitType = 'punch', comboStreak = 1) {
-        const isSlap = hitType === 'slap';
+        const isSlap = (hitType === 'slap');
 
-        // 1. Screen impact flash (crisp micro-flash)
         const flashCol = isSlap ? '244, 114, 182' : '255, 235, 150';
-        this.triggerScreenFlash(flashCol, isSlap ? 0.28 : 0.24, 0.04);
+        this.triggerScreenFlash(flashCol, isSlap ? 0.25 : 0.20, 0.04);
 
-        // 2. Impact radial flash
         const flashColor = isSlap ? '#f472b6' : (isSpecial ? '#ffeb3b' : '#ffffff');
-        this.impactFlashes.get(x, y, (isSlap ? 115 : 100) * depthScale, flashColor);
+        this.impactFlashes.get(x, y, (isSlap ? 110 : 95) * depthScale, flashColor);
 
-        // 3. Shockwave expanding on 2.5D plane
         const waveColor = isSlap ? '#ec4899' : (isSpecial ? '#ffd54f' : '#ffffff');
-        this.shockwaves.get(x, y + 10 * depthScale, (isSlap ? 155 : 140) * depthScale, waveColor);
+        this.shockwaves.get(x, y + 10 * depthScale, (isSlap ? 150 : 135) * depthScale, waveColor);
 
-        // 4. Hit sparks radiating outwards
-        const sparkCount = Math.floor((isSlap ? 22 : this.config.PARTICLE_COUNT_HIT) * depthScale);
+        // High performance sparks
+        const sparkCount = isSlap ? 16 : 14;
         const palette = isSlap 
             ? ['#f472b6', '#ec4899', '#db2777', '#fbcfe8', '#ffffff']
             : ['#ffeb3b', '#ff9800', '#ff5722', '#ffffff', '#ffd54f'];
 
         for (let i = 0; i < sparkCount; i++) {
             const angle = Math.random() * Math.PI * 2;
-            const speed = 140 + Math.random() * 260;
+            const speed = 130 + Math.random() * 220;
             const vx = Math.cos(angle) * speed;
-            const vy = Math.sin(angle) * speed * 0.65 - 80;
+            const vy = Math.sin(angle) * speed * 0.65 - 70;
             const color = palette[Math.floor(Math.random() * palette.length)];
             this.particles.get(
                 x, y,
                 vx, vy,
-                (2.5 + Math.random() * 3.5) * depthScale,
+                (2.5 + Math.random() * 3) * depthScale,
                 color,
-                0.35 + Math.random() * 0.35,
-                350,
+                0.32 + Math.random() * 0.28,
+                340,
                 'spark'
             );
         }
 
-        // 5. Flying cartoon sweat / tear droplets
-        const dropCount = 4 + Math.floor(Math.random() * 3);
-        for (let i = 0; i < dropCount; i++) {
+        // Flying cartoon droplets
+        for (let i = 0; i < 4; i++) {
             const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.2;
-            const speed = 110 + Math.random() * 190;
+            const speed = 100 + Math.random() * 160;
             const vx = Math.cos(angle) * speed;
-            const vy = Math.sin(angle) * speed - 60;
+            const vy = Math.sin(angle) * speed - 50;
             this.particles.get(
                 x, y - 10 * depthScale,
                 vx, vy,
-                (4.5 + Math.random() * 3) * depthScale,
+                (4 + Math.random() * 2.5) * depthScale,
                 'rgba(147, 197, 253, 0.95)',
-                0.45 + Math.random() * 0.25,
-                460,
+                0.40 + Math.random() * 0.20,
+                440,
                 'droplet'
             );
         }
 
-        // 6. Bonk / slap stars
-        const starCount = 5 + Math.floor(Math.random() * 4);
-        for (let i = 0; i < starCount; i++) {
+        // Cartoon stars
+        for (let i = 0; i < 4; i++) {
             const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.1;
-            const speed = 120 + Math.random() * 180;
+            const speed = 110 + Math.random() * 160;
             const vx = Math.cos(angle) * speed;
-            const vy = Math.sin(angle) * speed - 50;
+            const vy = Math.sin(angle) * speed - 45;
             this.particles.get(
                 x, y - 15 * depthScale,
                 vx, vy,
-                (6 + Math.random() * 5) * depthScale,
+                (5.5 + Math.random() * 4) * depthScale,
                 isSlap ? '#f472b6' : '#ffd700',
-                0.5 + Math.random() * 0.3,
-                420,
+                0.45 + Math.random() * 0.25,
+                400,
                 'star'
             );
         }
 
-        // 7. Dirt clumps & dust puffs around hole rim
-        const dustCount = Math.floor(this.config.PARTICLE_COUNT_DUST * depthScale);
-        for (let i = 0; i < dustCount; i++) {
+        // Dust puffs
+        for (let i = 0; i < 6; i++) {
             const angle = -Math.PI + Math.random() * Math.PI;
-            const speed = 70 + Math.random() * 160;
+            const speed = 60 + Math.random() * 130;
             const vx = Math.cos(angle) * speed;
             const vy = Math.sin(angle) * speed;
             const isSmoke = Math.random() > 0.45;
             this.particles.get(
-                x + (Math.random() - 0.5) * 40 * depthScale,
-                y + (Math.random() - 0.5) * 15 * depthScale,
+                x + (Math.random() - 0.5) * 35 * depthScale,
+                y + (Math.random() - 0.5) * 12 * depthScale,
                 vx, vy,
-                (isSmoke ? 8 : 4) * depthScale,
-                isSmoke ? 'rgba(215, 195, 160, 0.6)' : '#6d4c41',
-                0.4 + Math.random() * 0.35,
-                isSmoke ? 30 : 500,
+                (isSmoke ? 7 : 3.5) * depthScale,
+                isSmoke ? 'rgba(215, 195, 160, 0.55)' : '#6d4c41',
+                0.35 + Math.random() * 0.25,
+                isSmoke ? 30 : 480,
                 isSmoke ? 'smoke' : 'dirt',
-                y + 35 * depthScale
+                y + 30 * depthScale
             );
         }
 
-        // 8. Confetti burst on high streaks!
         if (comboStreak >= 3) {
-            this.spawnComboConfetti(x, y - 20 * depthScale, Math.min(32, 14 + comboStreak * 4));
+            this.spawnComboConfetti(x, y - 20 * depthScale, Math.min(22, 10 + comboStreak * 3));
         }
 
-        // 9. Comic Hit Text from HumanHit(TEXT).txt with Starburst Explosion Banner
+        // Requirement 4: Comic Pop Insult Text (Idiot, Namoona, Chomu, etc.)
         if (this.config.FLOATING_TEXT_ENABLED) {
             const word = INSULT_TEXTS[Math.floor(Math.random() * INSULT_TEXTS.length)] + '!';
-            // Pure white text with rich, vivid comic outline:
-            // For Punch: pure white text with vibrant deep crimson outline (#991b1b) on bright golden starburst (#facc15)
-            // For Slap: pure white text with deep magenta outline (#831843) on electric pink starburst (#f472b6)
-            const textColor = '#ffffff';
-            const strokeColor = isSlap ? '#831843' : '#991b1b';
-            const bannerColor = isSlap ? '#f472b6' : '#facc15';
-            this.floatingTexts.get(x, y - 44 * depthScale, word, textColor, strokeColor, bannerColor, false);
+            const bannerCol = isSlap ? '#f472b6' : '#facc15';
+            const strokeCol = isSlap ? '#831843' : '#1e1b4b';
+            this.floatingTexts.get(x, y, word, '#ffffff', strokeCol, bannerCol, false);
         }
     }
 
-    // Trigger rage transformation VFX when Yellow turns Red
-    spawnRedEnrageVFX(x, y, depthScale = 1.0) {
-        this.triggerScreenFlash('239, 68, 68', 0.42, 0.08);
-
-        this.impactFlashes.get(x, y, 125 * depthScale, '#ef4444');
-        this.shockwaves.get(x, y + 10 * depthScale, 165 * depthScale, '#dc2626');
-
-        // Steam puffs rising up from angry head
-        for (let i = 0; i < 14; i++) {
-            const angle = -Math.PI / 2 + (Math.random() - 0.5) * 1.2;
-            const speed = 60 + Math.random() * 140;
-            const vx = Math.cos(angle) * speed;
-            const vy = Math.sin(angle) * speed - 50;
-            this.particles.get(
-                x + (Math.random() - 0.5) * 30 * depthScale,
-                y - 20 * depthScale,
-                vx, vy,
-                (7 + Math.random() * 6) * depthScale,
-                'rgba(239, 68, 68, 0.75)',
-                0.5 + Math.random() * 0.3,
-                20,
-                'smoke'
-            );
-        }
-
-        // Fiery red sparks
-        for (let i = 0; i < 20; i++) {
-            const angle = Math.random() * Math.PI * 2;
-            const speed = 120 + Math.random() * 220;
-            const vx = Math.cos(angle) * speed;
-            const vy = Math.sin(angle) * speed - 60;
-            this.particles.get(
-                x, y - 10 * depthScale,
-                vx, vy,
-                (3 + Math.random() * 3) * depthScale,
-                '#f87171',
-                0.4 + Math.random() * 0.3,
-                380,
-                'spark'
-            );
-        }
-
-        if (this.config.FLOATING_TEXT_ENABLED) {
-            this.floatingTexts.get(x, y - 48 * depthScale, 'ENRAGED!', '#ffffff', '#450a0a', '#ef4444', false);
-        }
-    }
-
-    // Trigger stone crack VFX around hole rim when yellow mole is hit (Point 4)
+    // Trigger stone crack VFX on hole rim
     spawnHoleCrackVFX(x, y, rx, ry, hole = null) {
         this.holeCracks.get(x, y, rx, ry, hole);
-
-        // Small stone chips / flying debris
-        for (let i = 0; i < 7; i++) {
-            const angle = Math.random() * Math.PI * 2;
-            const speed = 40 + Math.random() * 90;
-            this.particles.get(
-                x + Math.cos(angle) * (rx * 0.9),
-                y + Math.sin(angle) * (ry * 0.9),
-                Math.cos(angle) * speed,
-                Math.sin(angle) * speed * 0.6 - 35,
-                2 + Math.random() * 2.5,
-                Math.random() > 0.5 ? '#e5e7eb' : '#9ca3af',
-                0.35 + Math.random() * 0.25,
-                420,
-                'dirt'
-            );
-        }
     }
 
-    // Trigger massive Red Mole explosion VFX with fireball, shockwave, shrapnel & KABOOM (Point 5)
-    spawnRedExplosionVFX(x, y, depthScale = 1.0) {
-        // Dramatic crimson fireball screen flash
-        this.triggerScreenFlash('220, 38, 38', 0.65, 0.16);
+    // Requirement 3: Massive FULL-SCREEN Explosion VFX!
+    // Covers the ENTIRE viewport with shockwaves, blazing fire, embers, and full-screen vignette!
+    spawnFullScreenExplosionVFX(x, y) {
+        const W = this.config.VIEWPORT_WIDTH || 1200;
+        const H = this.config.VIEWPORT_HEIGHT || 800;
+        const screenDiagonal = Math.hypot(W, H);
 
-        // 1. Massive radial white-hot fireball flash
-        this.impactFlashes.get(x, y, 170 * depthScale, '#ffffff');
+        // 1. Intense Full-Screen Chromatic Screen Flash
+        this.triggerScreenFlash('239, 68, 68', 0.85, 0.24);
 
-        // 2. Double fiery shockwaves (outer orange wave + inner crimson ring)
-        this.shockwaves.get(x, y, 230 * depthScale, '#ff5722');
-        this.shockwaves.get(x, y, 175 * depthScale, '#dc2626');
+        // Activate Full-Screen Fiery Explosion Vignette
+        this.fullScreenExplosion.active = true;
+        this.fullScreenExplosion.duration = 0.70;
+        this.fullScreenExplosion.timer = 0.70;
 
-        // 3. Dense fireball smoke puffs (exploding out in 360 degrees)
-        for (let i = 0; i < 24; i++) {
+        // 2. Giant Full-Screen expanding blast waves covering entire screen
+        this.impactFlashes.get(x, y, 260, '#ffffff');
+        this.shockwaves.get(x, y, screenDiagonal * 0.95, '#ff5722', 0.55);
+        this.shockwaves.get(x, y, screenDiagonal * 0.70, '#dc2626', 0.45);
+        this.shockwaves.get(x, y, screenDiagonal * 0.45, '#ffd700', 0.35);
+
+        // 3. Dense radial fireball smoke puffs expanding across the screen
+        for (let i = 0; i < 28; i++) {
             const angle = Math.random() * Math.PI * 2;
-            const speed = 70 + Math.random() * 200;
+            const speed = 120 + Math.random() * 340;
             const vx = Math.cos(angle) * speed;
-            const vy = Math.sin(angle) * speed * 0.7 - 65;
-            const colors = ['#f59e0b', '#ef4444', '#dc2626', '#b91c1c', 'rgba(55, 65, 81, 0.85)'];
+            const vy = Math.sin(angle) * speed * 0.75 - 80;
+            const colors = ['#f59e0b', '#ef4444', '#dc2626', '#b91c1c', 'rgba(40, 45, 55, 0.85)'];
             const c = colors[Math.floor(Math.random() * colors.length)];
             this.particles.get(
-                x + (Math.random() - 0.5) * 40 * depthScale,
-                y + (Math.random() - 0.5) * 30 * depthScale,
+                x + (Math.random() - 0.5) * 50,
+                y + (Math.random() - 0.5) * 40,
                 vx, vy,
-                (10 + Math.random() * 14) * depthScale,
+                14 + Math.random() * 16,
                 c,
-                0.55 + Math.random() * 0.4,
-                25,
+                0.60 + Math.random() * 0.40,
+                30,
                 'smoke'
             );
         }
 
-        // 4. Burning fiery sparks and flying shrapnel
+        // 4. Burning fiery sparks flying in all directions
         for (let i = 0; i < 35; i++) {
             const angle = Math.random() * Math.PI * 2;
-            const speed = 140 + Math.random() * 320;
+            const speed = 160 + Math.random() * 400;
             const vx = Math.cos(angle) * speed;
-            const vy = Math.sin(angle) * speed - 80;
+            const vy = Math.sin(angle) * speed - 100;
             const sparkColors = ['#ffeb3b', '#ff9800', '#ff5722', '#ffffff', '#ef4444'];
             this.particles.get(
                 x, y,
                 vx, vy,
-                (3 + Math.random() * 4) * depthScale,
+                3.5 + Math.random() * 4,
                 sparkColors[Math.floor(Math.random() * sparkColors.length)],
-                0.45 + Math.random() * 0.35,
-                450,
+                0.50 + Math.random() * 0.35,
+                460,
                 'spark'
             );
         }
 
-        // 5. Giant comic KABOOM! floating pop text with starburst
+        // 5. Giant comic BOOM! text in front of hand!
         if (this.config.FLOATING_TEXT_ENABLED) {
-            this.floatingTexts.get(x, y - 60 * depthScale, 'KABOOM! -1 LIFE', '#ffffff', '#450a0a', '#dc2626', false);
+            this.floatingTexts.get(x, y - 60, 'BOOM! -1 LIFE', '#ffffff', '#450a0a', '#dc2626', false);
         }
     }
 
-    spawnWrongHitVFX(x, y, depthScale = 1.0) {
-        this.spawnRedExplosionVFX(x, y, depthScale);
-    }
-
     spawnMoleEmergeVFX(x, y, depthScale = 1.0) {
-        for (let i = 0; i < 8; i++) {
-            const angle = -Math.PI / 2 + (Math.random() - 0.5) * 1.6;
-            const speed = 40 + Math.random() * 80;
+        for (let i = 0; i < 6; i++) {
+            const angle = -Math.PI / 2 + (Math.random() - 0.5) * 1.5;
+            const speed = 40 + Math.random() * 70;
             const vx = Math.cos(angle) * speed;
             const vy = Math.sin(angle) * speed;
             this.particles.get(
                 x + (Math.random() - 0.5) * 35 * depthScale,
                 y + 10 * depthScale,
                 vx, vy,
-                (4 + Math.random() * 4) * depthScale,
-                'rgba(180, 150, 110, 0.5)',
+                (4 + Math.random() * 3) * depthScale,
+                'rgba(180, 150, 110, 0.45)',
                 0.3 + Math.random() * 0.2,
                 30,
                 'smoke'
@@ -812,20 +729,26 @@ export class VFXManager {
         this.impactFlashes.update(dt);
         this.holeCracks.update(dt);
 
-        // Update Screen Flash
         if (this.screenFlash.timer > 0) {
             this.screenFlash.timer -= dt;
             this.screenFlash.alpha = Math.max(0, (this.screenFlash.timer / this.screenFlash.duration) * this.screenFlash.maxAlpha);
         }
 
-        // Update ambient floating spores
+        if (this.fullScreenExplosion.active) {
+            this.fullScreenExplosion.timer -= dt;
+            if (this.fullScreenExplosion.timer <= 0) {
+                this.fullScreenExplosion.active = false;
+            }
+        }
+
+        // Ambient floating spores
         const w = this.config.VIEWPORT_WIDTH;
         const h = this.config.VIEWPORT_HEIGHT;
         for (let i = 0; i < this.ambientParticles.length; i++) {
             const p = this.ambientParticles[i];
             p.y += p.speedY * dt;
-            p.x += (p.speedX + Math.sin(p.phase) * 12) * dt;
-            p.phase += dt * 2.2;
+            p.x += (p.speedX + Math.sin(p.phase) * 10) * dt;
+            p.phase += dt * 2.0;
 
             if (p.y < -20) {
                 p.y = h + 20;
@@ -836,30 +759,50 @@ export class VFXManager {
         }
     }
 
-    // Draw ground-level effects (cracks, shockwaves)
     drawGroundLayer(ctx) {
         this.holeCracks.draw(ctx);
         this.shockwaves.draw(ctx);
     }
 
-    // Draw above-mole effects (impact flashes, sparks, floating text)
     drawTopLayer(ctx) {
         this.impactFlashes.draw(ctx);
         this.particles.draw(ctx);
+    }
+
+    // Requirement 4: Draw Floating Texts (Idiot, Namoona, Chomu, etc.) IN FRONT OF HAND!
+    drawFloatingTexts(ctx) {
         this.floatingTexts.draw(ctx);
     }
 
-    // Draw full-canvas screen flash overlay on heavy impacts
+    // Requirement 3: Draw Full-screen Screen Flash & Fiery Explosion Covering Whole Screen
     drawScreenFlash(ctx) {
+        const W = this.config.VIEWPORT_WIDTH;
+        const H = this.config.VIEWPORT_HEIGHT;
+
+        // 1. Fiery Explosion Vignette covering whole screen
+        if (this.fullScreenExplosion.active) {
+            const p = 1 - (this.fullScreenExplosion.timer / this.fullScreenExplosion.duration);
+            const vigAlpha = Math.max(0, (1 - p) * 0.75);
+
+            ctx.save();
+            const vig = ctx.createRadialGradient(W * 0.5, H * 0.5, H * 0.25, W * 0.5, H * 0.5, Math.hypot(W, H) * 0.65);
+            vig.addColorStop(0, 'rgba(239, 68, 68, 0)');
+            vig.addColorStop(0.5, `rgba(220, 38, 38, ${vigAlpha * 0.45})`);
+            vig.addColorStop(1, `rgba(185, 28, 28, ${vigAlpha})`);
+            ctx.fillStyle = vig;
+            ctx.fillRect(0, 0, W, H);
+            ctx.restore();
+        }
+
+        // 2. High-impact Screen Flash
         if (this.screenFlash && this.screenFlash.alpha > 0.005) {
             ctx.save();
             ctx.fillStyle = `rgba(${this.screenFlash.color}, ${this.screenFlash.alpha})`;
-            ctx.fillRect(0, 0, this.config.VIEWPORT_WIDTH, this.config.VIEWPORT_HEIGHT);
+            ctx.fillRect(0, 0, W, H);
             ctx.restore();
         }
     }
 
-    // Draw ambient foreground drifting spores / floating dust
     drawAmbientForeground(ctx) {
         ctx.save();
         for (let i = 0; i < this.ambientParticles.length; i++) {

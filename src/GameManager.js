@@ -40,7 +40,9 @@ export class GameManager {
             redCharacter: null,
             punchSprite: null,
             slapSprite: null,
-            bgImg: null
+            bgImg: null,
+            holePad: null,
+            holeRim: null
         };
 
         // Subsystems
@@ -106,6 +108,7 @@ export class GameManager {
 
     async loadSprites() {
         const loadImg = (url) => new Promise((resolve) => {
+            if (!url) return resolve(null);
             const img = new Image();
             img.src = url;
             img.onload = () => resolve(img);
@@ -118,21 +121,21 @@ export class GameManager {
             this.assets.punchSprite = await loadImg(ASSETS_DATA.punch);
             this.assets.slapSprite = await loadImg(ASSETS_DATA.slap);
             this.assets.bgImg = await loadImg(ASSETS_DATA.bg);
+            this.assets.holePad = await loadImg(ASSETS_DATA.hole);
+            this.assets.holeRim = await loadImg(ASSETS_DATA.holeRim);
         } else {
-            // Load new clean sprites
             this.assets.yellowCharacter = await loadImg('assets/clean_sprites/yellow_character.png');
             this.assets.redCharacter = await loadImg('assets/clean_sprites/red_character.png');
             this.assets.punchSprite = await loadImg('assets/clean_sprites/punch_hand.png');
             this.assets.slapSprite = await loadImg('assets/clean_sprites/slap_hand.png');
-            this.assets.bgImg = await loadImg('assets/BG_NEW/Background_Seamless.jpg');
+            this.assets.bgImg = await loadImg('assets/clean_sprites/arena_bg.jpg');
+            this.assets.holePad = await loadImg('assets/clean_sprites/hole_pad.png');
+            this.assets.holeRim = await loadImg('assets/clean_sprites/hole_front_rim.png');
         }
 
         if (this.parallaxManager && this.assets.bgImg) {
             this.parallaxManager.bgImg = this.assets.bgImg;
             this.parallaxManager.calculateBounds();
-            if (this.moleSpawner) {
-                this.moleSpawner.updateHolePositions();
-            }
         }
     }
 
@@ -142,6 +145,7 @@ export class GameManager {
         const screenW = rect.width || window.innerWidth || 1200;
         const screenH = rect.height || window.innerHeight || 800;
         const isPortrait = screenH > screenW;
+        const isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (screenW <= 768);
 
         if (isPortrait) {
             const baseW = 720;
@@ -149,27 +153,26 @@ export class GameManager {
             this.config.VIEWPORT_WIDTH = baseW;
             this.config.VIEWPORT_HEIGHT = Math.round(baseW * aspect);
             this.config.IS_PORTRAIT = true;
-            this.config.PERSPECTIVE_HORIZON_Y = Math.round(this.config.VIEWPORT_HEIGHT * 0.16);
-            this.config.HOLE_COLUMNS = 3;
-            this.config.HOLE_ROWS = 5;
-            this.config.HOLE_BASE_RADIUS_X = 72;
-            this.config.HOLE_BASE_RADIUS_Y = 46;
-            this.config.HOLE_VERTICAL_SPACING = Math.round((this.config.VIEWPORT_HEIGHT - this.config.PERSPECTIVE_HORIZON_Y) / 4.8);
+            this.config.HOLE_COLUMNS = 3; // 3 columns in portrait = 9 holes max!
+            this.config.HOLE_ROWS = 3;    // Strictly 3 rows!
+            this.config.PADDING_TOP = 120;
+            this.config.PADDING_BOTTOM = 65;
+            this.config.PADDING_HORIZONTAL = 50;
         } else {
             const baseH = 800;
             const aspect = screenW / screenH;
             this.config.VIEWPORT_HEIGHT = baseH;
             this.config.VIEWPORT_WIDTH = Math.max(1200, Math.round(baseH * aspect));
             this.config.IS_PORTRAIT = false;
-            this.config.PERSPECTIVE_HORIZON_Y = 120;
-            this.config.HOLE_COLUMNS = 3;
-            this.config.HOLE_ROWS = 5;
-            this.config.HOLE_BASE_RADIUS_X = 75;
-            this.config.HOLE_BASE_RADIUS_Y = 48;
-            this.config.HOLE_VERTICAL_SPACING = 185;
+            this.config.HOLE_COLUMNS = 4; // 4 columns in landscape = 12 holes max!
+            this.config.HOLE_ROWS = 3;    // Strictly 3 rows!
+            this.config.PADDING_TOP = 130;
+            this.config.PADDING_BOTTOM = 75;
+            this.config.PADDING_HORIZONTAL = 75;
         }
 
-        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        // Mobile performance optimization: clamp DPR to 1.5 on mobile to avoid fillrate lag
+        const dpr = Math.min(window.devicePixelRatio || 1, isMobile ? 1.5 : 2);
         this.canvas.width = Math.round(this.config.VIEWPORT_WIDTH * dpr);
         this.canvas.height = Math.round(this.config.VIEWPORT_HEIGHT * dpr);
         this.ctx.resetTransform?.();
@@ -206,38 +209,31 @@ export class GameManager {
             this.stats.highestStreak = this.stats.currentStreak;
         }
 
-        // Hit Stop Crunch (microfreeze for 35ms)
-        this.hitStopRemaining = (this.config.HIT_STOP_MS || 35) / 1000;
+        // Snappy hit stop (20ms) without frame hitching
+        this.hitStopRemaining = (this.config.HIT_STOP_MS || 20) / 1000;
 
         // Mobile Haptic Feedback
         if (navigator.vibrate) {
-            navigator.vibrate(result.transformedToRed ? 50 : 25);
+            try { navigator.vibrate(25); } catch (e) {}
         }
 
         const hitsUntilRed = this.moleSpawner ? this.moleSpawner.getHitsUntilRed() : 4;
 
-        if (result.transformedToRed) {
-            // Yellow mole transformed into Red mole!
-            this.audioManager.playRedEnrage();
-            this.vfxManager.spawnRedEnrageVFX(result.x, result.y, result.depthScale);
-            this.cameraShake.addTrauma(0.55, 0, 1);
+        // Regular hit with insult text popup and combo pitch escalation
+        if (result.hitType === 'punch') {
+            this.audioManager.playPunchHit(this.stats.currentStreak);
+            this.cameraShake.addTrauma(0.42, 0, 1);
         } else {
-            // Regular hit with insult text popup and combo pitch escalation!
-            if (result.hitType === 'punch') {
-                this.audioManager.playPunchHit(this.stats.currentStreak);
-                this.cameraShake.addTrauma(0.44, 0, 1);
-            } else {
-                this.audioManager.playSlapHit(this.stats.currentStreak);
-                this.cameraShake.addTrauma(0.34, 0, 1);
-            }
+            this.audioManager.playSlapHit(this.stats.currentStreak);
+            this.cameraShake.addTrauma(0.32, 0, 1);
+        }
 
-            this.vfxManager.spawnHitVFX(result.x, result.y, result.depthScale, false, result.hitType, this.stats.currentStreak);
+        this.vfxManager.spawnHitVFX(result.x, result.y, 1.0, false, result.hitType, this.stats.currentStreak);
 
-            // Point 4: Crack VFX around hole rim and stone crack SFX
-            if (result.hole) {
-                this.vfxManager.spawnHoleCrackVFX(result.hole.screenX, result.hole.screenY, result.hole.radiusX, result.hole.radiusY, result.hole);
-                this.audioManager.playHoleCrack();
-            }
+        // Crack VFX around hole rim
+        if (result.hole) {
+            this.vfxManager.spawnHoleCrackVFX(result.hole.screenX, result.hole.screenY, result.hole.radiusX, result.hole.radiusY, result.hole);
+            this.audioManager.playHoleCrack();
         }
 
         window.dispatchEvent(new CustomEvent('molehit', {
@@ -251,6 +247,7 @@ export class GameManager {
         }));
     }
 
+    // Requirement 3: Immediate Red Explosion without needing a second touch!
     handleWrongHit(result) {
         if (this.isGameOver) return;
 
@@ -259,26 +256,26 @@ export class GameManager {
         this.stats.currentStreak = 0;
 
         // Hit stop crunch
-        this.hitStopRemaining = 0.06;
+        this.hitStopRemaining = 0.04;
 
-        // Point 5: Red mole explodes and instantly vanishes into explosion
+        // Instantly vanish mole on explosion
         if (result.hole && result.hole.mole) {
             result.hole.mole.explode();
         }
 
-        // Play heavy red explosion sound and heart lost warning
+        // Heavy red explosion sound
         this.audioManager.playRedExplosion();
         this.audioManager.playHeartLost();
 
-        // Heavy camera shake
-        this.cameraShake.addTrauma(1.0, 0, 1);
+        // Heavy camera trauma shake
+        this.cameraShake.addTrauma(1.3, 0, 1);
 
         if (navigator.vibrate) {
             try { navigator.vibrate([70, 40, 70]); } catch (e) {}
         }
 
-        // Point 5: Massive Red character explosion VFX
-        this.vfxManager.spawnRedExplosionVFX(result.x, result.y, result.depthScale);
+        // Requirement 3: Massive FULL-SCREEN Explosion VFX covering whole screen!
+        this.vfxManager.spawnFullScreenExplosionVFX(result.x, result.y);
 
         const hitsUntilRed = this.moleSpawner ? this.moleSpawner.getHitsUntilRed() : 4;
 
@@ -330,7 +327,7 @@ export class GameManager {
                 h.mole.isHit = false;
                 h.mole.type = 'yellow';
             });
-            this.moleSpawner.spawnTimer = 0.6;
+            this.moleSpawner.spawnTimer = 0.5;
             this.moleSpawner.gameTime = 0;
         }
 
@@ -346,14 +343,15 @@ export class GameManager {
         }));
     }
 
+    // Process player strike (punch or slap)
     processHit(hitX, hitY, isTouch = false, attackType = 'punch') {
         if (this.isGameOver) return;
 
-        // Check if any mole was hit at impact time
         const result = this.moleSpawner.checkHit(hitX, hitY, isTouch, true, attackType);
 
         if (result.hit) {
-            if (result.penalty) {
+            // Requirement 3: The yellow character that turns red IMMEDIATELY EXPLODES without needing a second touch!
+            if (result.penalty || result.transformedToRed) {
                 this.handleWrongHit(result);
             } else {
                 this.executeHitSuccess(result);
@@ -379,14 +377,14 @@ export class GameManager {
         if (!this.isRunning) return;
 
         const rawDt = (now - this.lastTime) / 1000;
-        const dt = Math.min(rawDt, 0.1);
+        const dt = Math.min(rawDt, 0.05); // Capped delta time for buttery smooth pacing
         this.lastTime = now;
 
         if (!this.isGameOver) {
             this.stats.sessionTime += dt;
         }
 
-        // Process Hit-Stop (brief game pause for impact crunch)
+        // Process Hit-Stop (brief microfreeze without frame drops)
         if (this.hitStopRemaining > 0) {
             this.hitStopRemaining -= dt;
             this.cameraShake.update(dt);
@@ -399,7 +397,7 @@ export class GameManager {
         this.cameraShake.update(dt);
         this.parallaxManager.update(dt);
         if (!this.isGameOver) {
-            this.moleSpawner.update(dt, this.parallaxManager.scrollY_Ground);
+            this.moleSpawner.update(dt);
             this.hammer.update(dt);
         }
         this.vfxManager.update(dt);
@@ -420,34 +418,44 @@ export class GameManager {
         ctx.save();
         this.cameraShake.apply(ctx);
 
-        // 1. Unified moving arena ground (Background_New.jpg)
+        // 1. Clean fullscreen arena ground plane
         this.parallaxManager.drawGroundPlane(ctx);
 
-        // 2. Ground VFX (shockwaves)
+        // 2. Ground VFX (shockwaves, cracks)
         this.vfxManager.drawGroundLayer(ctx);
 
-        // 3. Holes and Moles (scrolling together with ground)
+        // 3. Holes (with hole pad, emerging mole, front rim, and gripping paws!)
         this.moleSpawner.draw(ctx);
 
-        // 4. Top VFX (impact flashes, sparks, insult comic pop text)
+        // 4. Top VFX (impact flashes, sparks)
         this.vfxManager.drawTopLayer(ctx);
 
         // 5. Player Hand (Punch & Slap animations)
         this.hammer.draw(ctx);
 
-        // 6. Ambient drifting floating dust/spores
+        // 6. REQUIREMENT 4: Floating Insult Text Messages (Idiot, Namoona, Chomu, etc.)
+        // ALWAYS DRAWN IN FRONT OF THE HAND!
+        this.vfxManager.drawFloatingTexts(ctx);
+
+        // 7. Ambient drifting dust/spores
         this.vfxManager.drawAmbientForeground(ctx);
 
         ctx.restore();
 
-        // 7. Full-viewport screen impact flash (illuminates screen on hit crunch)
+        // 8. Full-viewport screen impact flash & whole-screen explosion vignette (Requirement 3)
         this.vfxManager.drawScreenFlash(ctx);
     }
 
-    // Hand mode switch (combo / punch / slap)
     setHandMode(mode) {
         if (this.hammer) {
             this.hammer.setHandMode(mode);
+        }
+    }
+
+    setGridMode(mode) {
+        if (mode === 9 || mode === 12 || mode === 'auto') {
+            this.config.GRID_MODE = mode;
+            this.setupCanvasResolution();
         }
     }
 

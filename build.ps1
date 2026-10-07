@@ -86,6 +86,24 @@ $uiWiring = @'
         });
     }
 
+    // --- Grid Layout Toggle (Auto / 9 Holes / 12 Holes) (Requirement 1) ---
+    const btnGridMode = document.getElementById('btn-grid-mode');
+    const textGridMode = document.getElementById('text-grid-mode');
+    const gridOptions = [
+        { id: 'auto', label: 'GRID: AUTO' },
+        { id: 9, label: 'GRID: 9 HOLES' },
+        { id: 12, label: 'GRID: 12 HOLES' }
+    ];
+    let currentGridIdx = 0;
+    if (btnGridMode) {
+        btnGridMode.addEventListener('click', () => {
+            currentGridIdx = (currentGridIdx + 1) % gridOptions.length;
+            const current = gridOptions[currentGridIdx];
+            if (textGridMode) textGridMode.textContent = current.label;
+            game.setGridMode(current.id);
+        });
+    }
+
     // --- Audio and SFX Toggles ---
     const pathSfxOn = 'M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z';
     const pathSfxOff = 'M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z';
@@ -274,20 +292,32 @@ $middleHtml = @'
             WHACK-A-MOLE
         </div>
 
+        <!-- Hand Attack Mode Toggle (Combo / Punch / Slap) -->
+        <button id="btn-hand-mode" class="hud-btn btn-hand-mode" title="Switch Hand Mode" aria-label="Switch Hand Mode">
+            <span id="icon-hand-mode"><svg class="hud-mode-icon" viewBox="0 0 24 24"><path d="M7 2v11h3v9l7-12h-4l4-8z"/></svg></span>
+            <span id="text-hand-mode">COMBO</span>
+        </button>
+
+        <!-- Grid Layout Toggle (Auto / 9 Holes / 12 Holes) (Requirement 1) -->
+        <button id="btn-grid-mode" class="hud-btn" title="Toggle 9 or 12 Holes Grid" aria-label="Toggle 9 or 12 Holes Grid">
+            <svg class="hud-icon" viewBox="0 0 24 24"><path d="M4 4h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 10h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 16h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4z"/></svg>
+            <span id="text-grid-mode">GRID</span>
+        </button>
+
         <!-- Score Display Pill -->
         <div class="hud-pill hud-score-pill" title="Moles Whacked">
             <span class="hud-pill-label">SCORE</span>
             <span id="hud-score-val" class="hud-pill-val">0</span>
         </div>
 
-        <!-- Red Rage Predictor Pill (Requirement 5) -->
-        <div class="hud-pill hud-predictor-pill" id="hud-predictor-pill" title="Predicts when Yellow mole will turn RED!">
+        <!-- Red Rage Predictor Pill (Requirement 3: Yellow turns RED and explodes!) -->
+        <div class="hud-pill hud-predictor-pill" id="hud-predictor-pill" title="Predicts when Yellow mole will turn RED and explode!">
             <span class="hud-pill-label">RAGE</span>
             <span class="hud-pill-val" id="hud-predictor-val-wrap"><span id="hud-predictor-dot" class="rage-indicator-dot"></span><span id="hud-predictor-val">IN: 4</span></span>
         </div>
 
         <!-- 3 Hearts Health Bar -->
-        <div class="hud-pill hud-health-pill" id="hud-health-bar" title="3 Lives - Hitting Red Mole loses 1 heart!">
+        <div class="hud-pill hud-health-pill" id="hud-health-bar" title="3 Lives - Exploding Red Mole loses 1 heart!">
             <span class="hud-heart active" id="heart-0" aria-label="Heart 1">
                 <svg class="heart-svg" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
             </span>
@@ -339,7 +369,7 @@ $middleHtml = @'
 
     <!-- Gameplay Tip -->
     <div class="bottom-tip">
-        <span>Punch &amp; Slap Mode | Predict the pattern: Yellow turns RED on every 4th hit!</span>
+        <span>3 Rows (9 or 12 Holes) | Yellow that turns RED instantly EXPLODES!</span>
     </div>
 
     <!-- Backdrop -->

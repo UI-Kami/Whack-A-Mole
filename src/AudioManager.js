@@ -36,9 +36,30 @@ export class AudioManager {
             this.musicGain.connect(this.masterGain);
 
             this.initialized = true;
+            this.createNoiseBuffers();
             this.startBackgroundMusic();
         } catch (e) {
             console.warn("Web Audio API not supported or blocked", e);
+        }
+    }
+
+    createNoiseBuffers() {
+        if (!this.ctx) return;
+        try {
+            const sr = this.ctx.sampleRate || 44100;
+            // 1. Long loopable white noise buffer
+            const whiteSize = Math.floor(sr * 1.0);
+            this.whiteNoiseBuffer = this.ctx.createBuffer(1, whiteSize, sr);
+            const wd = this.whiteNoiseBuffer.getChannelData(0);
+            for (let i = 0; i < whiteSize; i++) wd[i] = (Math.random() * 2 - 1);
+
+            // 2. Pre-decayed crackle/crunch buffer
+            const crackSize = Math.floor(sr * 0.4);
+            this.crackleNoiseBuffer = this.ctx.createBuffer(1, crackSize, sr);
+            const cd = this.crackleNoiseBuffer.getChannelData(0);
+            for (let i = 0; i < crackSize; i++) cd[i] = (Math.random() * 2 - 1) * Math.exp(-i / (sr * 0.05));
+        } catch (e) {
+            console.warn("Error creating noise buffers", e);
         }
     }
 
@@ -74,12 +95,10 @@ export class AudioManager {
         if (!this.initialized || this.isMuted) return;
         this.resume();
         const t = this.ctx.currentTime;
-        const bufferSize = this.ctx.sampleRate * 0.10;
-        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-        const data = buffer.getChannelData(0);
-        for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1);
+        if (!this.whiteNoiseBuffer) return;
+
         const noise = this.ctx.createBufferSource();
-        noise.buffer = buffer;
+        noise.buffer = this.whiteNoiseBuffer;
         const filter = this.ctx.createBiquadFilter();
         filter.type = 'lowpass';
         filter.frequency.setValueAtTime(600, t);
@@ -116,20 +135,18 @@ export class AudioManager {
         subOsc.start(t);
         subOsc.stop(t + 0.18);
 
-        // 2. Punch crunch burst
-        const crackBuffer = this.ctx.createBuffer(1, this.ctx.sampleRate * 0.06, this.ctx.sampleRate);
-        const crackData = crackBuffer.getChannelData(0);
-        for (let i = 0; i < crackData.length; i++) {
-            crackData[i] = (Math.random() * 2 - 1) * Math.exp(-i / 200);
+        // 2. Punch crunch burst (reused noise buffer for zero GC lag)
+        if (this.crackleNoiseBuffer) {
+            const crackSource = this.ctx.createBufferSource();
+            crackSource.buffer = this.crackleNoiseBuffer;
+            const crackGain = this.ctx.createGain();
+            crackGain.gain.setValueAtTime(0.65, t);
+            crackGain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+            crackSource.connect(crackGain);
+            crackGain.connect(this.sfxGain);
+            crackSource.start(t);
+            crackSource.stop(t + 0.06);
         }
-        const crackSource = this.ctx.createBufferSource();
-        crackSource.buffer = crackBuffer;
-        const crackGain = this.ctx.createGain();
-        crackGain.gain.setValueAtTime(0.65, t);
-        crackGain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
-        crackSource.connect(crackGain);
-        crackGain.connect(this.sfxGain);
-        crackSource.start(t);
 
         this.playMoleBonkSqueak(pitchMod * 0.95);
 
@@ -144,12 +161,10 @@ export class AudioManager {
         if (!this.initialized || this.isMuted) return;
         this.resume();
         const t = this.ctx.currentTime;
-        const bufferSize = this.ctx.sampleRate * 0.09;
-        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-        const data = buffer.getChannelData(0);
-        for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1);
+        if (!this.whiteNoiseBuffer) return;
+
         const noise = this.ctx.createBufferSource();
-        noise.buffer = buffer;
+        noise.buffer = this.whiteNoiseBuffer;
         const filter = this.ctx.createBiquadFilter();
         filter.type = 'highpass';
         filter.frequency.setValueAtTime(800, t);
@@ -174,20 +189,18 @@ export class AudioManager {
         const comboPitch = Math.min(1.85, 1.0 + Math.max(0, comboStreak - 1) * 0.07);
         const pitchMod = comboPitch * (1 + (Math.random() * 0.16 - 0.08));
 
-        // 1. Sharp high-frequency stinging slap crack
-        const slapBuffer = this.ctx.createBuffer(1, this.ctx.sampleRate * 0.05, this.ctx.sampleRate);
-        const slapData = slapBuffer.getChannelData(0);
-        for (let i = 0; i < slapData.length; i++) {
-            slapData[i] = (Math.random() * 2 - 1) * Math.exp(-i / 110);
+        // 1. Sharp high-frequency stinging slap crack (reused buffer)
+        if (this.crackleNoiseBuffer) {
+            const slapSource = this.ctx.createBufferSource();
+            slapSource.buffer = this.crackleNoiseBuffer;
+            const slapGain = this.ctx.createGain();
+            slapGain.gain.setValueAtTime(0.85, t);
+            slapGain.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+            slapSource.connect(slapGain);
+            slapGain.connect(this.sfxGain);
+            slapSource.start(t);
+            slapSource.stop(t + 0.05);
         }
-        const slapSource = this.ctx.createBufferSource();
-        slapSource.buffer = slapBuffer;
-        const slapGain = this.ctx.createGain();
-        slapGain.gain.setValueAtTime(0.85, t);
-        slapGain.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
-        slapSource.connect(slapGain);
-        slapGain.connect(this.sfxGain);
-        slapSource.start(t);
 
         // 2. Resonant skin slap pop tone
         const popOsc = this.ctx.createOscillator();
@@ -204,7 +217,6 @@ export class AudioManager {
 
         this.playMoleBonkSqueak(pitchMod * 1.25);
 
-        // Celebratory combo chime on milestones
         if (comboStreak === 3 || comboStreak === 5 || comboStreak === 10 || (comboStreak > 10 && comboStreak % 5 === 0)) {
             this.playComboChime(comboStreak);
         }
@@ -256,7 +268,6 @@ export class AudioManager {
         this.resume();
         const t = this.ctx.currentTime;
 
-        // Angry rising steam synth siren
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
         osc.type = 'sawtooth';
@@ -318,7 +329,6 @@ export class AudioManager {
         const t = this.ctx.currentTime;
         const pitchMod = 1 + (Math.random() * 0.25 - 0.12);
 
-        // Cute chirpy pop
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
         osc.type = 'sine';
@@ -333,21 +343,6 @@ export class AudioManager {
         gain.connect(this.sfxGain);
         osc.start(t);
         osc.stop(t + 0.1);
-
-        // Soft dirt rustle
-        const buf = this.ctx.createBuffer(1, this.ctx.sampleRate * 0.08, this.ctx.sampleRate);
-        const data = buf.getChannelData(0);
-        for (let i = 0; i < data.length; i++) {
-            data[i] = (Math.random() * 2 - 1) * 0.15;
-        }
-        const rustle = this.ctx.createBufferSource();
-        rustle.buffer = buf;
-        const filter = this.ctx.createBiquadFilter();
-        filter.type = 'lowpass';
-        filter.frequency.value = 800;
-        rustle.connect(filter);
-        filter.connect(this.sfxGain);
-        rustle.start(t);
     }
 
     // --- SFX: UI Click ---
@@ -368,7 +363,6 @@ export class AudioManager {
         osc.stop(t + 0.05);
     }
 
-    // --- SFX: Human "Ouch!" Vocal Tone & Error Buzz ---
     // --- SFX: Massive Red Mole Explosion Blast (Point 5) ---
     playRedExplosion() {
         if (!this.initialized || this.isMuted) return;
@@ -388,44 +382,39 @@ export class AudioManager {
         subOsc.start(t);
         subOsc.stop(t + 0.5);
 
-        // 2. Heavy White Noise Explosion Wave
-        const bufferSize = this.ctx.sampleRate * 0.4;
-        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-        const data = buffer.getChannelData(0);
-        for (let i = 0; i < bufferSize; i++) {
-            data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.08));
+        // 2. Heavy White Noise Explosion Wave (reused buffer)
+        if (this.whiteNoiseBuffer) {
+            const noise = this.ctx.createBufferSource();
+            noise.buffer = this.whiteNoiseBuffer;
+
+            const filter = this.ctx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(1200, t);
+            filter.frequency.exponentialRampToValueAtTime(150, t + 0.4);
+
+            const noiseGain = this.ctx.createGain();
+            noiseGain.gain.setValueAtTime(0.85, t);
+            noiseGain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+
+            noise.connect(filter);
+            filter.connect(noiseGain);
+            noiseGain.connect(this.sfxGain);
+            noise.start(t);
+            noise.stop(t + 0.4);
         }
-        const noise = this.ctx.createBufferSource();
-        noise.buffer = buffer;
-
-        const filter = this.ctx.createBiquadFilter();
-        filter.type = 'lowpass';
-        filter.frequency.setValueAtTime(1200, t);
-        filter.frequency.exponentialRampToValueAtTime(150, t + 0.4);
-
-        const noiseGain = this.ctx.createGain();
-        noiseGain.gain.setValueAtTime(0.85, t);
-        noiseGain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
-
-        noise.connect(filter);
-        filter.connect(noiseGain);
-        noiseGain.connect(this.sfxGain);
-        noise.start(t);
 
         // 3. Crunchy Debris Crackle
-        const crackBuffer = this.ctx.createBuffer(1, this.ctx.sampleRate * 0.15, this.ctx.sampleRate);
-        const crackData = crackBuffer.getChannelData(0);
-        for (let i = 0; i < crackData.length; i++) {
-            crackData[i] = (Math.random() * 2 - 1) * Math.exp(-i / 80);
+        if (this.crackleNoiseBuffer) {
+            const crack = this.ctx.createBufferSource();
+            crack.buffer = this.crackleNoiseBuffer;
+            const crackGain = this.ctx.createGain();
+            crackGain.gain.setValueAtTime(0.6, t);
+            crackGain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+            crack.connect(crackGain);
+            crackGain.connect(this.sfxGain);
+            crack.start(t);
+            crack.stop(t + 0.15);
         }
-        const crack = this.ctx.createBufferSource();
-        crack.buffer = crackBuffer;
-        const crackGain = this.ctx.createGain();
-        crackGain.gain.setValueAtTime(0.6, t);
-        crackGain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
-        crack.connect(crackGain);
-        crackGain.connect(this.sfxGain);
-        crack.start(t);
     }
 
     // --- SFX: Wrong Hit Alias (fixes freeze bug) ---
