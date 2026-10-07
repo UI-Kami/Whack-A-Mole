@@ -264,26 +264,82 @@ export class MoleController {
         }
     }
 
-    // Draw Character Body (clipped inside the hole cavity)
+    getSpriteFrame(isRed) {
+        if (isRed) {
+            if (this.state === MOLE_STATE.HIT) {
+                return this.assets.red_hit || this.assets.redCharacter;
+            }
+            if (this.state === MOLE_STATE.PEEKING) {
+                return this.assets.red_peek || this.assets.redCharacter;
+            }
+            if (this.state === MOLE_STATE.EMERGING) {
+                return (this.riseProgress < 0.60) ? (this.assets.red_push || this.assets.red_peek || this.assets.redCharacter) : (this.assets.red_idle || this.assets.redCharacter);
+            }
+            if (this.state === MOLE_STATE.DUCKING) {
+                return (this.riseProgress > 0.45) ? (this.assets.red_push || this.assets.redCharacter) : (this.assets.red_peek || this.assets.redCharacter);
+            }
+            // IDLE / ENRAGED_RED
+            return this.assets.red_idle || this.assets.redCharacter;
+        } else {
+            if (this.state === MOLE_STATE.HIT) {
+                return this.assets.yellow_hit || this.assets.yellowCharacter;
+            }
+            if (this.state === MOLE_STATE.PEEKING) {
+                return this.assets.yellow_peek || this.assets.yellowCharacter;
+            }
+            if (this.state === MOLE_STATE.EMERGING) {
+                return (this.riseProgress < 0.60) ? (this.assets.yellow_push || this.assets.yellow_peek || this.assets.yellowCharacter) : (this.assets.yellow_idle || this.assets.yellowCharacter);
+            }
+            if (this.state === MOLE_STATE.DUCKING) {
+                return (this.riseProgress > 0.45) ? (this.assets.yellow_push || this.assets.yellowCharacter) : (this.assets.yellow_peek || this.assets.yellowCharacter);
+            }
+            // IDLE
+            return this.assets.yellow_idle || this.assets.yellowCharacter;
+        }
+    }
+
+    // Draw Character with integrated Animated Sprite Frames
     draw(ctx, screenX, screenY, holeRadiusX, holeRadiusY) {
         if (this.state === MOLE_STATE.HIDDEN || this.riseProgress <= 0.01) return;
 
         const isRed = (this.type === 'red' || this.state === MOLE_STATE.ENRAGED_RED);
-        const sprite = isRed ? this.assets.redCharacter : this.assets.yellowCharacter;
+        const sprite = this.getSpriteFrame(isRed);
 
-        // Size matches hole opening: character fills hole width comfortably
-        const charW = holeRadiusX * 2.05;
-        const charH = charW * (259 / 264);
+        if (!sprite || !sprite.complete || sprite.naturalWidth === 0) {
+            this.drawProceduralCharacter(ctx, holeRadiusX * 2, holeRadiusX * 2, isRed);
+            return;
+        }
 
-        // Emergence vertical anchoring:
-        // Head, hair curl, and eyes pop above hole rim; bottom torso sits inside hole
-        const travelY = holeRadiusY * 2.8;
-        const faceCenterY = (-holeRadiusY * 1.15) + (1.0 - this.riseProgress) * travelY;
+        const natW = sprite.naturalWidth;
+        const natH = sprite.naturalHeight;
+        const aspect = natH / natW;
 
-        const s = charW / 140;
+        // Size character proportionally to hole width
+        const charW = holeRadiusX * 2.15;
+        const charH = charW * aspect;
+
+        // Vertical positioning based on animation state:
+        let anchorY;
+        const bob = (this.state === MOLE_STATE.IDLE) ? Math.sin(this.idleBobTimer * 2.4) * 2.5 : 0;
+
+        if (this.state === MOLE_STATE.PEEKING) {
+            // Hands sit right on the hole rim
+            anchorY = screenY + (holeRadiusY * 0.14);
+        } else if (this.state === MOLE_STATE.EMERGING) {
+            const emergeOffset = (1.0 - this.riseProgress) * (holeRadiusY * 1.5);
+            anchorY = screenY + (holeRadiusY * 0.08) - emergeOffset;
+        } else if (this.state === MOLE_STATE.DUCKING) {
+            const duckOffset = (1.0 - this.riseProgress) * (holeRadiusY * 1.6);
+            anchorY = screenY + (holeRadiusY * 0.08) - duckOffset;
+        } else if (this.state === MOLE_STATE.HIT) {
+            anchorY = screenY - (holeRadiusY * 0.05);
+        } else {
+            // IDLE / ENRAGED_RED
+            anchorY = screenY - (holeRadiusY * 0.10) + bob;
+        }
 
         ctx.save();
-        ctx.translate(screenX, screenY + faceCenterY);
+        ctx.translate(screenX, anchorY);
 
         // Warning tell: subtle pulse before hit so player can predict explosion!
         if (this.isPatternTrigger && !isRed && this.state === MOLE_STATE.IDLE) {
@@ -292,140 +348,20 @@ export class MoleController {
 
         ctx.scale(this.scaleX, this.scaleY);
 
-        // Red Enraged Fiery Glow (lightweight without heavy shadowBlur)
+        // Red Enraged subtle glow
         if (isRed) {
             ctx.fillStyle = 'rgba(239, 68, 68, 0.22)';
             ctx.beginPath();
-            ctx.arc(0, 0, charW * 0.58, 0, Math.PI * 2);
+            ctx.arc(0, -charH * 0.5, charW * 0.55, 0, Math.PI * 2);
             ctx.fill();
         }
 
-        // Draw clean character sprite
-        if (sprite && sprite.complete && sprite.naturalWidth > 0) {
-            ctx.drawImage(sprite, -charW * 0.5, -charH * 0.38, charW, charH);
-
-            // Eye enhancements
-            if (!isRed) {
-                if (this.state === MOLE_STATE.HIT) {
-                    this.drawKOEyes(ctx, s);
-                } else if (this.isBlinking) {
-                    ctx.fillStyle = '#f59e0b';
-                    ctx.beginPath();
-                    ctx.ellipse(-15 * s, 6 * s, 14 * s, 6.5 * s, 0, 0, Math.PI * 2);
-                    ctx.ellipse(15 * s, 6 * s, 14 * s, 6.5 * s, 0, 0, Math.PI * 2);
-                    ctx.fill();
-                } else if (this.glanceX !== 0 || this.glanceY !== 0) {
-                    ctx.fillStyle = '#1e293b';
-                    ctx.beginPath();
-                    ctx.arc((-15 + this.glanceX) * s, (6 + this.glanceY) * s, 4.5 * s, 0, Math.PI * 2);
-                    ctx.arc((15 + this.glanceX) * s, (6 + this.glanceY) * s, 4.5 * s, 0, Math.PI * 2);
-                    ctx.fill();
-                }
-            } else {
-                this.drawAngryEyebrows(ctx, s);
-            }
-        } else {
-            this.drawProceduralCharacter(ctx, charW, charH, isRed);
-        }
+        // Draw animated sprite frame anchored horizontally centered and vertically from bottom
+        ctx.drawImage(sprite, -charW * 0.5, -charH, charW, charH);
 
         // Dizzy stars on hit
         if (this.state === MOLE_STATE.HIT) {
-            this.drawDizzyFX(ctx, charH * 0.38);
-        }
-
-        ctx.restore();
-    }
-
-    // Requirement 2: Draw Character Hands / Paws around the Hole Rim!
-    // Shows like the character crawled out of the hole like a mole!
-    drawCharacterPaws(ctx, screenX, screenY, holeRadiusX, holeRadiusY) {
-        if (this.state === MOLE_STATE.HIDDEN || this.riseProgress <= 0.05) return;
-
-        const isRed = (this.type === 'red' || this.state === MOLE_STATE.ENRAGED_RED);
-        const pawW = holeRadiusX * 0.44;
-        const pawH = holeRadiusY * 0.58;
-
-        // Paw vertical travel:
-        // When peeking (riseProgress ~0.25): paws are resting right at the rim edge
-        // When fully up (riseProgress = 1.0): paws are firmly clamped onto the front rim
-        // Gentle organic breathing bobbing
-        const bob = (this.state === MOLE_STATE.IDLE) ? Math.sin(this.idleBobTimer * 2.4) * 1.5 : 0;
-        const pawY = screenY + (holeRadiusY * 0.12) + bob;
-
-        // Left Paw position: on the left side of the hole rim
-        const leftPawX = screenX - holeRadiusX * 0.54;
-        // Right Paw position: on the right side of the hole rim
-        const rightPawX = screenX + holeRadiusX * 0.54;
-
-        ctx.save();
-
-        const pawColor = isRed ? '#ef4444' : '#facc15';
-        const pawShade = isRed ? '#b91c1c' : '#eab308';
-        const outlineColor = isRed ? '#450a0a' : '#261c0e';
-        const clawColor = isRed ? '#ffffff' : '#fef08a';
-
-        // Draw Left Paw
-        this.renderSinglePaw(ctx, leftPawX, pawY, pawW, pawH, -0.15, pawColor, pawShade, outlineColor, clawColor, isRed);
-
-        // Draw Right Paw
-        this.renderSinglePaw(ctx, rightPawX, pawY, pawW, pawH, 0.15, pawColor, pawShade, outlineColor, clawColor, isRed);
-
-        ctx.restore();
-    }
-
-    // Render a single cute cartoon paw gripping over the front rim
-    renderSinglePaw(ctx, x, y, w, h, tiltAngle, baseColor, shadeColor, outlineColor, clawColor, isRed) {
-        ctx.save();
-        ctx.translate(x, y);
-        ctx.rotate(tiltAngle);
-
-        const r = w * 0.5;
-
-        // 1. Subtle drop shadow onto hole rim
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
-        ctx.beginPath();
-        ctx.ellipse(0, h * 0.22, r * 1.05, h * 0.42, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // 2. Paw Base Cushion (rounded oval)
-        ctx.fillStyle = shadeColor;
-        ctx.beginPath();
-        ctx.ellipse(0, 0, r, h * 0.5, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = baseColor;
-        ctx.beginPath();
-        ctx.ellipse(0, -h * 0.08, r * 0.92, h * 0.42, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // 3. Paw Outline
-        ctx.strokeStyle = outlineColor;
-        ctx.lineWidth = Math.max(2.0, w * 0.09);
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.beginPath();
-        ctx.ellipse(0, 0, r, h * 0.5, 0, 0, Math.PI * 2);
-        ctx.stroke();
-
-        // 4. 3 Gripping Fingers / Claws curled downwards over the rim
-        const fingerSpacing = r * 0.52;
-        for (let i = -1; i <= 1; i++) {
-            const fx = i * fingerSpacing;
-            const fy = h * 0.22;
-
-            // Finger knuckle line
-            ctx.strokeStyle = outlineColor;
-            ctx.lineWidth = Math.max(1.8, w * 0.08);
-            ctx.beginPath();
-            ctx.moveTo(fx, -h * 0.12);
-            ctx.lineTo(fx, fy);
-            ctx.stroke();
-
-            // Little claw / finger pad
-            ctx.fillStyle = clawColor;
-            ctx.beginPath();
-            ctx.arc(fx, fy, Math.max(2.2, r * 0.20), 0, Math.PI * 2);
-            ctx.fill();
+            this.drawDizzyFX(ctx, charH);
         }
 
         ctx.restore();

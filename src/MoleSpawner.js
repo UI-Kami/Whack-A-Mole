@@ -44,25 +44,19 @@ export class Hole {
             this.drawProceduralHole(ctx, rx, ry);
         }
 
-        // --- Layer 1: Mole Emerging from cavity (with bottom ellipse mask) ---
+        // Draw Animated Mole emerging from cavity (with bottom ellipse mask)
         if (this.mole.state !== MOLE_STATE.HIDDEN && this.mole.riseProgress > 0.01) {
             ctx.save();
             ctx.beginPath();
             ctx.moveTo(this.screenX - rx * 2.5, this.screenY - 500);
             ctx.lineTo(this.screenX + rx * 2.5, this.screenY - 500);
-            ctx.lineTo(this.screenX + rx * 1.02, this.screenY);
-            ctx.ellipse(this.screenX, this.screenY, rx * 1.02, ry * 0.44, 0, 0, Math.PI, false);
+            ctx.lineTo(this.screenX + rx * 1.05, this.screenY);
+            ctx.ellipse(this.screenX, this.screenY, rx * 1.05, ry * 0.44, 0, 0, Math.PI, false);
             ctx.closePath();
             ctx.clip();
 
             this.mole.draw(ctx, this.screenX, this.screenY, rx, ry);
             ctx.restore();
-        }
-
-        // --- Layer 2: Character Paws / Hands gripping over the front rim! (Requirement 2) ---
-        // Showing like it crawled out of the hole like a mole!
-        if (this.mole.state !== MOLE_STATE.HIDDEN && this.mole.riseProgress > 0.05) {
-            this.mole.drawCharacterPaws(ctx, this.screenX, this.screenY, rx, ry);
         }
     }
 

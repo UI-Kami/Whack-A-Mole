@@ -34,10 +34,18 @@ export class GameManager {
             sessionTime: 0
         };
 
-        // Loaded Assets
+        // Loaded Assets (including full Character Sprite Animations)
         this.assets = {
             yellowCharacter: null,
             redCharacter: null,
+            yellow_peek: null,
+            yellow_push: null,
+            yellow_idle: null,
+            yellow_hit: null,
+            red_peek: null,
+            red_push: null,
+            red_idle: null,
+            red_hit: null,
             punchSprite: null,
             slapSprite: null,
             bgImg: null,
@@ -118,6 +126,14 @@ export class GameManager {
         if (typeof ASSETS_DATA !== 'undefined' && ASSETS_DATA) {
             this.assets.yellowCharacter = await loadImg(ASSETS_DATA.yellow);
             this.assets.redCharacter = await loadImg(ASSETS_DATA.red);
+            this.assets.yellow_peek = await loadImg(ASSETS_DATA.yellow_peek || ASSETS_DATA.yellow);
+            this.assets.yellow_push = await loadImg(ASSETS_DATA.yellow_push || ASSETS_DATA.yellow);
+            this.assets.yellow_idle = await loadImg(ASSETS_DATA.yellow_idle || ASSETS_DATA.yellow);
+            this.assets.yellow_hit = await loadImg(ASSETS_DATA.yellow_hit || ASSETS_DATA.yellow);
+            this.assets.red_peek = await loadImg(ASSETS_DATA.red_peek || ASSETS_DATA.red);
+            this.assets.red_push = await loadImg(ASSETS_DATA.red_push || ASSETS_DATA.red);
+            this.assets.red_idle = await loadImg(ASSETS_DATA.red_idle || ASSETS_DATA.red);
+            this.assets.red_hit = await loadImg(ASSETS_DATA.red_hit || ASSETS_DATA.red);
             this.assets.punchSprite = await loadImg(ASSETS_DATA.punch);
             this.assets.slapSprite = await loadImg(ASSETS_DATA.slap);
             this.assets.bgImg = await loadImg(ASSETS_DATA.bg);
@@ -126,6 +142,14 @@ export class GameManager {
         } else {
             this.assets.yellowCharacter = await loadImg('assets/clean_sprites/yellow_character.png');
             this.assets.redCharacter = await loadImg('assets/clean_sprites/red_character.png');
+            this.assets.yellow_peek = await loadImg('assets/clean_sprites/yellow_peek.png');
+            this.assets.yellow_push = await loadImg('assets/clean_sprites/yellow_push.png');
+            this.assets.yellow_idle = await loadImg('assets/clean_sprites/yellow_idle.png');
+            this.assets.yellow_hit = await loadImg('assets/clean_sprites/yellow_hit.png');
+            this.assets.red_peek = await loadImg('assets/clean_sprites/red_peek.png');
+            this.assets.red_push = await loadImg('assets/clean_sprites/red_push.png');
+            this.assets.red_idle = await loadImg('assets/clean_sprites/red_idle.png');
+            this.assets.red_hit = await loadImg('assets/clean_sprites/red_hit.png');
             this.assets.punchSprite = await loadImg('assets/clean_sprites/punch_hand.png');
             this.assets.slapSprite = await loadImg('assets/clean_sprites/slap_hand.png');
             this.assets.bgImg = await loadImg('assets/BG_NEW/Background_New.jpg');
