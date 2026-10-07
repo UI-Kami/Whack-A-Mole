@@ -76,13 +76,15 @@ $uiWiring = @'
     ];
     let currentModeIndex = 0;
 
-    btnHandMode.addEventListener('click', () => {
-        currentModeIndex = (currentModeIndex + 1) % modesList.length;
-        const current = modesList[currentModeIndex];
-        textHandMode.textContent = current.label;
-        iconHandMode.innerHTML = modeIcons[current.id];
-        game.setHandMode(current.id);
-    });
+    if (btnHandMode) {
+        btnHandMode.addEventListener('click', () => {
+            currentModeIndex = (currentModeIndex + 1) % modesList.length;
+            const current = modesList[currentModeIndex];
+            if (textHandMode) textHandMode.textContent = current.label;
+            if (iconHandMode) iconHandMode.innerHTML = modeIcons[current.id];
+            game.setHandMode(current.id);
+        });
+    }
 
     // --- Audio and SFX Toggles ---
     const pathSfxOn = 'M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z';
@@ -278,25 +280,11 @@ $middleHtml = @'
             <span id="hud-score-val" class="hud-pill-val">0</span>
         </div>
 
-        <!-- Combo Streak Pill -->
-        <div class="hud-pill hud-streak-pill" id="hud-streak-pill" title="Consecutive Hits Combo Streak">
-            <span class="hud-pill-label">STREAK</span>
-            <span id="hud-streak-val" class="hud-pill-val">0x</span>
-        </div>
-
         <!-- Red Rage Predictor Pill (Requirement 5) -->
         <div class="hud-pill hud-predictor-pill" id="hud-predictor-pill" title="Predicts when Yellow mole will turn RED!">
             <span class="hud-pill-label">RAGE</span>
             <span class="hud-pill-val" id="hud-predictor-val-wrap"><span id="hud-predictor-dot" class="rage-indicator-dot"></span><span id="hud-predictor-val">IN: 4</span></span>
         </div>
-
-        <!-- Hand Attack Mode Toggle (Requirement 2: Punch & Slap) -->
-        <button id="btn-hand-mode" class="hud-btn btn-hand-mode" title="Toggle Attack Hand: Combo / Punch / Slap" aria-label="Toggle Attack Mode">
-            <span id="icon-hand-mode">
-                <svg class="hud-mode-icon" viewBox="0 0 24 24"><path d="M7 2v11h3v9l7-12h-4l4-8z"/></svg>
-            </span>
-            <span id="text-hand-mode">COMBO</span>
-        </button>
 
         <!-- 3 Hearts Health Bar -->
         <div class="hud-pill hud-health-pill" id="hud-health-bar" title="3 Lives - Hitting Red Mole loses 1 heart!">

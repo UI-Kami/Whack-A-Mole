@@ -12,10 +12,10 @@
     --bg-dark: #0f172a;
     --primary: #f59e0b;
     --primary-glow: rgba(245, 158, 11, 0.4);
-    --glass-bg: rgba(15, 23, 42, 0.75);
-    --glass-border: rgba(255, 255, 255, 0.15);
-    --text-main: #f8fafc;
-    --text-muted: #94a3b8;
+    --glass-bg: rgba(15, 23, 42, 0.85);
+    --glass-border: rgba(255, 255, 255, 0.20);
+    --text-main: #ffffff;
+    --text-muted: #e2e8f0;
 }
 
 * {
@@ -117,10 +117,10 @@ html, body {
 }
 
 .hud-pill-label {
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 800;
     letter-spacing: 0.8px;
-    color: var(--text-muted);
+    color: #e2e8f0;
 }
 
 .hud-pill-val {
@@ -305,15 +305,15 @@ html, body {
     display: flex;
     align-items: center;
     gap: 8px;
-    background: rgba(15, 23, 42, 0.85);
+    background: rgba(15, 23, 42, 0.92);
     backdrop-filter: blur(12px);
-    border: 1px solid var(--glass-border);
-    padding: 6px 16px;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    padding: 8px 20px;
     border-radius: 9999px;
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--text-muted);
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+    font-size: 13px;
+    font-weight: 700;
+    color: #ffffff;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.55);
     pointer-events: none;
     z-index: 100;
 }
@@ -396,9 +396,9 @@ html, body {
 }
 
 .stat-label {
-    font-size: 11px;
-    font-weight: 700;
-    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 800;
+    color: #cbd5e1;
     margin-bottom: 4px;
 }
 
@@ -462,25 +462,11 @@ html, body {
             <span id="hud-score-val" class="hud-pill-val">0</span>
         </div>
 
-        <!-- Combo Streak Pill -->
-        <div class="hud-pill hud-streak-pill" id="hud-streak-pill" title="Consecutive Hits Combo Streak">
-            <span class="hud-pill-label">STREAK</span>
-            <span id="hud-streak-val" class="hud-pill-val">0x</span>
-        </div>
-
         <!-- Red Rage Predictor Pill (Requirement 5) -->
         <div class="hud-pill hud-predictor-pill" id="hud-predictor-pill" title="Predicts when Yellow mole will turn RED!">
             <span class="hud-pill-label">RAGE</span>
             <span class="hud-pill-val" id="hud-predictor-val-wrap"><span id="hud-predictor-dot" class="rage-indicator-dot"></span><span id="hud-predictor-val">IN: 4</span></span>
         </div>
-
-        <!-- Hand Attack Mode Toggle (Requirement 2: Punch & Slap) -->
-        <button id="btn-hand-mode" class="hud-btn btn-hand-mode" title="Toggle Attack Hand: Combo / Punch / Slap" aria-label="Toggle Attack Mode">
-            <span id="icon-hand-mode">
-                <svg class="hud-mode-icon" viewBox="0 0 24 24"><path d="M7 2v11h3v9l7-12h-4l4-8z"/></svg>
-            </span>
-            <span id="text-hand-mode">COMBO</span>
-        </button>
 
         <!-- 3 Hearts Health Bar -->
         <div class="hud-pill hud-health-pill" id="hud-health-bar" title="3 Lives - Hitting Red Mole loses 1 heart!">
@@ -1670,19 +1656,19 @@ class FloatingText {
         ctx.scale(this.scale, this.scale);
 
         if (!this.isScore && this.bannerColor) {
-            // Draw 12-point jagged comic explosion starburst backdrop!
+            // Draw 12-point jagged comic explosion starburst backdrop
             ctx.save();
             ctx.fillStyle = this.bannerColor;
-            ctx.strokeStyle = '#090d16';
-            ctx.lineWidth = 4;
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
-            ctx.shadowBlur = 10;
-            ctx.shadowOffsetY = 4;
+            ctx.strokeStyle = '#0f172a';
+            ctx.lineWidth = 3.5;
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+            ctx.shadowBlur = 8;
+            ctx.shadowOffsetY = 3;
 
             const points = 12;
-            const textWidth = Math.max(84, this.text.length * 15.5);
-            const outerR = textWidth * 0.60;
-            const innerR = outerR * 0.65;
+            const textWidth = Math.max(92, this.text.length * 17);
+            const outerR = textWidth * 0.62;
+            const innerR = outerR * 0.68;
             ctx.beginPath();
             for (let i = 0; i < points * 2; i++) {
                 const angle = (i * Math.PI) / points;
@@ -1698,24 +1684,22 @@ class FloatingText {
             ctx.restore();
         }
 
-        ctx.font = this.isScore 
-            ? '900 24px "Outfit", "Arial Black", sans-serif'
-            : '900 26px "Outfit", "Arial Black", sans-serif';
+        ctx.font = '900 28px "Outfit", "Arial Black", sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
 
-        // Outer cartoon stroke
+        // Outer cartoon stroke with clean round joins for crisp readability
         ctx.strokeStyle = this.strokeColor;
-        ctx.lineWidth = this.isScore ? 5 : 6;
-        ctx.lineJoin = 'miter';
-        ctx.miterLimit = 2;
+        ctx.lineWidth = 6.5;
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
         ctx.strokeText(this.text, 0, 0);
 
-        // Bright fill with subtle specular glow
+        // Bright high-contrast fill
         ctx.fillStyle = this.color;
-        ctx.shadowColor = this.isScore ? 'rgba(245, 158, 11, 0.8)' : 'rgba(0,0,0,0.4)';
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
         ctx.shadowOffsetY = 2;
-        ctx.shadowBlur = 6;
+        ctx.shadowBlur = 4;
         ctx.fillText(this.text, 0, 0);
 
         ctx.restore();
@@ -2055,19 +2039,16 @@ class VFXManager {
             this.spawnComboConfetti(x, y - 20 * depthScale, Math.min(32, 14 + comboStreak * 4));
         }
 
-        // 9. Comic Insult Text with Starburst Explosion Banner
+        // 9. Comic Hit Text from HumanHit(TEXT).txt with Starburst Explosion Banner
         if (this.config.FLOATING_TEXT_ENABLED) {
             const word = INSULT_TEXTS[Math.floor(Math.random() * INSULT_TEXTS.length)] + '!';
-            const textColor = isSlap ? '#ffffff' : '#261405';
-            const strokeColor = isSlap ? '#831843' : '#1c1917';
-            const bannerColor = isSlap ? '#f472b6' : '#fde047';
-            this.floatingTexts.get(x, y - 36 * depthScale, word, textColor, strokeColor, bannerColor, false);
-
-            // 10. Arcade Score Popup right above insult text
-            const basePts = 100;
-            const multiplier = Math.max(1, Math.min(5, comboStreak));
-            const pts = basePts * multiplier;
-            this.spawnScorePopup(x, y - 68 * depthScale, pts, comboStreak);
+            // Pure white text with rich, vivid comic outline:
+            // For Punch: pure white text with vibrant deep crimson outline (#991b1b) on bright golden starburst (#facc15)
+            // For Slap: pure white text with deep magenta outline (#831843) on electric pink starburst (#f472b6)
+            const textColor = '#ffffff';
+            const strokeColor = isSlap ? '#831843' : '#991b1b';
+            const bannerColor = isSlap ? '#f472b6' : '#facc15';
+            this.floatingTexts.get(x, y - 44 * depthScale, word, textColor, strokeColor, bannerColor, false);
         }
     }
 
@@ -4360,13 +4341,15 @@ class GameManager {
     ];
     let currentModeIndex = 0;
 
-    btnHandMode.addEventListener('click', () => {
-        currentModeIndex = (currentModeIndex + 1) % modesList.length;
-        const current = modesList[currentModeIndex];
-        textHandMode.textContent = current.label;
-        iconHandMode.innerHTML = modeIcons[current.id];
-        game.setHandMode(current.id);
-    });
+    if (btnHandMode) {
+        btnHandMode.addEventListener('click', () => {
+            currentModeIndex = (currentModeIndex + 1) % modesList.length;
+            const current = modesList[currentModeIndex];
+            if (textHandMode) textHandMode.textContent = current.label;
+            if (iconHandMode) iconHandMode.innerHTML = modeIcons[current.id];
+            game.setHandMode(current.id);
+        });
+    }
 
     // --- Audio and SFX Toggles ---
     const pathSfxOn = 'M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z';

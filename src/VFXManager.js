@@ -259,19 +259,19 @@ class FloatingText {
         ctx.scale(this.scale, this.scale);
 
         if (!this.isScore && this.bannerColor) {
-            // Draw 12-point jagged comic explosion starburst backdrop!
+            // Draw 12-point jagged comic explosion starburst backdrop
             ctx.save();
             ctx.fillStyle = this.bannerColor;
-            ctx.strokeStyle = '#090d16';
-            ctx.lineWidth = 4;
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
-            ctx.shadowBlur = 10;
-            ctx.shadowOffsetY = 4;
+            ctx.strokeStyle = '#0f172a';
+            ctx.lineWidth = 3.5;
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+            ctx.shadowBlur = 8;
+            ctx.shadowOffsetY = 3;
 
             const points = 12;
-            const textWidth = Math.max(84, this.text.length * 15.5);
-            const outerR = textWidth * 0.60;
-            const innerR = outerR * 0.65;
+            const textWidth = Math.max(92, this.text.length * 17);
+            const outerR = textWidth * 0.62;
+            const innerR = outerR * 0.68;
             ctx.beginPath();
             for (let i = 0; i < points * 2; i++) {
                 const angle = (i * Math.PI) / points;
@@ -287,24 +287,22 @@ class FloatingText {
             ctx.restore();
         }
 
-        ctx.font = this.isScore 
-            ? '900 24px "Outfit", "Arial Black", sans-serif'
-            : '900 26px "Outfit", "Arial Black", sans-serif';
+        ctx.font = '900 28px "Outfit", "Arial Black", sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
 
-        // Outer cartoon stroke
+        // Outer cartoon stroke with clean round joins for crisp readability
         ctx.strokeStyle = this.strokeColor;
-        ctx.lineWidth = this.isScore ? 5 : 6;
-        ctx.lineJoin = 'miter';
-        ctx.miterLimit = 2;
+        ctx.lineWidth = 6.5;
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
         ctx.strokeText(this.text, 0, 0);
 
-        // Bright fill with subtle specular glow
+        // Bright high-contrast fill
         ctx.fillStyle = this.color;
-        ctx.shadowColor = this.isScore ? 'rgba(245, 158, 11, 0.8)' : 'rgba(0,0,0,0.4)';
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
         ctx.shadowOffsetY = 2;
-        ctx.shadowBlur = 6;
+        ctx.shadowBlur = 4;
         ctx.fillText(this.text, 0, 0);
 
         ctx.restore();
@@ -646,19 +644,16 @@ export class VFXManager {
             this.spawnComboConfetti(x, y - 20 * depthScale, Math.min(32, 14 + comboStreak * 4));
         }
 
-        // 9. Comic Insult Text with Starburst Explosion Banner
+        // 9. Comic Hit Text from HumanHit(TEXT).txt with Starburst Explosion Banner
         if (this.config.FLOATING_TEXT_ENABLED) {
             const word = INSULT_TEXTS[Math.floor(Math.random() * INSULT_TEXTS.length)] + '!';
-            const textColor = isSlap ? '#ffffff' : '#261405';
-            const strokeColor = isSlap ? '#831843' : '#1c1917';
-            const bannerColor = isSlap ? '#f472b6' : '#fde047';
-            this.floatingTexts.get(x, y - 36 * depthScale, word, textColor, strokeColor, bannerColor, false);
-
-            // 10. Arcade Score Popup right above insult text
-            const basePts = 100;
-            const multiplier = Math.max(1, Math.min(5, comboStreak));
-            const pts = basePts * multiplier;
-            this.spawnScorePopup(x, y - 68 * depthScale, pts, comboStreak);
+            // Pure white text with rich, vivid comic outline:
+            // For Punch: pure white text with vibrant deep crimson outline (#991b1b) on bright golden starburst (#facc15)
+            // For Slap: pure white text with deep magenta outline (#831843) on electric pink starburst (#f472b6)
+            const textColor = '#ffffff';
+            const strokeColor = isSlap ? '#831843' : '#991b1b';
+            const bannerColor = isSlap ? '#f472b6' : '#facc15';
+            this.floatingTexts.get(x, y - 44 * depthScale, word, textColor, strokeColor, bannerColor, false);
         }
     }
 

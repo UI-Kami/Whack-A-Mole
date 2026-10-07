@@ -73,11 +73,9 @@ An endless, high-energy Whack-a-Mole arcade game built with HTML5 Canvas, contin
 
 | Control | Action |
 | :--- | :--- |
-| **Mouse / Touch** | Move the hand and tap/click to punch or slap emerging moles |
-| **Punch / Slap Mode Button** | Toggle between Punch Fist and Slap Hand modes |
-| **Score Pill** | Real-time score counter |
-| **Streak Pill** | Consecutive hits multiplier and combo streak |
-| **Rage Predictor Pill** | Counts down hits remaining until next Red Mole transformation |
+| **Mouse / Touch** | Move the hand and tap/click to punch or slap emerging moles (alternates dynamically) |
+| **Score Pill** | Real-time score counter tracking whacked moles |
+| **Rage Predictor Pill** | Counts down hits remaining until next Red Mole transformation (`NEXT: RED!` / `IN: X`) |
 | **Health Pill** | 3 remaining life hearts (`❤️ ❤️ ❤️`) |
 | **SFX / Music Buttons** | Toggle synthesized audio effects and background music |
 | **Stats Button** | View full game session statistics |
