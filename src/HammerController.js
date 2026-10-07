@@ -1,8 +1,8 @@
-// src/HammerController.js - Responsive Hammer Physics, Swing Phases, Motion Trails & Impact Juice
-export const HAMMER_STATE = {
+// src/HammerController.js - Punch & Slap Hand Attacks with Juicy Comic Animations (Point 3)
+export const HAND_STATE = {
     IDLE: 'IDLE',
     ANTICIPATION: 'ANTICIPATION',
-    SWING: 'SWING',
+    STRIKE: 'STRIKE',
     IMPACT: 'IMPACT',
     RECOVERY: 'RECOVERY'
 };
@@ -15,31 +15,34 @@ export class HammerController {
         this.cameraShake = cameraShake;
         this.vfxManager = vfxManager;
 
-        // Pointer target and current hammer positions
+        // Position coordinates
         this.targetX = config.VIEWPORT_WIDTH / 2;
         this.targetY = config.VIEWPORT_HEIGHT / 2;
-        this.x = this.targetX + 65;
-        this.y = this.targetY + 45;
+        this.x = this.targetX;
+        this.y = this.targetY;
 
-        // Swing state
-        this.state = HAMMER_STATE.IDLE;
+        // Attack state
+        this.state = HAND_STATE.IDLE;
         this.phaseTimer = 0;
-        this.swingProgress = 0; // 0 to 1
+        this.handMode = config.HAND_MODE || 'combo'; // 'combo' | 'punch' | 'slap'
+        this.currentAttack = 'punch'; // 'punch' | 'slap'
+        this.comboCounter = 0;
 
         // Transform properties
-        this.angle = this.config.HAMMER_IDLE_ANGLE || 0; // in degrees
+        this.angle = -14; // in degrees
         this.scaleX = 1;
         this.scaleY = 1;
-        this.squashFactor = 1;
+        this.scaleZ = 1; // 3D perspective punch scale
 
-        // Swing target coordinate (where the click occurred)
+        // Target coordinates of current strike
         this.hitTargetX = this.targetX;
         this.hitTargetY = this.targetY;
         this.hitCallback = null;
 
-        // Motion Trail buffer
+        // Visual effects: motion trail & impact burst
         this.trailPoints = [];
         this.idleBob = 0;
+        this.impactFlashAlpha = 0;
     }
 
     setPointer(px, py) {
@@ -47,14 +50,28 @@ export class HammerController {
         this.targetY = py;
     }
 
+    setHandMode(mode) {
+        if (mode === 'combo' || mode === 'punch' || mode === 'slap') {
+            this.handMode = mode;
+        }
+    }
+
     triggerSwing(hitX, hitY, hitCallback, isTouch = false) {
-        // If an ongoing swing had an unfulfilled hit, complete it right away so rapid multi-taps don't drop
-        if ((this.state === HAMMER_STATE.SWING || this.state === HAMMER_STATE.ANTICIPATION) && this.hitCallback) {
-            const pendingCb = this.hitCallback;
+        // Fulfill any pending strike
+        if ((this.state === HAND_STATE.STRIKE || this.state === HAND_STATE.ANTICIPATION) && this.hitCallback) {
+            const cb = this.hitCallback;
             const px = this.hitTargetX;
             const py = this.hitTargetY;
             this.hitCallback = null;
-            pendingCb(px, py);
+            cb(px, py, this.currentAttack);
+        }
+
+        // Determine attack type based on mode
+        if (this.handMode === 'combo') {
+            this.currentAttack = (this.comboCounter % 2 === 0) ? 'punch' : 'slap';
+            this.comboCounter++;
+        } else {
+            this.currentAttack = this.handMode;
         }
 
         this.targetX = hitX;
@@ -63,158 +80,170 @@ export class HammerController {
         this.hitTargetY = hitY;
         this.hitCallback = hitCallback;
 
-        // Exact impact grip position so head (-75, -75) lands precisely on hitTarget
-        const impactGripX = hitX + 98;
-        const impactGripY = hitY - 41;
+        this.state = HAND_STATE.ANTICIPATION;
+        this.phaseTimer = isTouch ? 0.025 : 0.035; // Snappy, responsive wind-up
 
-        if (isTouch) {
-            // Immediate snap to strike position on mobile touch
-            this.x = impactGripX + 15;
-            this.y = impactGripY - 25;
-            this.angle = 20;
-            this.state = HAMMER_STATE.ANTICIPATION;
-            this.phaseTimer = 0.02; // Ultra snappy 20ms anticipation on touch
+        if (this.currentAttack === 'punch') {
+            this.audioManager.playPunchSwing();
         } else {
-            const dist = Math.hypot(this.x - impactGripX, this.y - impactGripY);
-            if (dist > 180) {
-                this.x = hitX + 70;
-                this.y = hitY - 20;
-            }
-            this.state = HAMMER_STATE.ANTICIPATION;
-            this.phaseTimer = (this.config.HAMMER_ANTICIPATION_MS || 40) / 1000;
+            this.audioManager.playSlapSwing();
         }
-
-        this.audioManager.playHammerSwing();
     }
 
     update(dt) {
-        this.idleBob += dt * 3.5;
+        this.idleBob += dt * 4.5;
+        const isPunch = (this.currentAttack === 'punch');
 
-        // Target grip offsets
-        const impactGripX = this.hitTargetX + 98;
-        const impactGripY = this.hitTargetY - 41;
+        if (this.impactFlashAlpha > 0) {
+            this.impactFlashAlpha = Math.max(0, this.impactFlashAlpha - dt * 6.5);
+        }
 
-        let desiredGripX = this.targetX + 65;
-        let desiredGripY = this.targetY + 45;
-
-        // Swing State Machine
         switch (this.state) {
-            case HAMMER_STATE.IDLE:
-                // Gentle floating breath
-                this.angle = (this.config.HAMMER_IDLE_ANGLE || 0) + Math.sin(this.idleBob) * 2.5;
-                this.scaleX = 1;
-                this.scaleY = 1;
+            case HAND_STATE.IDLE:
+                // Natural ready stance: gentle floating breath
+                this.angle = isPunch ? (-14 + Math.sin(this.idleBob) * 2.5) : (12 + Math.sin(this.idleBob) * 3);
+                this.scaleX = 1 + Math.sin(this.idleBob * 1.5) * 0.02;
+                this.scaleY = 1 - Math.sin(this.idleBob * 1.5) * 0.02;
+                this.scaleZ = 1.0;
                 this.trailPoints = [];
+
+                // Smoothly follow pointer in idle
+                this.x += (this.targetX - this.x) * 0.55;
+                this.y += (this.targetY - this.y) * 0.55;
                 break;
 
-            case HAMMER_STATE.ANTICIPATION:
+            case HAND_STATE.ANTICIPATION:
                 this.phaseTimer -= dt;
-                const anticTotal = 0.04;
+                const anticTotal = 0.035;
                 const anticProg = 1 - Math.max(0, this.phaseTimer / anticTotal);
-                
-                // Lift / cock back & up for momentum
-                this.angle = (this.config.HAMMER_IDLE_ANGLE || 0) + 
-                    ((this.config.HAMMER_ANTICIPATION_ANGLE || 26) - (this.config.HAMMER_IDLE_ANGLE || 0)) * anticProg;
 
-                desiredGripX = impactGripX + 15 + anticProg * 10;
-                desiredGripY = impactGripY - 25 - anticProg * 15;
+                if (isPunch) {
+                    // Fist pulls back and cocks: rotates back, scales down slightly for 3D depth
+                    this.angle = -14 - 22 * anticProg; // Cocks to -36 deg
+                    this.scaleX = 0.94;
+                    this.scaleY = 1.08;
+                    this.scaleZ = 0.85; // Pulled back away from screen
+                    this.x = this.hitTargetX - 35 * anticProg;
+                    this.y = this.hitTargetY - 25 * anticProg;
+                } else {
+                    // Open slap hand raises high in air tilted backwards
+                    this.angle = 12 + 38 * anticProg; // Raises to +50 deg
+                    this.scaleX = 0.90;
+                    this.scaleY = 1.14;
+                    this.scaleZ = 0.88;
+                    this.x = this.hitTargetX + 35 * anticProg;
+                    this.y = this.hitTargetY - 45 * anticProg;
+                }
 
                 if (this.phaseTimer <= 0) {
-                    this.state = HAMMER_STATE.SWING;
-                    this.phaseTimer = (this.config.HAMMER_SWING_MS || 50) / 1000;
+                    this.state = HAND_STATE.STRIKE;
+                    this.phaseTimer = 0.032; // Fast lightning strike
                 }
                 break;
 
-            case HAMMER_STATE.SWING:
+            case HAND_STATE.STRIKE:
                 this.phaseTimer -= dt;
-                const swingTotal = (this.config.HAMMER_SWING_MS || 50) / 1000;
-                const rawProg = 1 - Math.max(0, this.phaseTimer / swingTotal);
-                
-                // Explosive accelerating ease-in downward smash
-                const easeInQuad = rawProg * rawProg;
-                const impactAngle = this.config.HAMMER_IMPACT_ANGLE || -68;
-                const anticAngle = this.config.HAMMER_ANTICIPATION_ANGLE || 26;
+                const strikeTotal = 0.032;
+                const strikeProg = 1 - Math.max(0, this.phaseTimer / strikeTotal);
+                const easeIn = strikeProg * strikeProg;
 
-                this.angle = anticAngle + (impactAngle - anticAngle) * easeInQuad;
-
-                desiredGripX = (impactGripX + 20) + (impactGripX - (impactGripX + 20)) * easeInQuad;
-                desiredGripY = (impactGripY - 35) + (impactGripY - (impactGripY - 35)) * easeInQuad;
+                if (isPunch) {
+                    // High-speed rocket punch thrust: zooms forward into screen!
+                    this.angle = -36 + 46 * easeIn; // Drives forward to +10 deg
+                    this.scaleX = 0.92 + 0.3 * easeIn;
+                    this.scaleY = 1.15 - 0.2 * easeIn;
+                    this.scaleZ = 0.85 + 0.50 * easeIn; // Zooms up to 1.35x for impact!
+                    // Drive directly to target coordinates
+                    this.x = this.hitTargetX - 35 * (1 - easeIn);
+                    this.y = this.hitTargetY - 25 * (1 - easeIn);
+                } else {
+                    // Wide sweeping slap arc downwards
+                    this.angle = 50 - 95 * easeIn; // Sweeps from +50 down to -45
+                    this.scaleX = 1.18;
+                    this.scaleY = 0.85;
+                    this.scaleZ = 0.88 + 0.38 * easeIn;
+                    this.x = this.hitTargetX + 35 * (1 - easeIn);
+                    this.y = this.hitTargetY - 45 * (1 - easeIn);
+                }
 
                 this.recordTrailPoint();
 
                 if (this.phaseTimer <= 0) {
-                    this.state = HAMMER_STATE.IMPACT;
-                    this.phaseTimer = 0.05; // 50ms impact squash
-                    this.x = impactGripX;
-                    this.y = impactGripY;
+                    this.state = HAND_STATE.IMPACT;
+                    this.phaseTimer = 0.052;
+                    this.x = this.hitTargetX;
+                    this.y = this.hitTargetY;
                     this.onImpact();
                 }
                 break;
 
-            case HAMMER_STATE.IMPACT:
+            case HAND_STATE.IMPACT:
                 this.phaseTimer -= dt;
-                this.angle = this.config.HAMMER_IMPACT_ANGLE || -68;
-                
-                // Squash mallet head against the ground
-                this.scaleX = 1.25;
-                this.scaleY = 0.76;
+                this.impactFlashAlpha = 1.0;
+                this.x = this.hitTargetX;
+                this.y = this.hitTargetY;
 
-                desiredGripX = impactGripX;
-                desiredGripY = impactGripY;
+                // Impact squash & stretch upon landing
+                if (isPunch) {
+                    this.scaleX = 1.45; // Heavy comic horizontal squash on knuckles!
+                    this.scaleY = 0.68;
+                    this.scaleZ = 1.30;
+                    this.angle = 10;
+                } else {
+                    this.scaleX = 1.48;
+                    this.scaleY = 0.65;
+                    this.scaleZ = 1.25;
+                    this.angle = -45;
+                }
 
                 if (this.phaseTimer <= 0) {
-                    this.state = HAMMER_STATE.RECOVERY;
-                    this.phaseTimer = (this.config.HAMMER_RECOVERY_MS || 120) / 1000;
+                    this.state = HAND_STATE.RECOVERY;
+                    this.phaseTimer = 0.095;
                 }
                 break;
 
-            case HAMMER_STATE.RECOVERY:
+            case HAND_STATE.RECOVERY:
                 this.phaseTimer -= dt;
-                const recovTotal = (this.config.HAMMER_RECOVERY_MS || 120) / 1000;
-                const recovProg = 1 - Math.max(0, this.phaseTimer / recovTotal);
-                
-                // Spring recovery back up to idle
-                const easeOutElastic = Math.sin(recovProg * Math.PI * 0.5);
-                const startAngle = this.config.HAMMER_IMPACT_ANGLE || -68;
-                const endAngle = this.config.HAMMER_IDLE_ANGLE || 0;
+                const recTotal = 0.095;
+                const recProg = 1 - Math.max(0, this.phaseTimer / recTotal);
+                // Elastic spring overshoot return to idle
+                const easeOut = Math.sin(recProg * Math.PI * 0.5);
 
-                this.angle = startAngle + (endAngle - startAngle) * easeOutElastic;
-                
-                this.scaleX = 0.76 + 0.24 * easeOutElastic;
-                this.scaleY = 1.25 - 0.25 * easeOutElastic;
+                this.scaleX = 1.45 - 0.45 * easeOut;
+                this.scaleY = 0.68 + 0.32 * easeOut;
+                this.scaleZ = 1.30 - 0.30 * easeOut;
+                this.angle = isPunch ? (10 - 24 * easeOut) : (-45 + 57 * easeOut);
 
-                desiredGripX = impactGripX + (this.targetX + 65 - impactGripX) * easeOutElastic;
-                desiredGripY = impactGripY + (this.targetY + 45 - impactGripY) * easeOutElastic;
-
-                this.decayTrail(dt);
+                // Smoothly return towards current pointer
+                this.x += (this.targetX - this.x) * (0.35 + 0.35 * easeOut);
+                this.y += (this.targetY - this.y) * (0.35 + 0.35 * easeOut);
 
                 if (this.phaseTimer <= 0) {
-                    this.state = HAMMER_STATE.IDLE;
+                    this.state = HAND_STATE.IDLE;
+                    this.scaleX = 1;
+                    this.scaleY = 1;
+                    this.scaleZ = 1;
+                    this.angle = isPunch ? -14 : 12;
                 }
                 break;
         }
 
-        // Apply fast spring/lerp to desired grip position
-        const lerpFactor = Math.min(1.0, dt * 35);
-        this.x += (desiredGripX - this.x) * lerpFactor;
-        this.y += (desiredGripY - this.y) * lerpFactor;
+        this.decayTrail(dt);
     }
 
     onImpact() {
         if (this.hitCallback) {
-            this.hitCallback(this.hitTargetX, this.hitTargetY);
+            const cb = this.hitCallback;
+            const px = this.hitTargetX;
+            const py = this.hitTargetY;
+            const attack = this.currentAttack;
             this.hitCallback = null;
+            cb(px, py, attack);
         }
-        this.cameraShake.addTrauma(0.24, 0, 1);
     }
 
     recordTrailPoint() {
-        const rad = (this.angle * Math.PI) / 180;
-        // Head coordinate relative to grip: approx (-75, -75)
-        const hx = this.x + Math.cos(rad) * (-75) - Math.sin(rad) * (-75);
-        const hy = this.y + Math.sin(rad) * (-75) + Math.cos(rad) * (-75);
-
-        this.trailPoints.push({ x: hx, y: hy, alpha: 0.75 });
+        this.trailPoints.push({ x: this.x, y: this.y, alpha: 0.85, type: this.currentAttack, scaleZ: this.scaleZ });
         if (this.trailPoints.length > 8) {
             this.trailPoints.shift();
         }
@@ -222,7 +251,7 @@ export class HammerController {
 
     decayTrail(dt) {
         for (let i = this.trailPoints.length - 1; i >= 0; i--) {
-            this.trailPoints[i].alpha -= dt * 5.0;
+            this.trailPoints[i].alpha -= dt * 6.5;
             if (this.trailPoints[i].alpha <= 0) {
                 this.trailPoints.splice(i, 1);
             }
@@ -230,38 +259,80 @@ export class HammerController {
     }
 
     draw(ctx) {
-        // 1. Draw motion blur arc swoosh
+        // 1. Motion Trail / speed streaks
         this.drawMotionTrail(ctx);
 
-        // 2. Realistic ground drop shadow beneath mallet head
-        const rad = (this.angle * Math.PI) / 180;
-        const headX = this.x + Math.cos(rad) * (-75) - Math.sin(rad) * (-75);
-        const headY = this.y + Math.sin(rad) * (-75) + Math.cos(rad) * (-75);
-
+        // 2. Realistic ground shadow beneath hand
         ctx.save();
         ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
         ctx.beginPath();
-        const shadowScale = (this.state === HAMMER_STATE.IMPACT) ? 1.25 : 0.95;
-        ctx.ellipse(headX, headY + 16, 36 * shadowScale, 14 * shadowScale, 0, 0, Math.PI * 2);
+        const shadowScale = (this.state === HAND_STATE.IMPACT) ? 1.45 : (1.0 * this.scaleZ);
+        ctx.ellipse(this.x, this.y + 28, 48 * shadowScale, 20 * shadowScale, 0, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
 
-        // 3. Draw hammer
+        // 3. Draw active hand sprite with comic 3D punch scaling
         ctx.save();
         ctx.translate(this.x, this.y);
         ctx.rotate((this.angle * Math.PI) / 180);
-        ctx.scale(this.scaleX, this.scaleY);
+        ctx.scale(this.scaleX * this.scaleZ, this.scaleY * this.scaleZ);
 
-        const sprite = this.assets.hammerSprite;
+        const isPunch = (this.currentAttack === 'punch');
+        const sprite = isPunch ? this.assets.punchSprite : this.assets.slapSprite;
 
         if (sprite && sprite.complete && sprite.naturalWidth > 0) {
-            // Draw clean toy mallet with handle grip at (0, 0)
-            const w = 115;
-            const h = 115;
-            ctx.drawImage(sprite, -w * 0.91, -h * 0.92, w, h);
+            if (isPunch) {
+                // Punch fist: natural size ~433x407
+                // Knuckles impact point is at top-right of fist: offset so knuckles are at pivot (0, 0)
+                const w = 142;
+                const h = 133;
+                ctx.drawImage(sprite, -w * 0.82, -h * 0.50, w, h);
+            } else {
+                // Slap hand: natural size ~502x752
+                // Palm center lands at pivot (0, 0)
+                const w = 125;
+                const h = 172;
+                ctx.drawImage(sprite, -w * 0.52, -h * 0.72, w, h);
+            }
         } else {
-            this.drawProceduralHammer(ctx);
+            // Procedural fallback
+            this.drawProceduralHand(ctx, isPunch);
         }
+
+        // 4. Comic impact burst on knuckles
+        if (this.state === HAND_STATE.IMPACT || this.impactFlashAlpha > 0.05) {
+            this.drawImpactBurst(ctx, isPunch);
+        }
+
+        ctx.restore();
+    }
+
+    drawImpactBurst(ctx, isPunch) {
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, this.impactFlashAlpha);
+
+        // Comic impact starburst spikes
+        const spikeCount = isPunch ? 8 : 10;
+        const outerR = isPunch ? 50 : 58;
+        const innerR = isPunch ? 16 : 22;
+        const color = isPunch ? '#ffd700' : '#f472b6';
+
+        ctx.fillStyle = color;
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2.8;
+
+        ctx.beginPath();
+        for (let i = 0; i < spikeCount * 2; i++) {
+            const angle = (i * Math.PI) / spikeCount;
+            const r = (i % 2 === 0) ? outerR : innerR;
+            const px = Math.cos(angle) * r;
+            const py = Math.sin(angle) * r;
+            if (i === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
 
         ctx.restore();
     }
@@ -273,6 +344,9 @@ export class HammerController {
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
 
+        const isSlap = (this.currentAttack === 'slap');
+        const colorRgb = isSlap ? '244, 114, 182' : '255, 215, 0';
+
         for (let i = 1; i < this.trailPoints.length; i++) {
             const p1 = this.trailPoints[i - 1];
             const p2 = this.trailPoints[i];
@@ -281,49 +355,27 @@ export class HammerController {
             ctx.beginPath();
             ctx.moveTo(p1.x, p1.y);
             ctx.lineTo(p2.x, p2.y);
-            ctx.strokeStyle = `rgba(255, 235, 59, ${alpha * 0.6})`;
-            ctx.lineWidth = 14 * (i / this.trailPoints.length);
-            ctx.shadowColor = '#fff';
-            ctx.shadowBlur = 8;
+            ctx.strokeStyle = `rgba(${colorRgb}, ${alpha * 0.65})`;
+            ctx.lineWidth = 20 * (i / this.trailPoints.length);
             ctx.stroke();
         }
 
         ctx.restore();
     }
 
-    drawProceduralHammer(ctx) {
-        // Wooden handle angled towards top-left (-85, -75)
+    drawProceduralHand(ctx, isPunch) {
         ctx.save();
-        ctx.rotate(-Math.PI * 0.77);
-
-        // Wooden handle from grip (0,0) extending along X
-        ctx.fillStyle = '#8d6e63';
-        ctx.strokeStyle = '#5d4037';
-        ctx.lineWidth = 2.5;
-        ctx.beginPath();
-        ctx.roundRect(0, -6, 95, 12, 5);
-        ctx.fill();
-        ctx.stroke();
-
-        // Blue rubber mallet head
-        const headGrad = ctx.createLinearGradient(75, -28, 115, 28);
-        headGrad.addColorStop(0, '#42a5f5');
-        headGrad.addColorStop(0.5, '#1e88e5');
-        headGrad.addColorStop(1, '#1565c0');
-        ctx.fillStyle = headGrad;
-        ctx.strokeStyle = '#0d47a1';
+        ctx.fillStyle = '#fbcfe8';
+        ctx.strokeStyle = '#db2777';
         ctx.lineWidth = 3;
-
         ctx.beginPath();
-        ctx.roundRect(75, -28, 40, 56, 10);
+        if (isPunch) {
+            ctx.arc(-20, 0, 38, 0, Math.PI * 2);
+        } else {
+            ctx.ellipse(0, -30, 26, 48, 0, 0, Math.PI * 2);
+        }
         ctx.fill();
         ctx.stroke();
-
-        // Striking face cushions (yellow rubber bumpers)
-        ctx.fillStyle = '#ffca28';
-        ctx.fillRect(75, -28, 6, 56);
-        ctx.fillRect(109, -28, 6, 56);
-
         ctx.restore();
     }
 }

@@ -1,11 +1,11 @@
-// src/MoleController.js - Individual Mole State Machine, 2.5D Depth, Animations & Hit Reactions
+// src/MoleController.js - Yellow Mole & Red Mole State Machine, Animations & Transformation
 export const MOLE_STATE = {
     HIDDEN: 'HIDDEN',
     PEEKING: 'PEEKING',
     EMERGING: 'EMERGING',
     IDLE: 'IDLE',
     HIT: 'HIT',
-    RETREATING: 'RETREATING',
+    ENRAGED_RED: 'ENRAGED_RED',
     DUCKING: 'DUCKING'
 };
 
@@ -16,106 +16,206 @@ export class MoleController {
         this.assets = assets;
 
         this.state = MOLE_STATE.HIDDEN;
-        this.type = 'normal'; // 'normal' | 'speedy' | 'golden'
+        this.type = 'yellow'; // 'yellow' | 'red'
         this.timer = 0;
-        this.idleDuration = 1.5;
+        this.idleDuration = 1.6;
 
         // Visual animation properties
         this.riseProgress = 0; // 0 = fully underground, 1 = fully up
         this.scaleX = 1;
         this.scaleY = 1;
-        this.offsetY = 0;
         this.dizzyAngle = 0;
         this.idleBobTimer = 0;
+        this.blinkTimer = 0;
+        this.isBlinking = false;
         this.isHit = false;
 
-        // Hit hitbox bounds (calculated dynamically based on depth scale)
-        this.hitboxRadius = 45;
+        // Eye glancing
+        this.glanceTimer = 2.0;
+        this.glanceX = 0;
+        this.glanceY = 0;
+
+        // Predictable Red Pattern properties
+        this.isPatternTrigger = false; // When true, hitting this Yellow mole turns it RED!
+        this.rageShakeTimer = 0;
+        this.steamTimer = 0;
     }
 
-    spawn(type = 'normal') {
-        this.type = type;
+    spawn(type = 'yellow', isPatternTrigger = false) {
+        this.type = 'yellow'; // Always spawn as Yellow!
+        this.isPatternTrigger = isPatternTrigger;
         this.state = MOLE_STATE.PEEKING;
-        this.timer = this.config.MOLE_PEEK_TIME * (type === 'speedy' ? 0.6 : (type === 'human' ? 1.2 : 1.0));
-        this.riseProgress = 0.15; // Low peek
+        this.timer = this.config.MOLE_PEEK_TIME || 0.25;
+        this.riseProgress = 0.22; // Low peek: hair and eyes visible
         this.isHit = false;
         this.scaleX = 1;
         this.scaleY = 1;
         this.idleBobTimer = Math.random() * Math.PI * 2;
+        this.blinkTimer = 1.5 + Math.random() * 2;
+        this.isBlinking = false;
+        this.glanceTimer = 1.0 + Math.random() * 2.0;
+        this.glanceX = 0;
+        this.glanceY = 0;
+        this.rageShakeTimer = 0;
+        this.steamTimer = 0;
 
-        if (type === 'human') {
-            // Human lingers a bit longer so player has fair reaction window to NOT hit
-            this.idleDuration = 1.8 + Math.random() * 0.7;
-        } else {
-            const minIdle = this.config.MOLE_MIN_IDLE_TIME * (type === 'speedy' ? 0.65 : 1.0);
-            const maxIdle = this.config.MOLE_MAX_IDLE_TIME * (type === 'speedy' ? 0.75 : 1.0);
-            this.idleDuration = minIdle + Math.random() * (maxIdle - minIdle);
-        }
+        const minIdle = this.config.MOLE_MIN_IDLE_TIME || 1.1;
+        const maxIdle = this.config.MOLE_MAX_IDLE_TIME || 1.8;
+        this.idleDuration = minIdle + Math.random() * (maxIdle - minIdle);
     }
 
-    onHit() {
-        if (this.state === MOLE_STATE.HIDDEN || this.state === MOLE_STATE.RETREATING || this.isHit) {
+    // Instantly vanish on explosion
+    explode() {
+        this.state = MOLE_STATE.HIDDEN;
+        this.riseProgress = 0;
+        this.isHit = false;
+    }
+
+    onHit(hitType = 'punch') {
+        if (this.state === MOLE_STATE.HIDDEN || this.isHit) {
             return false;
         }
 
+        // 1. If in ENRAGED_RED state -> hitting it causes massive EXPLOSION!
+        if (this.state === MOLE_STATE.ENRAGED_RED) {
+            this.isHit = true;
+            this.explode(); // Instantly vanishes into explosion VFX
+            return { success: true, penalty: true, type: 'red' };
+        }
+
+        // 2. If this Yellow mole is the PATTERN TRIGGER mole -> TRANSFORMS TO RED!
+        if (this.isPatternTrigger && this.type === 'yellow') {
+            this.type = 'red';
+            this.state = MOLE_STATE.ENRAGED_RED;
+            this.timer = this.config.RED_IDLE_TIME || 1.5;
+            this.riseProgress = 1.0;
+            this.scaleX = 1.25;
+            this.scaleY = 0.85;
+            this.rageShakeTimer = 0.6;
+            return { success: true, transformedToRed: true, type: 'red' };
+        }
+
+        // 3. Normal Yellow mole hit
         this.isHit = true;
         this.state = MOLE_STATE.HIT;
-        // Human shows hurt/dizzy reaction for a moment before ducking
-        this.timer = this.type === 'human' ? 0.28 : this.config.MOLE_HIT_RETREAT_TIME;
-        
-        // Immediate punchy squash
-        this.scaleX = this.type === 'human' ? 1.25 : 1.45;
-        this.scaleY = this.type === 'human' ? 0.6 : 0.45;
+        this.timer = this.config.MOLE_HIT_RETREAT_TIME || 0.22;
+        this.scaleX = 1.45;
+        this.scaleY = 0.48;
         this.dizzyAngle = 0;
 
-        return true;
+        return { success: true, penalty: false, type: 'yellow' };
     }
 
     update(dt) {
         if (this.state === MOLE_STATE.HIDDEN) return;
 
-        this.idleBobTimer += dt * 5;
+        this.idleBobTimer += dt * 5.5;
+        this.steamTimer += dt * 8.0;
+
+        // Eye blinking cycle
+        this.blinkTimer -= dt;
+        if (this.blinkTimer <= 0) {
+            this.isBlinking = !this.isBlinking;
+            this.blinkTimer = this.isBlinking ? 0.12 : (2.0 + Math.random() * 2.5);
+        }
+
+        // Eye glance pupil movement
+        this.glanceTimer -= dt;
+        if (this.glanceTimer <= 0) {
+            this.glanceTimer = 1.5 + Math.random() * 2.5;
+            const r = Math.random();
+            if (r < 0.35) {
+                this.glanceX = -3.5; // Look left
+                this.glanceY = 0;
+            } else if (r < 0.70) {
+                this.glanceX = 3.5; // Look right
+                this.glanceY = 0;
+            } else {
+                this.glanceX = 0; // Look center
+                this.glanceY = -2;
+            }
+        }
 
         switch (this.state) {
             case MOLE_STATE.PEEKING:
                 this.timer -= dt;
-                this.riseProgress = 0.25; // Just ears and eyes peeking over rim
+                this.riseProgress = 0.22;
+                // Subtle anticipation breathing while peeking
+                this.scaleX = 1.0 + Math.sin(this.idleBobTimer * 3) * 0.03;
+                this.scaleY = 1.0 - Math.sin(this.idleBobTimer * 3) * 0.03;
                 if (this.timer <= 0) {
                     this.state = MOLE_STATE.EMERGING;
-                    this.timer = this.config.MOLE_POP_DURATION * (this.type === 'speedy' ? 0.6 : 1.0);
+                    this.timer = this.config.MOLE_POP_DURATION || 0.28;
                 }
                 break;
 
             case MOLE_STATE.EMERGING:
                 this.timer -= dt;
-                const emergeTotal = this.config.MOLE_POP_DURATION * (this.type === 'speedy' ? 0.6 : 1.0);
-                const popProgress = 1 - Math.max(0, this.timer / emergeTotal);
-                
-                // Overshoot spring pop
-                const easeOutBack = 1 + 2.2 * Math.pow(popProgress - 1, 3) + 1.2 * Math.pow(popProgress - 1, 2);
-                this.riseProgress = Math.min(1.05, 0.25 + 0.8 * easeOutBack);
+                const emergeTotal = this.config.MOLE_POP_DURATION || 0.28;
+                const p = Math.max(0, Math.min(1.0, 1 - (this.timer / emergeTotal)));
 
-                // Stretch vertically while emerging
-                this.scaleX = 0.9;
-                this.scaleY = 1.12;
+                // 3-Phase Juicy Disney/Pixar Squash & Stretch Curve:
+                // Phase 1 (0.0 to 0.18): Anticipation / Coiling down into hole
+                // Phase 2 (0.18 to 0.65): Rocket upward stretch
+                // Phase 3 (0.65 to 1.0): Elastic impact squash, overshoot, and harmonic dampening settle
+                if (p < 0.18) {
+                    const sub = p / 0.18;
+                    this.riseProgress = 0.22 - 0.07 * Math.sin(sub * Math.PI); // subtle dip
+                    this.scaleX = 1.0 + 0.14 * Math.sin(sub * Math.PI);       // coil squash
+                    this.scaleY = 1.0 - 0.14 * Math.sin(sub * Math.PI);
+                } else if (p < 0.65) {
+                    const sub = (p - 0.18) / 0.47;
+                    const ease = sub * (2 - sub); // smooth rocket propulsion
+                    this.riseProgress = 0.15 + 0.90 * ease;
+                    const stretch = Math.sin(sub * Math.PI);
+                    this.scaleX = 1.0 - 0.18 * stretch; // rocket vertical stretch
+                    this.scaleY = 1.0 + 0.24 * stretch;
+                } else {
+                    const sub = (p - 0.65) / 0.35;
+                    const decay = Math.exp(-sub * 3.5);
+                    const wobble = Math.sin(sub * Math.PI * 2.5) * decay;
+                    this.riseProgress = 1.0 + 0.04 * wobble;
+                    this.scaleX = 1.0 + 0.14 * wobble; // bouncy settle
+                    this.scaleY = 1.0 - 0.14 * wobble;
+                }
 
                 if (this.timer <= 0) {
                     this.state = MOLE_STATE.IDLE;
                     this.riseProgress = 1.0;
+                    this.scaleX = 1.0;
+                    this.scaleY = 1.0;
                     this.timer = this.idleDuration;
                 }
                 break;
 
             case MOLE_STATE.IDLE:
                 this.timer -= dt;
-                // Subtle breathing and idle bobbing
-                this.scaleX = 1.0 + Math.sin(this.idleBobTimer * 2) * 0.03;
-                this.scaleY = 1.0 - Math.sin(this.idleBobTimer * 2) * 0.03;
-                this.riseProgress = 1.0 + Math.sin(this.idleBobTimer * 2.5) * 0.02;
+                // Soft organic breathing and gentle vertical bobbing
+                this.scaleX = 1.0 + Math.sin(this.idleBobTimer * 2.4) * 0.035;
+                this.scaleY = 1.0 - Math.sin(this.idleBobTimer * 2.4) * 0.035;
+                this.riseProgress = 1.0 + Math.sin(this.idleBobTimer * 2.4) * 0.02;
 
                 if (this.timer <= 0) {
                     this.state = MOLE_STATE.DUCKING;
-                    this.timer = this.config.MOLE_DUCK_DURATION;
+                    this.timer = this.config.MOLE_DUCK_DURATION || 0.22;
+                }
+                break;
+
+            case MOLE_STATE.ENRAGED_RED:
+                this.timer -= dt;
+                // Angry jitter & steam vibration
+                if (this.rageShakeTimer > 0) {
+                    this.rageShakeTimer -= dt;
+                }
+                const shakeAmp = (this.rageShakeTimer > 0) ? 0.09 : 0.05;
+                this.scaleX = 1.06 + (Math.random() - 0.5) * shakeAmp;
+                this.scaleY = 1.06 + (Math.random() - 0.5) * shakeAmp;
+                this.riseProgress = 1.0;
+
+                // If player doesn't hit the Red mole, it ducks safely (Red dodge)
+                if (this.timer <= 0) {
+                    this.state = MOLE_STATE.DUCKING;
+                    this.timer = this.config.MOLE_DUCK_DURATION || 0.22;
                 }
                 break;
 
@@ -123,149 +223,210 @@ export class MoleController {
                 this.timer -= dt;
                 this.dizzyAngle += dt * 18;
 
-                // Squash down and immediately sink
-                const hitProgress = 1 - (this.timer / this.config.MOLE_HIT_RETREAT_TIME);
-                this.riseProgress = 0.8 * (1 - hitProgress); // Rapidly duck down while hit
-                this.scaleX = 1.45 - hitProgress * 0.3;
-                this.scaleY = 0.45 + hitProgress * 0.35;
+                const hitTotal = this.config.MOLE_HIT_RETREAT_TIME || 0.22;
+                const hitProg = 1 - Math.max(0, this.timer / hitTotal);
+                this.riseProgress = 0.85 * (1 - hitProg * hitProg);
+                this.scaleX = 1.48 - hitProg * 0.48;
+                this.scaleY = 0.46 + hitProg * 0.44;
 
                 if (this.timer <= 0) {
-                    // Instantly disappear into hole
                     this.state = MOLE_STATE.HIDDEN;
                     this.riseProgress = 0;
                     this.isHit = false;
                 }
                 break;
 
-            case MOLE_STATE.RETREATING:
             case MOLE_STATE.DUCKING:
                 this.timer -= dt;
-                const totalDuck = this.config.MOLE_DUCK_DURATION;
-                const duckProg = Math.max(0, this.timer / totalDuck);
-                // Ease smoothly into hole
-                this.riseProgress = duckProg * duckProg;
-                this.scaleX = 0.95;
-                this.scaleY = 1.05;
+                const duckTotal = this.config.MOLE_DUCK_DURATION || 0.22;
+                const duckProg = Math.max(0, this.timer / duckTotal);
+                this.riseProgress = duckProg;
+                // Stretches slightly down as pulled into the hole
+                this.scaleX = 0.94 - 0.08 * (1 - duckProg);
+                this.scaleY = 1.06 + 0.12 * (1 - duckProg);
 
                 if (this.timer <= 0) {
                     this.state = MOLE_STATE.HIDDEN;
                     this.riseProgress = 0;
-                    this.isHit = false;
                 }
                 break;
         }
     }
 
-    draw(ctx, holeX, holeY, depthScale, rx, ry) {
-        if (this.state === MOLE_STATE.HIDDEN) return;
+    draw(ctx, screenX, screenY, depthScale, holeRadiusX, holeRadiusY) {
+        if (this.state === MOLE_STATE.HIDDEN || this.riseProgress <= 0.01) return;
+
+        const isRed = (this.type === 'red' || this.state === MOLE_STATE.ENRAGED_RED);
+        const sprite = isRed ? this.assets.redCharacter : this.assets.yellowCharacter;
+
+        // Size matches hole opening: character fills hole width comfortably
+        // holeRadiusX is already in screen pixels
+        const charW = holeRadiusX * 2.10;
+        const charH = charW * (259 / 264);
+
+        // Emergence vertical anchoring:
+        // Whack-a-Mole characters pop out head/chest/arms, NEVER lower body or feet!
+        // At peak riseProgress = 1.0, face/eyes are raised proudly above the hole rim,
+        // while the bottom feet stay deep inside the hole cavity (submerged below hole center).
+        const travelY = holeRadiusY * 3.0;
+        const faceCenterY = (-holeRadiusY * 1.28) + (1.0 - this.riseProgress) * travelY;
+
+        // Relative scale factor for facial features and accessories
+        const s = charW / 140;
 
         ctx.save();
+        ctx.translate(screenX, screenY + faceCenterY);
 
-        // Position at hole center
-        ctx.translate(holeX, holeY);
-        ctx.scale(depthScale, depthScale);
+        // Pattern Trigger tell: subtle warning aura before hit so player can predict!
+        if (this.isPatternTrigger && !isRed && this.state === MOLE_STATE.IDLE) {
+            this.drawPredictorAura(ctx, charW * 1.10, charH * 0.95);
+        }
 
-        // Clip mole so it is ONLY visible emerging above the hole's bottom rim
-        // This ensures the mole emerges cleanly out of the hole without rendering below the rim
-        const rimY = ry * 0.35;
-        ctx.beginPath();
-        ctx.rect(-rx * 1.6, -300, rx * 3.2, 300 + rimY);
-        ctx.clip();
+        // Enraged Red Warning Banner & Steam Puffs
+        if (isRed && this.state === MOLE_STATE.ENRAGED_RED) {
+            this.drawEnragedSteam(ctx, charW * 0.32, -charH * 0.20);
+            this.drawEnragedBadge(ctx, 0, -charH * 0.44 * this.scaleY);
+        }
 
-        const isHuman = this.type === 'human';
-        const charW = isHuman ? 96 : 88;
-        const charH = isHuman ? 116 : 108;
-
-        // Anchor mole: when riseProgress = 1.0, paws are at rimY
-        // When riseProgress = 0.0, mole is completely below rimY
-        const submergedY = (1 - this.riseProgress) * charH;
-        ctx.translate(0, rimY + submergedY);
         ctx.scale(this.scaleX, this.scaleY);
 
-        // Draw shadow cast inside hole
-        this.drawMoleShadow(ctx);
+        // Red Enraged Fiery Glow
+        if (isRed && this.state === MOLE_STATE.ENRAGED_RED) {
+            ctx.shadowColor = '#ef4444';
+            ctx.shadowBlur = 22 + Math.sin(this.idleBobTimer * 5) * 8;
+        }
 
-        // Draw the character
-        this.drawMoleBody(ctx, charW, charH);
+        // Draw clean character sprite
+        if (sprite && sprite.complete && sprite.naturalWidth > 0) {
+            // Draw centered on face: top is -charH * 0.38, bottom is +charH * 0.62
+            ctx.drawImage(sprite, -charW * 0.5, -charH * 0.38, charW, charH);
 
-        // If hit, draw dizzy comic stars
+            // Eye enhancements
+            if (!isRed) {
+                if (this.state === MOLE_STATE.HIT) {
+                    // Cartoon "X X" KO eyes on hit
+                    this.drawKOEyes(ctx, s);
+                } else if (this.isBlinking) {
+                    // Cute blinking eyelids
+                    ctx.fillStyle = '#f59e0b';
+                    ctx.beginPath();
+                    ctx.ellipse(-15 * s, 6 * s, 14 * s, 6.5 * s, 0, 0, Math.PI * 2);
+                    ctx.ellipse(15 * s, 6 * s, 14 * s, 6.5 * s, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                } else if (this.glanceX !== 0 || this.glanceY !== 0) {
+                    // Pupil glance dots for personality
+                    ctx.fillStyle = '#1e293b';
+                    ctx.beginPath();
+                    ctx.arc((-15 + this.glanceX) * s, (6 + this.glanceY) * s, 4.5 * s, 0, Math.PI * 2);
+                    ctx.arc((15 + this.glanceX) * s, (6 + this.glanceY) * s, 4.5 * s, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            } else {
+                // Red mole fierce angry eyebrows
+                this.drawAngryEyebrows(ctx, s);
+            }
+        } else {
+            // Procedural fallback
+            this.drawProceduralCharacter(ctx, charW, charH, isRed);
+        }
+
+        // Dizzy stars on hit
         if (this.state === MOLE_STATE.HIT) {
-            this.drawDizzyFX(ctx, charH);
+            this.drawDizzyFX(ctx, charH * 0.38);
         }
 
         ctx.restore();
     }
 
-    drawMoleShadow(ctx) {
+    // Cartoon KO "X X" eyes when yellow character is hit
+    drawKOEyes(ctx, s = 1.0) {
         ctx.save();
-        ctx.globalAlpha = 0.35;
-        ctx.fillStyle = '#100a04';
+        ctx.strokeStyle = '#1e1b4b';
+        ctx.lineWidth = 4.2 * s;
+        ctx.lineCap = 'round';
+
+        const ey = 6 * s;
+        // Left eye X
         ctx.beginPath();
-        ctx.ellipse(0, -6, 36, 12, 0, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.moveTo(-24 * s, ey - 9 * s);
+        ctx.lineTo(-6 * s, ey + 9 * s);
+        ctx.moveTo(-6 * s, ey - 9 * s);
+        ctx.lineTo(-24 * s, ey + 9 * s);
+        ctx.stroke();
+
+        // Right eye X
+        ctx.beginPath();
+        ctx.moveTo(6 * s, ey - 9 * s);
+        ctx.lineTo(24 * s, ey + 9 * s);
+        ctx.moveTo(24 * s, ey - 9 * s);
+        ctx.lineTo(6 * s, ey + 9 * s);
+        ctx.stroke();
         ctx.restore();
     }
 
-    drawMoleBody(ctx, w, h) {
-        if (this.type === 'human') {
-            this.drawHumanCharacter(ctx, w, h);
-            return;
-        }
-
-        const sprite = this.assets.moleSprite;
-
-        if (sprite && sprite.complete && sprite.naturalWidth > 0) {
-            if (this.type === 'golden') {
-                ctx.save();
-                ctx.shadowColor = '#ffd700';
-                ctx.shadowBlur = 18;
-            }
-
-            // Draw mole with bottom edge (paws) aligned at y = 0
-            ctx.drawImage(sprite, -w / 2, -h, w, h);
-
-            if (this.type === 'golden') {
-                ctx.restore();
-                this.drawCrown(ctx, 0, -h - 4);
-            } else if (this.type === 'speedy') {
-                this.drawHeadband(ctx, 0, -h + 34);
-            }
-        } else {
-            this.drawProceduralMole(ctx, w, h);
-        }
-    }
-
-    drawHumanCharacter(ctx, w, h) {
-        const isHurt = this.isHit || this.state === MOLE_STATE.HIT;
-        const sprite = isHurt ? this.assets.humanHitSprite : this.assets.humanIdleSprite;
-
-        if (sprite && sprite.complete && sprite.naturalWidth > 0) {
-            ctx.drawImage(sprite, -w / 2, -h, w, h);
-        } else {
-            this.drawProceduralHuman(ctx, w, h, isHurt);
-        }
-
-        // Warning speech pill above human head when emerging or idle
-        if (!isHurt && (this.state === MOLE_STATE.IDLE || this.state === MOLE_STATE.EMERGING)) {
-            this.drawHumanBadge(ctx, 0, -h - 6);
-        }
-    }
-
-    drawHumanBadge(ctx, x, y) {
+    // Angry angled eyebrows for Red character
+    drawAngryEyebrows(ctx, s = 1.0) {
         ctx.save();
-        ctx.translate(x, y);
-        const bob = Math.sin(this.idleBobTimer * 3) * 2;
-        ctx.translate(0, bob);
+        ctx.strokeStyle = '#450a0a';
+        ctx.lineWidth = 4.5 * s;
+        ctx.lineCap = 'round';
 
-        // Warning pill badge
-        ctx.fillStyle = 'rgba(220, 38, 38, 0.94)';
+        const ey = 2 * s;
+        // Left angry eyebrow slant downwards toward nose
+        ctx.beginPath();
+        ctx.moveTo(-25 * s, ey - 10 * s);
+        ctx.lineTo(-6 * s, ey - 2 * s);
+        ctx.stroke();
+
+        // Right angry eyebrow slant downwards toward nose
+        ctx.beginPath();
+        ctx.moveTo(25 * s, ey - 10 * s);
+        ctx.lineTo(6 * s, ey - 2 * s);
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    // Steam puffs rising from Red character's temples
+    drawEnragedSteam(ctx, xOffset, yOffset) {
+        ctx.save();
+        const steamPhase = this.steamTimer;
+        for (let side = -1; side <= 1; side += 2) {
+            for (let i = 0; i < 3; i++) {
+                const prog = ((steamPhase * 0.8 + i * 0.33) % 1.0);
+                const alpha = (1 - prog) * 0.65;
+                const r = 4 + prog * 8;
+                const px = side * (xOffset + prog * 10);
+                const py = yOffset - prog * 28;
+
+                ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+                ctx.beginPath();
+                ctx.arc(px, py, r, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+        ctx.restore();
+    }
+
+    // Predictor Glow: subtle rhythmic pulse so player easily predicts the next Red mole!
+    drawPredictorAura(ctx, w, h) {
+        ctx.save();
+        const pulse = 0.5 + Math.sin(Date.now() * 0.008) * 0.4;
+        ctx.strokeStyle = `rgba(239, 68, 68, ${pulse * 0.85})`;
+        ctx.lineWidth = 3.5;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        ctx.ellipse(0, 0, w * 0.58, h * 0.58, 0, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Warning badge overhead: "WILL ENRAGE!"
+        ctx.fillStyle = 'rgba(239, 68, 68, 0.95)';
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 1.5;
         ctx.beginPath();
         if (ctx.roundRect) {
-            ctx.roundRect(-42, -18, 84, 18, 9);
+            ctx.roundRect(-46, -h * 0.62, 92, 18, 9);
         } else {
-            ctx.rect(-42, -18, 84, 18);
+            ctx.rect(-46, -h * 0.62, 92, 18);
         }
         ctx.fill();
         ctx.stroke();
@@ -274,145 +435,49 @@ export class MoleController {
         ctx.fillStyle = '#ffffff';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText("DON'T HIT! ⚠️", 0, -9);
+        ctx.fillText("WILL ENRAGE!", 0, -h * 0.62 + 9);
         ctx.restore();
     }
 
-    drawProceduralHuman(ctx, w, h, isHurt) {
-        ctx.save();
-        // Shirt
-        ctx.fillStyle = '#1e88e5';
-        ctx.beginPath();
-        ctx.ellipse(0, -h * 0.25, w * 0.42, h * 0.25, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Head
-        ctx.fillStyle = '#ffcc80';
-        ctx.beginPath();
-        ctx.ellipse(0, -h * 0.65, w * 0.35, h * 0.35, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Cheeks
-        ctx.fillStyle = '#ff8a80';
-        ctx.beginPath();
-        ctx.arc(-w * 0.22, -h * 0.6, 5, 0, Math.PI * 2);
-        ctx.arc(w * 0.22, -h * 0.6, 5, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Eyes
-        if (isHurt) {
-            ctx.strokeStyle = '#212121';
-            ctx.lineWidth = 2;
-            [-w * 0.14, w * 0.14].forEach(ex => {
-                ctx.beginPath();
-                ctx.arc(ex, -h * 0.68, 6, 0, Math.PI * 2);
-                ctx.stroke();
-            });
-        } else {
-            ctx.fillStyle = '#212121';
-            ctx.beginPath();
-            ctx.arc(-w * 0.14, -h * 0.68, 4.5, 0, Math.PI * 2);
-            ctx.arc(w * 0.14, -h * 0.68, 4.5, 0, Math.PI * 2);
-            ctx.fill();
-        }
-
-        // Mouth
-        if (isHurt) {
-            ctx.fillStyle = '#b71c1c';
-            ctx.beginPath();
-            ctx.ellipse(0, -h * 0.52, 9, 7, 0, 0, Math.PI * 2);
-            ctx.fill();
-        } else {
-            ctx.strokeStyle = '#b71c1c';
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.arc(0, -h * 0.54, 8, 0.1 * Math.PI, 0.9 * Math.PI);
-            ctx.stroke();
-        }
-
-        // Red Baseball Cap
-        ctx.fillStyle = '#e53935';
-        ctx.beginPath();
-        ctx.arc(0, -h * 0.78, w * 0.36, Math.PI, 0);
-        ctx.fill();
-
-        // Cap Visor
-        ctx.fillStyle = '#c62828';
-        ctx.beginPath();
-        ctx.ellipse(0, -h * 0.78, w * 0.42, 6, 0, 0, Math.PI);
-        ctx.fill();
-
-        // Gloves on rim
-        ctx.fillStyle = '#8d6e63';
-        ctx.beginPath();
-        ctx.ellipse(-w * 0.3, -4, 12, 7, 0, 0, Math.PI * 2);
-        ctx.ellipse(w * 0.3, -4, 12, 7, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.restore();
-    }
-
-    drawCrown(ctx, x, y) {
+    // Enraged Red Mole warning badge: "DON'T HIT!"
+    drawEnragedBadge(ctx, x, y) {
         ctx.save();
         ctx.translate(x, y);
-        ctx.fillStyle = '#ffd700';
-        ctx.strokeStyle = '#b78103';
-        ctx.lineWidth = 2;
+        const bob = Math.sin(this.idleBobTimer * 3.5) * 2.5;
+        ctx.translate(0, bob);
+
+        ctx.fillStyle = 'rgba(220, 38, 38, 0.96)';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2.5;
         ctx.beginPath();
-        ctx.moveTo(-16, 0);
-        ctx.lineTo(-20, -16);
-        ctx.lineTo(-8, -8);
-        ctx.lineTo(0, -22);
-        ctx.lineTo(8, -8);
-        ctx.lineTo(20, -16);
-        ctx.lineTo(16, 0);
-        ctx.closePath();
+        if (ctx.roundRect) {
+            ctx.roundRect(-54, -20, 108, 22, 11);
+        } else {
+            ctx.rect(-54, -20, 108, 22);
+        }
         ctx.fill();
         ctx.stroke();
 
-        // Ruby jewels
-        ctx.fillStyle = '#e53935';
-        ctx.beginPath();
-        ctx.arc(0, -6, 3, 0, Math.PI * 2);
-        ctx.arc(-12, -4, 2, 0, Math.PI * 2);
-        ctx.arc(12, -4, 2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-    }
-
-    drawHeadband(ctx, x, y) {
-        ctx.save();
-        ctx.translate(x, y);
-        ctx.fillStyle = '#e53935';
-        ctx.fillRect(-32, -5, 64, 10);
-        
-        // Headband knot tails blowing in wind
-        const flutter = Math.sin(Date.now() * 0.015) * 4;
-        ctx.beginPath();
-        ctx.moveTo(30, 0);
-        ctx.lineTo(46, -6 + flutter);
-        ctx.lineTo(44, 4 + flutter);
-        ctx.closePath();
-        ctx.fill();
+        ctx.font = '900 11px "Outfit", sans-serif';
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText("! DON'T HIT !", 0, -9);
         ctx.restore();
     }
 
     drawDizzyFX(ctx, moleH) {
         ctx.save();
-        ctx.translate(0, -moleH - 10);
-
-        // Orbiting stars
+        ctx.translate(0, -moleH - 12);
         for (let i = 0; i < 3; i++) {
             const angle = this.dizzyAngle + (i * (Math.PI * 2 / 3));
             const orbitX = Math.cos(angle) * 36;
-            const orbitY = Math.sin(angle) * 14;
+            const orbitY = Math.sin(angle) * 12;
 
             ctx.save();
             ctx.translate(orbitX, orbitY);
             ctx.rotate(angle * 2);
             ctx.fillStyle = '#ffeb3b';
-            ctx.shadowColor = '#fff';
-            ctx.shadowBlur = 6;
             ctx.beginPath();
             const s = 6;
             ctx.moveTo(0, -s);
@@ -423,38 +488,22 @@ export class MoleController {
             ctx.fill();
             ctx.restore();
         }
-
         ctx.restore();
     }
 
-    drawProceduralMole(ctx, w, h) {
-        // High quality stylized mole backup
-        // Mole Body
-        const grad = ctx.createLinearGradient(0, -h, 0, 0);
-        grad.addColorStop(0, '#6d4c41');
-        grad.addColorStop(1, '#4e342e');
-        ctx.fillStyle = grad;
+    drawProceduralCharacter(ctx, w, h, isRed) {
+        ctx.save();
+        ctx.fillStyle = isRed ? '#dc2626' : '#facc15';
         ctx.beginPath();
-        ctx.ellipse(0, -h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Snout
-        ctx.fillStyle = '#ffab91';
-        ctx.beginPath();
-        ctx.ellipse(0, -h * 0.45, 14, 11, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Nose
-        ctx.fillStyle = '#d84315';
-        ctx.beginPath();
-        ctx.ellipse(0, -h * 0.52, 7, 5, 0, 0, Math.PI * 2);
+        ctx.arc(0, 0, w * 0.45, 0, Math.PI * 2);
         ctx.fill();
 
         // Eyes
-        ctx.fillStyle = '#212121';
+        ctx.fillStyle = '#000';
         ctx.beginPath();
-        ctx.arc(-15, -h * 0.65, 4.5, 0, Math.PI * 2);
-        ctx.arc(15, -h * 0.65, 4.5, 0, Math.PI * 2);
+        ctx.arc(-14, -8, 5, 0, Math.PI * 2);
+        ctx.arc(14, -8, 5, 0, Math.PI * 2);
         ctx.fill();
+        ctx.restore();
     }
 }

@@ -69,95 +69,224 @@ export class AudioManager {
         return base * (1 + (Math.random() * 2 - 1) * variance);
     }
 
-    // --- SFX: Hammer Swing Whoosh ---
-    playHammerSwing() {
+    // --- SFX: Punch Swing Whoosh ---
+    playPunchSwing() {
         if (!this.initialized || this.isMuted) return;
         this.resume();
-
         const t = this.ctx.currentTime;
-        // White noise through an automated bandpass filter
-        const bufferSize = this.ctx.sampleRate * 0.12;
+        const bufferSize = this.ctx.sampleRate * 0.10;
         const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
         const data = buffer.getChannelData(0);
-        for (let i = 0; i < bufferSize; i++) {
-            data[i] = (Math.random() * 2 - 1);
-        }
-
+        for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1);
         const noise = this.ctx.createBufferSource();
         noise.buffer = buffer;
-
         const filter = this.ctx.createBiquadFilter();
-        filter.type = 'bandpass';
-        filter.Q.value = 3.0;
-        filter.frequency.setValueAtTime(300, t);
-        filter.frequency.exponentialRampToValueAtTime(1400, t + 0.07);
-        filter.frequency.exponentialRampToValueAtTime(250, t + 0.12);
-
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(600, t);
+        filter.frequency.exponentialRampToValueAtTime(120, t + 0.1);
         const gain = this.ctx.createGain();
         gain.gain.setValueAtTime(0.01, t);
-        gain.gain.linearRampToValueAtTime(0.28, t + 0.04);
-        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
-
+        gain.gain.linearRampToValueAtTime(0.35, t + 0.03);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
         noise.connect(filter);
         filter.connect(gain);
         gain.connect(this.sfxGain);
-
         noise.start(t);
-        noise.stop(t + 0.12);
+        noise.stop(t + 0.1);
     }
 
-    // --- SFX: Heavy Satisfying Hammer Impact / Bonk ---
-    playHammerHit(isSpecial = false) {
+    // --- SFX: Heavy Punch Crunch / Thud with Combo Pitch Escalation ---
+    playPunchHit(comboStreak = 1) {
         if (!this.initialized || this.isMuted) return;
         this.resume();
-
         const t = this.ctx.currentTime;
-        const pitchMod = 1 + (Math.random() * 0.2 - 0.1);
+        const comboPitch = Math.min(1.8, 1.0 + Math.max(0, comboStreak - 1) * 0.07);
+        const pitchMod = comboPitch * (1 + (Math.random() * 0.16 - 0.08));
 
-        // 1. Heavy low-frequency thump (Sine drop)
+        // 1. Deep low-end bass gut punch (sub-bass drop)
         const subOsc = this.ctx.createOscillator();
         const subGain = this.ctx.createGain();
         subOsc.type = 'sine';
-        subOsc.frequency.setValueAtTime(160 * pitchMod, t);
-        subOsc.frequency.exponentialRampToValueAtTime(42 * pitchMod, t + 0.14);
-        subGain.gain.setValueAtTime(0.9, t);
+        subOsc.frequency.setValueAtTime(220 * pitchMod, t);
+        subOsc.frequency.exponentialRampToValueAtTime(35 * pitchMod, t + 0.15);
+        subGain.gain.setValueAtTime(1.0, t);
         subGain.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
         subOsc.connect(subGain);
         subGain.connect(this.sfxGain);
         subOsc.start(t);
         subOsc.stop(t + 0.18);
 
-        // 2. Resonant wooden / cartoon mallet bonk (Triangle sweep)
-        const bonkOsc = this.ctx.createOscillator();
-        const bonkGain = this.ctx.createGain();
-        bonkOsc.type = 'triangle';
-        const startFreq = (isSpecial ? 540 : 420) * pitchMod;
-        bonkOsc.frequency.setValueAtTime(startFreq, t);
-        bonkOsc.frequency.exponentialRampToValueAtTime(120 * pitchMod, t + 0.12);
-        bonkGain.gain.setValueAtTime(0.7, t);
-        bonkGain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
-        bonkOsc.connect(bonkGain);
-        bonkGain.connect(this.sfxGain);
-        bonkOsc.start(t);
-        bonkOsc.stop(t + 0.15);
-
-        // 3. Crunchy transient crack (Click/Noise burst)
-        const crackBuffer = this.ctx.createBuffer(1, this.ctx.sampleRate * 0.04, this.ctx.sampleRate);
+        // 2. Punch crunch burst
+        const crackBuffer = this.ctx.createBuffer(1, this.ctx.sampleRate * 0.06, this.ctx.sampleRate);
         const crackData = crackBuffer.getChannelData(0);
         for (let i = 0; i < crackData.length; i++) {
-            crackData[i] = (Math.random() * 2 - 1) * Math.exp(-i / 150);
+            crackData[i] = (Math.random() * 2 - 1) * Math.exp(-i / 200);
         }
         const crackSource = this.ctx.createBufferSource();
         crackSource.buffer = crackBuffer;
         const crackGain = this.ctx.createGain();
-        crackGain.gain.setValueAtTime(0.45, t);
-        crackGain.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
+        crackGain.gain.setValueAtTime(0.65, t);
+        crackGain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
         crackSource.connect(crackGain);
         crackGain.connect(this.sfxGain);
         crackSource.start(t);
 
-        // 4. Comical dizzy squeak tone
-        this.playMoleBonkSqueak(pitchMod);
+        this.playMoleBonkSqueak(pitchMod * 0.95);
+
+        // Celebratory combo chime on milestones
+        if (comboStreak === 3 || comboStreak === 5 || comboStreak === 10 || (comboStreak > 10 && comboStreak % 5 === 0)) {
+            this.playComboChime(comboStreak);
+        }
+    }
+
+    // --- SFX: Slap Fast High Whoosh ---
+    playSlapSwing() {
+        if (!this.initialized || this.isMuted) return;
+        this.resume();
+        const t = this.ctx.currentTime;
+        const bufferSize = this.ctx.sampleRate * 0.09;
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1);
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = buffer;
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'highpass';
+        filter.frequency.setValueAtTime(800, t);
+        filter.frequency.exponentialRampToValueAtTime(1800, t + 0.05);
+        filter.frequency.exponentialRampToValueAtTime(400, t + 0.09);
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0.01, t);
+        gain.gain.linearRampToValueAtTime(0.28, t + 0.03);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.sfxGain);
+        noise.start(t);
+        noise.stop(t + 0.09);
+    }
+
+    // --- SFX: Crisp Comic Slap / Smack with Combo Pitch Escalation ---
+    playSlapHit(comboStreak = 1) {
+        if (!this.initialized || this.isMuted) return;
+        this.resume();
+        const t = this.ctx.currentTime;
+        const comboPitch = Math.min(1.85, 1.0 + Math.max(0, comboStreak - 1) * 0.07);
+        const pitchMod = comboPitch * (1 + (Math.random() * 0.16 - 0.08));
+
+        // 1. Sharp high-frequency stinging slap crack
+        const slapBuffer = this.ctx.createBuffer(1, this.ctx.sampleRate * 0.05, this.ctx.sampleRate);
+        const slapData = slapBuffer.getChannelData(0);
+        for (let i = 0; i < slapData.length; i++) {
+            slapData[i] = (Math.random() * 2 - 1) * Math.exp(-i / 110);
+        }
+        const slapSource = this.ctx.createBufferSource();
+        slapSource.buffer = slapBuffer;
+        const slapGain = this.ctx.createGain();
+        slapGain.gain.setValueAtTime(0.85, t);
+        slapGain.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+        slapSource.connect(slapGain);
+        slapGain.connect(this.sfxGain);
+        slapSource.start(t);
+
+        // 2. Resonant skin slap pop tone
+        const popOsc = this.ctx.createOscillator();
+        const popGain = this.ctx.createGain();
+        popOsc.type = 'triangle';
+        popOsc.frequency.setValueAtTime(750 * pitchMod, t);
+        popOsc.frequency.exponentialRampToValueAtTime(180 * pitchMod, t + 0.08);
+        popGain.gain.setValueAtTime(0.55, t);
+        popGain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+        popOsc.connect(popGain);
+        popGain.connect(this.sfxGain);
+        popOsc.start(t);
+        popOsc.stop(t + 0.1);
+
+        this.playMoleBonkSqueak(pitchMod * 1.25);
+
+        // Celebratory combo chime on milestones
+        if (comboStreak === 3 || comboStreak === 5 || comboStreak === 10 || (comboStreak > 10 && comboStreak % 5 === 0)) {
+            this.playComboChime(comboStreak);
+        }
+    }
+
+    // --- SFX: Harmonic Sparkling Combo Chime Arpeggio ---
+    playComboChime(streak = 3) {
+        if (!this.initialized || this.isMuted) return;
+        this.resume();
+        const t = this.ctx.currentTime;
+        const notes = streak >= 5 ? [523.25, 659.25, 783.99, 1046.50] : [587.33, 880.00];
+        notes.forEach((freq, idx) => {
+            const noteTime = t + idx * 0.06;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, noteTime);
+            gain.gain.setValueAtTime(0.001, noteTime);
+            gain.gain.linearRampToValueAtTime(0.28, noteTime + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, noteTime + 0.28);
+            osc.connect(gain);
+            gain.connect(this.sfxGain);
+            osc.start(noteTime);
+            osc.stop(noteTime + 0.28);
+        });
+    }
+
+    // --- SFX: Swing Miss Thud / Floor Impact ---
+    playMissThud() {
+        if (!this.initialized || this.isMuted) return;
+        this.resume();
+        const t = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(115, t);
+        osc.frequency.exponentialRampToValueAtTime(45, t + 0.08);
+        gain.gain.setValueAtTime(0.35, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+        osc.connect(gain);
+        gain.connect(this.sfxGain);
+        osc.start(t);
+        osc.stop(t + 0.09);
+    }
+
+    // --- SFX: Red Mole Enraged Screech / Warning ---
+    playRedEnrage() {
+        if (!this.initialized || this.isMuted) return;
+        this.resume();
+        const t = this.ctx.currentTime;
+
+        // Angry rising steam synth siren
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(260, t);
+        osc.frequency.linearRampToValueAtTime(580, t + 0.12);
+        osc.frequency.linearRampToValueAtTime(380, t + 0.28);
+        gain.gain.setValueAtTime(0.01, t);
+        gain.gain.linearRampToValueAtTime(0.4, t + 0.04);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(1200, t);
+        filter.frequency.exponentialRampToValueAtTime(400, t + 0.3);
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.sfxGain);
+        osc.start(t);
+        osc.stop(t + 0.3);
+    }
+
+    // --- SFX: Hammer Swing Whoosh ---
+    playHammerSwing() {
+        this.playPunchSwing();
+    }
+
+    // --- SFX: Heavy Satisfying Hammer Impact / Bonk ---
+    playHammerHit(isSpecial = false) {
+        this.playPunchHit();
     }
 
     // --- SFX: Mole Squeak on Bonk ---
@@ -240,46 +369,92 @@ export class AudioManager {
     }
 
     // --- SFX: Human "Ouch!" Vocal Tone & Error Buzz ---
-    playHumanHit() {
+    // --- SFX: Massive Red Mole Explosion Blast (Point 5) ---
+    playRedExplosion() {
         if (!this.initialized || this.isMuted) return;
         this.resume();
         const t = this.ctx.currentTime;
 
-        // Comical cartoon "Ouch!" vocal slide
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(580, t);
-        osc.frequency.exponentialRampToValueAtTime(980, t + 0.06);
-        osc.frequency.exponentialRampToValueAtTime(310, t + 0.28);
+        // 1. Deep Sub-Bass Impact Boom
+        const subOsc = this.ctx.createOscillator();
+        const subGain = this.ctx.createGain();
+        subOsc.type = 'sine';
+        subOsc.frequency.setValueAtTime(140, t);
+        subOsc.frequency.exponentialRampToValueAtTime(25, t + 0.45);
+        subGain.gain.setValueAtTime(0.9, t);
+        subGain.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+        subOsc.connect(subGain);
+        subGain.connect(this.sfxGain);
+        subOsc.start(t);
+        subOsc.stop(t + 0.5);
 
-        // Low-pass to soften the vocal timbre
+        // 2. Heavy White Noise Explosion Wave
+        const bufferSize = this.ctx.sampleRate * 0.4;
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+            data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.08));
+        }
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = buffer;
+
         const filter = this.ctx.createBiquadFilter();
         filter.type = 'lowpass';
-        filter.frequency.setValueAtTime(1400, t);
+        filter.frequency.setValueAtTime(1200, t);
+        filter.frequency.exponentialRampToValueAtTime(150, t + 0.4);
 
-        gain.gain.setValueAtTime(0.01, t);
-        gain.gain.linearRampToValueAtTime(0.4, t + 0.04);
-        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+        const noiseGain = this.ctx.createGain();
+        noiseGain.gain.setValueAtTime(0.85, t);
+        noiseGain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
 
-        osc.connect(filter);
-        filter.connect(gain);
+        noise.connect(filter);
+        filter.connect(noiseGain);
+        noiseGain.connect(this.sfxGain);
+        noise.start(t);
+
+        // 3. Crunchy Debris Crackle
+        const crackBuffer = this.ctx.createBuffer(1, this.ctx.sampleRate * 0.15, this.ctx.sampleRate);
+        const crackData = crackBuffer.getChannelData(0);
+        for (let i = 0; i < crackData.length; i++) {
+            crackData[i] = (Math.random() * 2 - 1) * Math.exp(-i / 80);
+        }
+        const crack = this.ctx.createBufferSource();
+        crack.buffer = crackBuffer;
+        const crackGain = this.ctx.createGain();
+        crackGain.gain.setValueAtTime(0.6, t);
+        crackGain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+        crack.connect(crackGain);
+        crackGain.connect(this.sfxGain);
+        crack.start(t);
+    }
+
+    // --- SFX: Wrong Hit Alias (fixes freeze bug) ---
+    playWrongHit() {
+        this.playRedExplosion();
+    }
+
+    // --- SFX: Hole Stone Crack Sound (Point 4) ---
+    playHoleCrack() {
+        if (!this.initialized || this.isMuted) return;
+        this.resume();
+        const t = this.ctx.currentTime;
+
+        // Sharp stone snap / fracturing transient
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(680, t);
+        osc.frequency.exponentialRampToValueAtTime(180, t + 0.06);
+        gain.gain.setValueAtTime(0.35, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.07);
+        osc.connect(gain);
         gain.connect(this.sfxGain);
         osc.start(t);
-        osc.stop(t + 0.28);
+        osc.stop(t + 0.07);
+    }
 
-        // Low mistake thud
-        const thud = this.ctx.createOscillator();
-        const thudGain = this.ctx.createGain();
-        thud.type = 'sine';
-        thud.frequency.setValueAtTime(120, t);
-        thud.frequency.exponentialRampToValueAtTime(40, t + 0.22);
-        thudGain.gain.setValueAtTime(0.65, t);
-        thudGain.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
-        thud.connect(thudGain);
-        thudGain.connect(this.sfxGain);
-        thud.start(t);
-        thud.stop(t + 0.22);
+    playHumanHit() {
+        this.playRedExplosion();
     }
 
     // --- SFX: Lost Heart Warning Buzz ---

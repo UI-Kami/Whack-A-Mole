@@ -24,24 +24,23 @@ export class GameManager {
         this.health = this.maxHealth;
         this.isGameOver = false;
 
-        // Statistics tracking (Ready for future scoring / leaderboard system)
+        // Statistics tracking
         this.stats = {
             totalHits: 0,
             totalMisses: 0,
             currentStreak: 0,
             highestStreak: 0,
-            goldenHits: 0,
-            speedyHits: 0,
+            redDodges: 0,
             sessionTime: 0
         };
 
         // Loaded Assets
         this.assets = {
-            moleSprite: null,
-            hammerSprite: null,
-            humanIdleSprite: null,
-            humanHitSprite: null,
-            cheeseBg: null
+            yellowCharacter: null,
+            redCharacter: null,
+            punchSprite: null,
+            slapSprite: null,
+            bgImg: null
         };
 
         // Subsystems
@@ -64,8 +63,13 @@ export class GameManager {
         // Load visual sprites
         await this.loadSprites();
 
-        // Initialize Spawner & Hammer
-        this.moleSpawner = new MoleSpawner(this.config, this.assets, this.audioManager, this.vfxManager);
+        // Pass loaded bgImg to parallaxManager
+        if (this.assets.bgImg) {
+            this.parallaxManager.bgImg = this.assets.bgImg;
+        }
+
+        // Initialize Spawner & Hand Controller
+        this.moleSpawner = new MoleSpawner(this.config, this.assets, this.audioManager, this.vfxManager, this.parallaxManager);
         this.hammer = new HammerController(this.config, this.assets, this.audioManager, this.cameraShake, this.vfxManager);
 
         // Initialize Input Manager
@@ -76,7 +80,7 @@ export class GameManager {
             this.config
         );
 
-        // Center hammer initially
+        // Center hand initially
         this.hammer.setPointer(this.config.VIEWPORT_WIDTH / 2, this.config.VIEWPORT_HEIGHT / 2);
 
         // Start Loop
@@ -84,7 +88,7 @@ export class GameManager {
         this.lastTime = performance.now();
         requestAnimationFrame((t) => this.gameLoop(t));
 
-        // Unlock WebAudio on first user interaction anywhere (fully iOS Safari and Android compatible)
+        // Unlock WebAudio on first user interaction anywhere
         const unlockAudio = () => {
             this.audioManager.resume();
             window.removeEventListener('pointerdown', unlockAudio);
@@ -108,11 +112,28 @@ export class GameManager {
             img.onerror = () => resolve(null);
         });
 
-        // Load extracted clean assets
-        this.assets.moleSprite = await loadImg('assets/mole_clean/sprite_5.png');
-        this.assets.hammerSprite = await loadImg('assets/gavel_clean/sprite_0.png');
-        this.assets.humanIdleSprite = await loadImg('assets/human_clean/human_idle.png');
-        this.assets.humanHitSprite = await loadImg('assets/human_clean/human_hit.png');
+        if (typeof ASSETS_DATA !== 'undefined' && ASSETS_DATA) {
+            this.assets.yellowCharacter = await loadImg(ASSETS_DATA.yellow);
+            this.assets.redCharacter = await loadImg(ASSETS_DATA.red);
+            this.assets.punchSprite = await loadImg(ASSETS_DATA.punch);
+            this.assets.slapSprite = await loadImg(ASSETS_DATA.slap);
+            this.assets.bgImg = await loadImg(ASSETS_DATA.bg);
+        } else {
+            // Load new clean sprites
+            this.assets.yellowCharacter = await loadImg('assets/clean_sprites/yellow_character.png');
+            this.assets.redCharacter = await loadImg('assets/clean_sprites/red_character.png');
+            this.assets.punchSprite = await loadImg('assets/clean_sprites/punch_hand.png');
+            this.assets.slapSprite = await loadImg('assets/clean_sprites/slap_hand.png');
+            this.assets.bgImg = await loadImg('assets/BG_NEW/Background_Seamless.jpg');
+        }
+
+        if (this.parallaxManager && this.assets.bgImg) {
+            this.parallaxManager.bgImg = this.assets.bgImg;
+            this.parallaxManager.calculateBounds();
+            if (this.moleSpawner) {
+                this.moleSpawner.updateHolePositions();
+            }
+        }
     }
 
     setupCanvasResolution() {
@@ -123,113 +144,111 @@ export class GameManager {
         const isPortrait = screenH > screenW;
 
         if (isPortrait) {
-            // Mobile Portrait mode: width 720, height dynamically scales to exact phone screen aspect ratio
             const baseW = 720;
             const aspect = screenH / screenW;
             this.config.VIEWPORT_WIDTH = baseW;
             this.config.VIEWPORT_HEIGHT = Math.round(baseW * aspect);
             this.config.IS_PORTRAIT = true;
-            this.config.PERSPECTIVE_HORIZON_Y = Math.round(this.config.VIEWPORT_HEIGHT * 0.22);
+            this.config.PERSPECTIVE_HORIZON_Y = Math.round(this.config.VIEWPORT_HEIGHT * 0.16);
             this.config.HOLE_COLUMNS = 3;
-            this.config.HOLE_ROWS = 6;
-            this.config.HOLE_BASE_RADIUS_X = 66;
-            this.config.HOLE_BASE_RADIUS_Y = 36;
-            this.config.HOLE_VERTICAL_SPACING = Math.round((this.config.VIEWPORT_HEIGHT - this.config.PERSPECTIVE_HORIZON_Y) / 5.4);
+            this.config.HOLE_ROWS = 5;
+            this.config.HOLE_BASE_RADIUS_X = 72;
+            this.config.HOLE_BASE_RADIUS_Y = 46;
+            this.config.HOLE_VERTICAL_SPACING = Math.round((this.config.VIEWPORT_HEIGHT - this.config.PERSPECTIVE_HORIZON_Y) / 4.8);
         } else {
-            // Landscape mode (Desktop or rotated tablet/mobile)
             const baseH = 800;
             const aspect = screenW / screenH;
             this.config.VIEWPORT_HEIGHT = baseH;
             this.config.VIEWPORT_WIDTH = Math.max(1200, Math.round(baseH * aspect));
             this.config.IS_PORTRAIT = false;
-            this.config.PERSPECTIVE_HORIZON_Y = 180;
-            this.config.HOLE_COLUMNS = 4;
+            this.config.PERSPECTIVE_HORIZON_Y = 120;
+            this.config.HOLE_COLUMNS = 3;
             this.config.HOLE_ROWS = 5;
-            this.config.HOLE_BASE_RADIUS_X = 62;
-            this.config.HOLE_BASE_RADIUS_Y = 34;
-            this.config.HOLE_VERTICAL_SPACING = 155;
+            this.config.HOLE_BASE_RADIUS_X = 75;
+            this.config.HOLE_BASE_RADIUS_Y = 48;
+            this.config.HOLE_VERTICAL_SPACING = 185;
         }
 
-        // High-DPI Retina support while maintaining virtual coordinate space
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
         this.canvas.width = Math.round(this.config.VIEWPORT_WIDTH * dpr);
         this.canvas.height = Math.round(this.config.VIEWPORT_HEIGHT * dpr);
         this.ctx.resetTransform?.();
         this.ctx.scale(dpr, dpr);
 
-        if (this.moleSpawner) {
-            this.moleSpawner.rebuildGrid(this.config);
-        }
         if (this.parallaxManager) {
             this.parallaxManager.resize(this.config);
         }
-        if (this.inputManager) {
-            this.inputManager.updateDimensions(this.config.VIEWPORT_WIDTH, this.config.VIEWPORT_HEIGHT);
+        if (this.moleSpawner) {
+            this.moleSpawner.rebuildGrid(this.config);
         }
     }
 
-    handlePointerMove(x, y, isTouch = false) {
-        if (this.hammer) {
+    handlePointerMove(x, y, isTouch) {
+        if (!isTouch && this.hammer) {
             this.hammer.setPointer(x, y);
         }
     }
 
-    handlePointerDown(x, y, isTouch = false) {
-        if (!this.hammer || this.isGameOver) return;
-        this.audioManager.resume();
+    handlePointerDown(x, y, isTouch) {
+        if (!this.hammer) return;
 
-        // Immediately update hammer pointer target so anticipation centers at touch
-        this.hammer.setPointer(x, y);
-
-        // Pre-check candidate hit at the exact instant of tap
-        const instantCandidate = this.moleSpawner.checkHit(x, y, isTouch, false);
-
-        // Trigger fast hammer swing
-        this.hammer.triggerSwing(x, y, (hitX, hitY) => {
-            if (instantCandidate && instantCandidate.hit && !instantCandidate.mole.isHit && instantCandidate.mole.state !== 'HIDDEN') {
-                const hitSuccess = instantCandidate.mole.onHit();
-                if (hitSuccess) {
-                    this.executeHitSuccess(instantCandidate);
-                    return;
-                }
-            }
-            this.processHit(hitX, hitY, isTouch);
+        // Trigger Punch / Slap attack
+        this.hammer.triggerSwing(x, y, (hitX, hitY, attackType) => {
+            this.processHit(hitX, hitY, isTouch, attackType);
         }, isTouch);
     }
 
     executeHitSuccess(result) {
-        // If player whacked the innocent human character -> WRONG HIT penalty!
-        if (result.isHuman || result.mole?.type === 'human') {
-            this.handleWrongHit(result);
-            return;
-        }
-
         // Stats update
         this.stats.totalHits++;
         this.stats.currentStreak++;
         if (this.stats.currentStreak > this.stats.highestStreak) {
             this.stats.highestStreak = this.stats.currentStreak;
         }
-        if (result.mole.type === 'golden') this.stats.goldenHits++;
-        if (result.mole.type === 'speedy') this.stats.speedyHits++;
 
         // Hit Stop Crunch (microfreeze for 35ms)
-        this.hitStopRemaining = this.config.HIT_STOP_MS / 1000;
-
-        // Audio & Camera Shake
-        this.audioManager.playHammerHit(result.isSpecial);
-        this.cameraShake.addTrauma(result.isSpecial ? 0.85 : 0.58, 0, 1);
+        this.hitStopRemaining = (this.config.HIT_STOP_MS || 35) / 1000;
 
         // Mobile Haptic Feedback
         if (navigator.vibrate) {
-            navigator.vibrate(result.isSpecial ? 40 : 22);
+            navigator.vibrate(result.transformedToRed ? 50 : 25);
         }
 
-        // VFX Explosion
-        this.vfxManager.spawnHitVFX(result.x, result.y, result.depthScale, result.isSpecial);
+        const hitsUntilRed = this.moleSpawner ? this.moleSpawner.getHitsUntilRed() : 4;
 
-        // Dispatch custom event for external hooks
-        window.dispatchEvent(new CustomEvent('molehit', { detail: { ...result, stats: this.stats, health: this.health } }));
+        if (result.transformedToRed) {
+            // Yellow mole transformed into Red mole!
+            this.audioManager.playRedEnrage();
+            this.vfxManager.spawnRedEnrageVFX(result.x, result.y, result.depthScale);
+            this.cameraShake.addTrauma(0.55, 0, 1);
+        } else {
+            // Regular hit with insult text popup and combo pitch escalation!
+            if (result.hitType === 'punch') {
+                this.audioManager.playPunchHit(this.stats.currentStreak);
+                this.cameraShake.addTrauma(0.44, 0, 1);
+            } else {
+                this.audioManager.playSlapHit(this.stats.currentStreak);
+                this.cameraShake.addTrauma(0.34, 0, 1);
+            }
+
+            this.vfxManager.spawnHitVFX(result.x, result.y, result.depthScale, false, result.hitType, this.stats.currentStreak);
+
+            // Point 4: Crack VFX around hole rim and stone crack SFX
+            if (result.hole) {
+                this.vfxManager.spawnHoleCrackVFX(result.hole.screenX, result.hole.screenY, result.hole.radiusX, result.hole.radiusY, result.hole);
+                this.audioManager.playHoleCrack();
+            }
+        }
+
+        window.dispatchEvent(new CustomEvent('molehit', {
+            detail: {
+                ...result,
+                stats: this.stats,
+                health: this.health,
+                hitsUntilRed: hitsUntilRed,
+                handMode: this.hammer?.handMode || 'combo'
+            }
+        }));
     }
 
     handleWrongHit(result) {
@@ -237,37 +256,42 @@ export class GameManager {
 
         // Deduct 1 heart
         this.health = Math.max(0, this.health - 1);
-        this.stats.currentStreak = 0; // Reset streak
+        this.stats.currentStreak = 0;
 
-        // Hit stop crunch (slightly longer for impact crunch)
+        // Hit stop crunch
         this.hitStopRemaining = 0.06;
 
-        // Audio: Human "Ouch!" + Heart Lost warning buzzer
-        this.audioManager.playHumanHit();
+        // Point 5: Red mole explodes and instantly vanishes into explosion
+        if (result.hole && result.hole.mole) {
+            result.hole.mole.explode();
+        }
+
+        // Play heavy red explosion sound and heart lost warning
+        this.audioManager.playRedExplosion();
         this.audioManager.playHeartLost();
 
         // Heavy camera shake
-        this.cameraShake.addTrauma(0.95, 0, 1);
+        this.cameraShake.addTrauma(1.0, 0, 1);
 
-        // Mobile Haptic rumble
         if (navigator.vibrate) {
-            navigator.vibrate([70, 40, 70]);
+            try { navigator.vibrate([70, 40, 70]); } catch (e) {}
         }
 
-        // Crimson wrong hit VFX & "OUCH! -1 ❤️" comic pop
-        this.vfxManager.spawnWrongHitVFX(result.x, result.y, result.depthScale);
+        // Point 5: Massive Red character explosion VFX
+        this.vfxManager.spawnRedExplosionVFX(result.x, result.y, result.depthScale);
 
-        // Dispatch playerhurt event for UI heart updates and screen red vignette flash
+        const hitsUntilRed = this.moleSpawner ? this.moleSpawner.getHitsUntilRed() : 4;
+
         window.dispatchEvent(new CustomEvent('playerhurt', {
             detail: {
                 health: this.health,
                 maxHealth: this.maxHealth,
                 stats: this.stats,
-                result: result
+                result: result,
+                hitsUntilRed: hitsUntilRed
             }
         }));
 
-        // If 0 hearts remaining -> 3 wrong hits: Game Over!
         if (this.health <= 0) {
             this.triggerGameOver();
         }
@@ -294,16 +318,17 @@ export class GameManager {
         this.stats.totalHits = 0;
         this.stats.totalMisses = 0;
         this.stats.currentStreak = 0;
-        this.stats.goldenHits = 0;
-        this.stats.speedyHits = 0;
+        this.stats.redDodges = 0;
         this.stats.sessionTime = 0;
 
         // Reset holes & moles
         if (this.moleSpawner) {
+            this.moleSpawner.hitCount = 0;
             this.moleSpawner.holes.forEach(h => {
                 h.mole.state = 'HIDDEN';
                 h.mole.riseProgress = 0;
                 h.mole.isHit = false;
+                h.mole.type = 'yellow';
             });
             this.moleSpawner.spawnTimer = 0.6;
             this.moleSpawner.gameTime = 0;
@@ -315,32 +340,44 @@ export class GameManager {
             detail: {
                 health: this.health,
                 maxHealth: this.maxHealth,
-                stats: this.stats
+                stats: this.stats,
+                hitsUntilRed: this.moleSpawner ? this.moleSpawner.getHitsUntilRed() : 4
             }
         }));
     }
 
-    processHit(hitX, hitY, isTouch = false) {
+    processHit(hitX, hitY, isTouch = false, attackType = 'punch') {
         if (this.isGameOver) return;
 
         // Check if any mole was hit at impact time
-        const result = this.moleSpawner.checkHit(hitX, hitY, isTouch, true);
+        const result = this.moleSpawner.checkHit(hitX, hitY, isTouch, true, attackType);
 
         if (result.hit) {
-            this.executeHitSuccess(result);
+            if (result.penalty) {
+                this.handleWrongHit(result);
+            } else {
+                this.executeHitSuccess(result);
+            }
         } else {
             // Missed ground hit
             this.stats.totalMisses++;
             this.stats.currentStreak = 0;
-            this.cameraShake.addTrauma(0.18, 0, 1);
-            window.dispatchEvent(new CustomEvent('molemiss', { detail: { x: hitX, y: hitY, stats: this.stats } }));
+            this.audioManager.playMissThud();
+            this.cameraShake.addTrauma(0.12, 0, 1);
+            window.dispatchEvent(new CustomEvent('molemiss', {
+                detail: {
+                    x: hitX,
+                    y: hitY,
+                    stats: this.stats,
+                    hitsUntilRed: this.moleSpawner ? this.moleSpawner.getHitsUntilRed() : 4
+                }
+            }));
         }
     }
 
     gameLoop(now) {
         if (!this.isRunning) return;
 
-        // Delta time calculation with 0.1s cap
         const rawDt = (now - this.lastTime) / 1000;
         const dt = Math.min(rawDt, 0.1);
         this.lastTime = now;
@@ -352,7 +389,6 @@ export class GameManager {
         // Process Hit-Stop (brief game pause for impact crunch)
         if (this.hitStopRemaining > 0) {
             this.hitStopRemaining -= dt;
-            // Still update camera shake during hitstop for crunch feel
             this.cameraShake.update(dt);
             this.render();
             requestAnimationFrame((t) => this.gameLoop(t));
@@ -378,48 +414,41 @@ export class GameManager {
         const ctx = this.ctx;
         const w = this.config.VIEWPORT_WIDTH;
         const h = this.config.VIEWPORT_HEIGHT;
-        const theme = this.parallaxManager.theme;
 
         ctx.clearRect(0, 0, w, h);
 
-        // --- CAMERA SHAKE CONTAINER BEGIN ---
         ctx.save();
         this.cameraShake.apply(ctx);
 
-        // 1. Sky & Distant Mountains
-        this.parallaxManager.drawSkyLayer(ctx);
-
-        // 2. Midground Rolling Hills & Trees
-        this.parallaxManager.drawMidgroundLayer(ctx);
-
-        // 3. 2.5D Ground Plane
+        // 1. Unified moving arena ground (Background_New.jpg)
         this.parallaxManager.drawGroundPlane(ctx);
 
-        // 4. Ground VFX (expanding shockwaves)
+        // 2. Ground VFX (shockwaves)
         this.vfxManager.drawGroundLayer(ctx);
 
-        // 5. Holes and Moles (sorted in depth order back-to-front)
-        this.moleSpawner.draw(ctx, theme);
+        // 3. Holes and Moles (scrolling together with ground)
+        this.moleSpawner.draw(ctx);
 
-        // 6. Top VFX (impact flashes, sparks, dirt chunks, comic pop text)
+        // 4. Top VFX (impact flashes, sparks, insult comic pop text)
         this.vfxManager.drawTopLayer(ctx);
 
-        // 7. Player Hammer Mallet & Motion Trails
+        // 5. Player Hand (Punch & Slap animations)
         this.hammer.draw(ctx);
 
-        // --- CAMERA SHAKE CONTAINER END ---
-        ctx.restore();
-
-        // 8. Foreground drifting spores / ambient particles
+        // 6. Ambient drifting floating dust/spores
         this.vfxManager.drawAmbientForeground(ctx);
 
-        // 9. Foreground Corner Grass & Leaves
-        this.parallaxManager.drawForegroundLayer(ctx);
+        ctx.restore();
+
+        // 7. Full-viewport screen impact flash (illuminates screen on hit crunch)
+        this.vfxManager.drawScreenFlash(ctx);
     }
 
-    // Public API controls
-    setTheme(themeName) {
-        this.parallaxManager.setTheme(themeName);
+    // Hand mode switch (combo / punch / slap)
+    setHandMode(mode) {
+        if (this.hammer) {
+            this.hammer.setHandMode(mode);
+        }
     }
 
     toggleAudio() {

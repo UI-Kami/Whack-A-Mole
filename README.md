@@ -1,82 +1,101 @@
-# 🔨 Whack-A-Mole 2.5D | Infinite Arcade
+# 🥊 Whack-A-Mole 2.5D | Punch & Slap Arcade
 
-An endless, fast-paced Whack-a-Mole arcade game built with HTML5 Canvas, responsive 2.5D perspective rendering, juicy impact VFX, a 3-heart health system, innocent obstacles, and procedural Web Audio synthesis.
+An endless, high-energy Whack-a-Mole arcade game built with HTML5 Canvas, continuous procedural scrolling background, interactive **Punch & Slap hand controls**, predictable **Red Rage mechanics**, explosive VFX, and 100% procedural Web Audio synthesis.
 
 ## 🎮 Play Online
 > Play directly in your browser: **[https://ui-kami.github.io/Whack-A-Mole/](https://ui-kami.github.io/Whack-A-Mole/)** *(Hosted via GitHub Pages)*
 
 ---
 
-## ✨ Key Features & Gameplay
+## 🌟 Major Updates & New Features
 
-### ❤️ 3-Heart Health System & Game Over
-* **Health Bar in HUD**: Live glowing heart indicators (`❤️ ❤️ ❤️`) visible right in the top arcade bar.
-* **Wrong Hit Penalty**: Whacking the innocent human character penalizes you by deducting **1 heart**.
-* **Visual & Audio Feedback**:
-  * Damaged heart shakes violently and shatters into a cracked broken heart (`🖤`).
-  * Full-screen crimson hurt vignette flash (`#hurt-overlay`).
-  * Comic warning floaters (*"OUCH! -1 ❤️"*, *"WRONG! -1 ❤️"*).
-  * Procedural human voice "Ouch!" slide and urgent negative warning buzz.
-* **Arcade Game Over Modal**:
-  * Triggered after 3 wrong hits.
-  * Comprehensive session breakdown: **Moles Whacked**, **Best Streak**, **Golden Whacks**, and **Time Survived**.
-  * Instant **"PLAY AGAIN"** button (or press `Space` / `Enter` on keyboard) that replenishes all 3 hearts, resets stats, and kicks off a fresh round with victory chimes.
+### 🟡 Yellow & 🔴 Red Character Engine
+* **High-Detail Sprites**: Custom illustrated character sprites with transparent alpha masks and expressive character design.
+* **Proportional Hole Scaling**: Characters are scaled up (`~90%` of hole diameter) to snugly fit the 3D silver-beveled holes.
+* **Submerged Emergence Anchoring**: Authentic Whack-a-Mole emergence—characters pop out only with their head, expressive eyes, hair curl, and upper chest. Lower body and feet stay permanently submerged and clipped inside the hole cavity.
+* **Dynamic Facial Expressions**:
+  * **Blinking & Eye Glances**: Organic idling with gentle breathing, eyelid blinks, and pupil glances.
+  * **Cartoon KO Eyes ("X X")**: Slap or punch impact knocks the yellow character dizzy with orbiting cartoon stars.
+  * **Fierce Red Eyebrows & Steam Puffs**: Enraged Red mole features animated rising steam puffs and angled brows.
 
-### 👦 Innocent Cartoon Human Character
-* **Friendly Neighborhood Boy**: An innocent cartoon boy wearing a red baseball cap and blue shirt pops out of the holes.
-* **Fair Warning**: Displays a floating `"DON'T HIT! ⚠️"` badge above his cap so players have clear visual cues to hold their hammer back.
-* **Safe Passage**: If you spare him, he safely ducks back underground after a brief peek without penalty.
-* **Hilarious Hurt Reaction**: If whacked by mistake, his cap goes askew, his eyes swirl into dizzy spirals, a cartoon head bandage appears, and an *"OUCH!"* speech bubble pops up!
-* **Balanced Spawner**: Paced intelligently so at most one human is on screen at a time, ensuring you always have plenty of moles to whack.
+---
 
-### 🎨 5 Vibrant Sceneries (Environment Themes)
-Switch between 5 complete environments on the fly with the **Theme** button:
-1. 🌿 **Lush Garden**: Bright sunny skies, alpine mountains, emerald rolling hills, cartoon trees, and drifting green leaves.
-2. 🧀 **Cheese Kingdom (Redesigned & Balanced)**:
-   * Fixed the yellow wash! Replaced the monochrome yellow with a dreamy **twilight purple & apricot sunset** (`#1c1038` to `#d97706`).
-   * Giant glowing **Swiss Cheese Moon** with craters and twinkling night stars.
-   * Toasted cracker & pretzel mountain ridges.
-   * Fresh cartoon **broccoli florets** along the hills—providing natural culinary contrast that makes the golden cheese terrain pop!
-   * Warm golden Swiss cheese ground with deep 3D shaded cavity pores.
-3. 🏜️ **Desert Sunset**: Dramatic Arizona canyon dusk gradient, Monument Valley sandstone mesas & buttes, iconic Saguaro cacti, and warm terracotta dunes with wind ripples.
-4. 🍬 **Candy Wonderland**: Cotton candy pastel skies, sugar-frosted chocolate fudge peaks, giant swirled lollipops, and strawberry frosting ground sprinkled with rainbow confetti.
-5. 🌆 **Cyber Arcade**: Retro 80s synthwave night sky, sliced neon sun, vector wireframe mountains, glowing cyber obelisks, and a dark reflective synthwave floor with glowing cyan and magenta perspective lines.
+### 🥊 Punch & Slap Mode (Interactive Weapons)
+* **Dual Weapon Types**: Switch between **Punch Fist** and **Slap Hand** via the HUD button or automatic combo mechanics.
+* **Juicy Kinetic Animation**: Spring-damped tracking, dynamic anticipation pullback, accelerating downward smash, and impact squash.
+* **Comic Hit Text (`HumanHit`)**: Authentic comic popups (*"WHACK!"*, *"SLAP!"*, *"POW!"*, *"SMACK!"*, *"BAM!"*, *"KAPOW!"*) spawned dynamically at impact sites with bouncy upward drift and rotation.
 
-### 🔨 Physics-Driven Toy Mallet & Juicy Juice
-* Responsive cursor/touch tracking with spring smoothing.
-* Anticipation backswing, fast accelerating downward strike, and impact squash.
-* Microfreeze hit stop (`35ms` - `60ms`) for crunch feel.
-* Directional camera shake with rotational roll.
-* 3D dirt pebbles, dust clouds, and comic text (*"BONK!"*, *"POW!"*, *"WHACK!"*, *"GOLDEN!"*).
+---
 
-### 🎵 Procedural Web Audio Engine (Zero Sound Files)
-* 100% synthesized through Web Audio API:
-  * Punchy wooden mallet thumps & transient cracks.
-  * Mole squeaks and dirt rustle bursts.
-  * Comical human vocal "Ouch!" slide & warning error buzzes.
-  * Sad descending arcade defeat fanfare & cheerful revival chords.
-  * Cheerful C-major pentatonic background arpeggio loop.
+### 🔥 Predictable Red Mole Pattern & Explosion VFX
+* **Predictable Transformation**: Every 4th hit transforms the targeted Yellow mole into an **Enraged Red Mole** (`RED_TRIGGER_COUNT = 4`).
+* **HUD Predictor Counter**: Real-time rage counter in the header pill (`RAGE: NEXT: RED!` or `RAGE IN: X`) lets players strategize their hits.
+* **Pre-Hit Warning Aura**: The trigger mole pulses with an elliptical warning ring and a `"WILL ENRAGE!"` indicator before being struck.
+* **Detonation Hazard**: Hitting an Enraged Red mole causes a **Massive Explosion**:
+  * Expanding shockwave ring and blazing fire particles.
+  * Heavy camera trauma shake and full-screen crimson hurt vignette flash.
+  * Deducts 1 heart from the player's 3-heart health bar.
+* **Safe Dodge Reward**: Leaving the Red mole alone lets it safely duck back underground, awarding streak bonuses and updating the dodge counter.
+
+---
+
+### 📜 Continuous Procedural Scrolling Background
+* **Uniform Orthographic Grid (1024×1200 Native)**: 6 identical rows spaced at an exact 200px vertical period across 3 columns (18 holes per repeating tile).
+* **Zero Seam Tiling**: Eliminated linear perspective distortion to achieve 100% seamless infinite vertical scrolling with no stretched/normal mismatches.
+* **Dynamic Hole Tracking**: Holes move continuously with the conveyor belt background; mole emergence, animations, and hitboxes are locked to the moving ground with subpixel precision.
+* **Continuous Closed Polygon Hole Mask**: Custom clipping path allows heads and badges to extend upward into the air while strictly masking the lower torso against the bottom ellipse rim.
+* **Stone Impact Cracks**: Striking moles spawns procedural radial fractures on the hole rims that scroll down with the stone tiles.
+
+---
+
+### ❤️ 3-Heart Health & Arcade Game Over System
+* **HUD Heart Indicators**: Live glowing heart counters (`❤️ ❤️ ❤️`) tracking player health.
+* **Penalty Handling**: Red mole explosions deduct hearts with broken-heart animation (`🖤`) and hurt vignette.
+* **Session Game Over Modal**:
+  * Triggers upon losing all 3 hearts.
+  * Displays total hits, highest streak, red dodges, accuracy, and survival time.
+  * Instant restart via button or keyboard (`Space` / `Enter`).
+
+---
+
+### 🔊 Procedural Web Audio Engine (Zero External Audio Files)
+* 100% synthesized in real time via the Web Audio API:
+  * **Punch Impact**: Deep thud with wooden crack transient.
+  * **Slap Impact**: High-frequency skin-on-skin snap with resonant overtone.
+  * **Explosion Blast**: Low-frequency rumble with white-noise fire dissipation.
+  * **Mole Pop & Squeak**: Playful chirps and frequency slides.
+  * **Danger Buzzer & Fanfare**: Arcade alerts and defeat fanfares.
+  * **Background Synth Arpeggios**: Cheerful pentatonic background melody loop.
 
 ---
 
 ## 🕹️ Controls & HUD
 
-* **Mouse / Touch**: Move the hammer and click or tap emerging moles to whack them.
-* **Live Score Pill**: Tracks your successful mole hits in real-time.
-* **Health Pill**: Displays your 3 remaining hearts (`❤️ ❤️ ❤️`).
-* **Theme Button**: Cycles between all 5 sceneries (*Garden ➔ Cheese ➔ Desert ➔ Candy ➔ Cyber*).
-* **SFX Button**: Toggle sound effects on/off.
-* **Music Button**: Toggle background synthesizer music on/off.
-* **Stats Button**: Open session statistics (hits, streaks, golden hits, play time).
-* **Space / Enter Key**: Instant restart from Game Over screen.
-* **Fullscreen Button**: Toggle edge-to-edge immersive gameplay.
+| Control | Action |
+| :--- | :--- |
+| **Mouse / Touch** | Move the hand and tap/click to punch or slap emerging moles |
+| **Punch / Slap Mode Button** | Toggle between Punch Fist and Slap Hand modes |
+| **Score Pill** | Real-time score counter |
+| **Streak Pill** | Consecutive hits multiplier and combo streak |
+| **Rage Predictor Pill** | Counts down hits remaining until next Red Mole transformation |
+| **Health Pill** | 3 remaining life hearts (`❤️ ❤️ ❤️`) |
+| **SFX / Music Buttons** | Toggle synthesized audio effects and background music |
+| **Stats Button** | View full game session statistics |
+| **Space / Enter** | Restart immediately from the Game Over screen |
+| **Fullscreen Button** | Toggle edge-to-edge immersive play |
 
 ---
 
-## 🛠️ Tech Stack & Architecture
+## 🛠️ Architecture & Build System
 
-* **Engine**: Pure Vanilla JavaScript (ES6+ modular architecture).
-* **Rendering**: High-DPI HTML5 Canvas (responsive 2.5D perspective projection & 5-layer parallax).
-* **Audio**: Native Web Audio API (procedural synthesis, no audio files).
-* **Styles**: Vanilla CSS (Modern glassmorphism, responsive for mobile & desktop).
-* **Standalone Build**: Automated PowerShell bundler (`build_bundle.ps1`) compiles all source modules, CSS, and base64 sprites into a single-file executable `whack-a-mole-standalone.html`.
+* **Engine**: Modular ES6+ JavaScript (`src/GameManager.js`, `src/MoleController.js`, `src/MoleSpawner.js`, `src/HammerController.js`, `src/ParallaxManager.js`, `src/VFXManager.js`, `src/AudioManager.js`).
+* **Graphics**: High-DPI HTML5 Canvas with continuous scrolling conveyor belt, 2.5D depth scaling, and single-path vector clipping.
+* **Audio**: Native Web Audio API procedural synthesis.
+* **Build Bundler (`build.ps1`)**: Automated PowerShell build script that bundles modular JavaScript source files, CSS stylesheets, and Base64 assets into:
+  * `index.html` (Standalone, zero-dependency browser build).
+  * `whack-a-mole-standalone.html` (Portable single-file distribution).
+
+To rebuild the project:
+```powershell
+powershell -ExecutionPolicy Bypass -File .\build.ps1
+```
