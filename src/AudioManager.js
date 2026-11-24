@@ -321,6 +321,63 @@ export class AudioManager {
         osc.stop(t + 0.22);
     }
 
+    playMoleEmerge() {
+        this.playMolePop();
+    }
+
+    playCoolDownStart() {
+        if (!this.initialized || this.isMuted) return;
+        this.resume();
+        const t = this.ctx.currentTime;
+        // Calm warm reflective chime (D4, F#4, A4, D5)
+        const notes = [293.66, 369.99, 440.00, 587.33];
+        notes.forEach((freq, idx) => {
+            const start = t + idx * 0.08;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, start);
+            gain.gain.setValueAtTime(0.001, start);
+            gain.gain.linearRampToValueAtTime(0.22, start + 0.03);
+            gain.gain.exponentialRampToValueAtTime(0.001, start + 0.65);
+            osc.connect(gain);
+            gain.connect(this.sfxGain);
+            osc.start(start);
+            osc.stop(start + 0.65);
+        });
+    }
+
+    playVictoryFanfare() {
+        if (!this.initialized || this.isMuted) return;
+        this.resume();
+        const t = this.ctx.currentTime;
+        const notes = [261.63, 329.63, 392.00, 523.25, 659.25, 783.99]; // Ascending C Major
+        notes.forEach((freq, idx) => {
+            const start = t + idx * 0.09;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(freq, start);
+            gain.gain.setValueAtTime(0.01, start);
+            gain.gain.linearRampToValueAtTime(0.35, start + 0.03);
+            gain.gain.exponentialRampToValueAtTime(0.001, start + 0.35);
+            osc.connect(gain);
+            gain.connect(this.sfxGain);
+            osc.start(start);
+            osc.stop(start + 0.35);
+        });
+    }
+
+    playDefeatFanfare() {
+        this.playGameOver();
+    }
+
+    toggleMaster() {
+        const next = !this.isMuted;
+        this.setMuted(next);
+        return !next;
+    }
+
     // --- SFX: Mole Emerging / Dirt Rustle ---
     playMolePop() {
         if (!this.initialized || this.isMuted) return;

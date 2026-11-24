@@ -50,6 +50,24 @@ export class HammerController {
         this.targetY = py;
     }
 
+    reset() {
+        this.state = HAND_STATE.IDLE;
+        this.phaseTimer = 0;
+        this.comboCounter = 0;
+        this.hitCallback = null;
+        this.targetX = this.config.VIEWPORT_WIDTH / 2;
+        this.targetY = this.config.VIEWPORT_HEIGHT / 2;
+        this.x = this.targetX;
+        this.y = this.targetY;
+        this.angle = -14;
+        this.scaleX = 1;
+        this.scaleY = 1;
+        this.scaleZ = 1;
+        this.trailPoints = [];
+        this.idleBob = 0;
+        this.impactFlashAlpha = 0;
+    }
+
     setHandMode(mode) {
         if (mode === 'combo' || mode === 'punch' || mode === 'slap') {
             this.handMode = mode;

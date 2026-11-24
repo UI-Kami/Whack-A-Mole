@@ -1,7 +1,9 @@
 $ErrorActionPreference = "Stop"
 
-$styleCss = Get-Content -Path "style.css" -Raw
-$assetsJson = Get-Content -Path "assets\clean_sprites\assets_base64.json" -Raw
+$utf8 = [System.Text.UTF8Encoding]::new($true)
+
+$styleCss = [System.IO.File]::ReadAllText((Resolve-Path "style.css"), $utf8)
+$assetsJson = [System.IO.File]::ReadAllText((Resolve-Path "assets\normalized\assets_base64.json"), $utf8)
 
 $modules = @(
     "Config.js",
@@ -19,7 +21,7 @@ $modules = @(
 
 $combinedModules = ""
 foreach ($m in $modules) {
-    $content = Get-Content -Path "src\$m" -Raw
+    $content = [System.IO.File]::ReadAllText((Resolve-Path "src\$m"), $utf8)
     # Strip import statements
     $content = [System.Text.RegularExpressions.Regex]::Replace($content, "(?m)^\s*import\s+[^;]+;\s*\r?\n?", "")
     # Strip export keywords
@@ -27,240 +29,17 @@ foreach ($m in $modules) {
     $combinedModules += "`n    // ========================================== `n    // Module: $m `n    // ========================================== `n" + $content + "`n"
 }
 
-$uiWiring = @'
-    // --- Instantiate Game Engine ---
-    const game = new GameManager('game-canvas');
-    window.game = game;
-
-    // --- UI Element References ---
-    const btnSfx = document.getElementById('btn-sfx');
-    const svgSfx = document.getElementById('svg-sfx');
-    const btnMusic = document.getElementById('btn-music');
-    const svgMusic = document.getElementById('svg-music');
-    const btnHandMode = document.getElementById('btn-hand-mode');
-    const textHandMode = document.getElementById('text-hand-mode');
-    const iconHandMode = document.getElementById('icon-hand-mode');
-    const btnStats = document.getElementById('btn-stats');
-    const btnCloseStats = document.getElementById('btn-close-stats');
-    const statsModal = document.getElementById('stats-modal');
-    const gameoverModal = document.getElementById('gameover-modal');
-    const modalBackdrop = document.getElementById('modal-backdrop');
-    const btnFullscreen = document.getElementById('btn-fullscreen');
-    const btnRestart = document.getElementById('btn-restart');
-    const hurtOverlay = document.getElementById('hurt-overlay');
-    const hudScorePill = document.querySelector('.hud-score-pill');
-    const hudScoreVal = document.getElementById('hud-score-val');
-    const hudStreakPill = document.getElementById('hud-streak-pill');
-    const hudStreakVal = document.getElementById('hud-streak-val');
-    const hudPredictorPill = document.getElementById('hud-predictor-pill');
-    const hudPredictorVal = document.getElementById('hud-predictor-val');
-    const hudPredictorDot = document.getElementById('hud-predictor-dot');
-
-    const heartEls = [
-        document.getElementById('heart-0'),
-        document.getElementById('heart-1'),
-        document.getElementById('heart-2')
-    ];
-
-    // --- Hand Attack Mode Toggle (Combo / Punch / Slap) ---
-    const modeIcons = {
-        combo: '<svg class="hud-mode-icon" viewBox="0 0 24 24"><path d="M7 2v11h3v9l7-12h-4l4-8z"/></svg>',
-        punch: '<svg class="hud-mode-icon" viewBox="0 0 24 24"><path d="M19.5 7h-2.1c-.2-1.7-1.7-3-3.4-3-1 0-1.9.5-2.5 1.2C10.9 4.5 10 4 9 4c-1.7 0-3.2 1.3-3.4 3H4.5C3.1 7 2 8.1 2 9.5v5C2 17.5 4.5 20 7.5 20h7c3 0 5.5-2.5 5.5-5.5v-5c0-1.4-1.1-2.5-2.5-2.5z"/></svg>',
-        slap: '<svg class="hud-mode-icon" viewBox="0 0 24 24"><path d="M21 9a2 2 0 0 0-2-2 1.99 1.99 0 0 0-1.73 1C16.89 7.42 16 7 15 7c-.38 0-.74.1-1.06.27A1.99 1.99 0 0 0 12 7c-.4 0-.77.11-1.1.32A2 2 0 0 0 9 6a2 2 0 0 0-2 2v6.5l-1.91-.76a1.99 1.99 0 0 0-2.5 1.09c-.35.91.06 1.94.94 2.37L9 20.5a8 8 0 0 0 6 1.5h1a6 6 0 0 0 6-6V9z"/></svg>'
-    };
-
-    const modesList = [
-        { id: 'combo', label: 'COMBO' },
-        { id: 'punch', label: 'PUNCH' },
-        { id: 'slap', label: 'SLAP' }
-    ];
-    let currentModeIndex = 0;
-
-    if (btnHandMode) {
-        btnHandMode.addEventListener('click', () => {
-            currentModeIndex = (currentModeIndex + 1) % modesList.length;
-            const current = modesList[currentModeIndex];
-            if (textHandMode) textHandMode.textContent = current.label;
-            if (iconHandMode) iconHandMode.innerHTML = modeIcons[current.id];
-            game.setHandMode(current.id);
-        });
-    }
-
-
-
-    // --- Audio and SFX Toggles ---
-    const pathSfxOn = 'M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z';
-    const pathSfxOff = 'M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z';
-    const pathMusicOn = 'M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z';
-    const pathMusicOff = 'M4.27 3L3 4.27l9 9v.28c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4v-1.73l5.73 5.73L21 19.73 4.27 3zM14 7h4V3h-6v5.18l2 2V7z';
-
-    btnSfx.addEventListener('click', () => {
-        const active = game.toggleAudio();
-        btnSfx.classList.toggle('active', active);
-        const p = svgSfx ? svgSfx.querySelector('path') : null;
-        if (p) p.setAttribute('d', active ? pathSfxOn : pathSfxOff);
-    });
-
-    btnMusic.addEventListener('click', () => {
-        const active = game.toggleMusic();
-        btnMusic.classList.toggle('active', active);
-        const p = svgMusic ? svgMusic.querySelector('path') : null;
-        if (p) p.setAttribute('d', active ? pathMusicOn : pathMusicOff);
-    });
-
-    // --- Health UI (Hearts) ---
-    function updateHeartsUI(health) {
-        heartEls.forEach((el, idx) => {
-            if (!el) return;
-            if (idx < health) {
-                el.classList.add('active');
-                el.classList.remove('broken');
-            } else {
-                el.classList.remove('active');
-                el.classList.add('broken');
-            }
-        });
-    }
-
-    // --- Predictor UI (Yellow -> Red cycle) ---
-    function updatePredictorUI(remaining) {
-        if (!hudPredictorVal || !hudPredictorPill) return;
-        if (remaining === 1) {
-            hudPredictorPill.classList.add('danger');
-            if (hudPredictorDot) hudPredictorDot.classList.add('danger');
-            hudPredictorVal.textContent = 'NEXT: RED!';
-            hudPredictorVal.style.color = '#ef4444';
-        } else {
-            hudPredictorPill.classList.remove('danger');
-            if (hudPredictorDot) hudPredictorDot.classList.remove('danger');
-            hudPredictorVal.textContent = 'IN: ' + remaining;
-            hudPredictorVal.style.color = '#fde047';
-        }
-    }
-
-    // --- Event Listeners from GameManager ---
-    window.addEventListener('playerhurt', (e) => {
-        const { health, hitsUntilRed } = e.detail;
-        updateHeartsUI(health);
-        updatePredictorUI(hitsUntilRed);
-        if (hudStreakVal) hudStreakVal.textContent = '0x';
-        if (hudStreakPill) hudStreakPill.classList.remove('fire');
-
-        hurtOverlay.classList.remove('flash');
-        void hurtOverlay.offsetWidth;
-        hurtOverlay.classList.add('flash');
-        setTimeout(() => hurtOverlay.classList.remove('flash'), 300);
-    });
-
-    window.addEventListener('molehit', (e) => {
-        const { stats, hitsUntilRed } = e.detail;
-        if (hudScoreVal) hudScoreVal.textContent = stats.totalHits;
-        if (hudScorePill) {
-            hudScorePill.classList.remove('pop');
-            void hudScorePill.offsetWidth;
-            hudScorePill.classList.add('pop');
-        }
-        if (hudStreakVal) hudStreakVal.textContent = stats.currentStreak + 'x';
-        if (hudStreakPill) {
-            if (stats.currentStreak >= 3) {
-                hudStreakPill.classList.add('fire');
-            } else {
-                hudStreakPill.classList.remove('fire');
-            }
-        }
-        updatePredictorUI(hitsUntilRed);
-    });
-
-    window.addEventListener('molemiss', (e) => {
-        const { hitsUntilRed } = e.detail;
-        if (hudStreakVal) hudStreakVal.textContent = '0x';
-        if (hudStreakPill) hudStreakPill.classList.remove('fire');
-        updatePredictorUI(hitsUntilRed);
-    });
-
-    window.addEventListener('gameover', (e) => {
-        const s = e.detail.stats;
-        document.getElementById('go-hits').textContent = s.totalHits;
-        document.getElementById('go-streak').textContent = s.highestStreak;
-        document.getElementById('go-dodges').textContent = s.redDodges || 0;
-
-        const totalSec = Math.floor(s.sessionTime);
-        const mins = String(Math.floor(totalSec / 60)).padStart(2, '0');
-        const secs = String(totalSec % 60).padStart(2, '0');
-        document.getElementById('go-time').textContent = mins + ':' + secs;
-
-        gameoverModal.classList.add('show');
-        modalBackdrop.classList.add('show');
-    });
-
-    window.addEventListener('gamerestart', (e) => {
-        const { health, hitsUntilRed } = e.detail;
-        updateHeartsUI(health);
-        updatePredictorUI(hitsUntilRed);
-        if (hudScoreVal) hudScoreVal.textContent = '0';
-        if (hudStreakVal) hudStreakVal.textContent = '0x';
-        if (hudStreakPill) hudStreakPill.classList.remove('fire');
-        gameoverModal.classList.remove('show');
-        statsModal.classList.remove('show');
-        modalBackdrop.classList.remove('show');
-    });
-
-    btnRestart.addEventListener('click', () => game.restartGame());
-    window.addEventListener('keydown', (e) => {
-        if (game.isGameOver && (e.code === 'Space' || e.code === 'Enter')) {
-            e.preventDefault();
-            game.restartGame();
-        }
-    });
-
-    function updateStatsUI() {
-        const s = game.stats;
-        document.getElementById('stat-hits').textContent = s.totalHits;
-        document.getElementById('stat-streak').textContent = s.highestStreak;
-        document.getElementById('stat-misses').textContent = s.totalMisses;
-        const totalSec = Math.floor(s.sessionTime);
-        const mins = String(Math.floor(totalSec / 60)).padStart(2, '0');
-        const secs = String(totalSec % 60).padStart(2, '0');
-        document.getElementById('stat-time').textContent = mins + ':' + secs;
-    }
-
-    btnStats.addEventListener('click', () => {
-        updateStatsUI();
-        statsModal.classList.add('show');
-        modalBackdrop.classList.add('show');
-    });
-
-    const closeStats = () => {
-        statsModal.classList.remove('show');
-        if (!game.isGameOver) modalBackdrop.classList.remove('show');
-    };
-    btnCloseStats.addEventListener('click', closeStats);
-    modalBackdrop.addEventListener('click', () => {
-        if (!game.isGameOver) closeStats();
-    });
-
-    btnFullscreen.addEventListener('click', () => {
-        const doc = document;
-        const docEl = document.documentElement;
-        const isFull = doc.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement || doc.msFullscreenElement;
-        if (!isFull) {
-            const rfs = docEl.requestFullscreen || docEl.webkitRequestFullscreen || docEl.mozRequestFullScreen || docEl.msRequestFullscreen;
-            if (rfs) rfs.call(docEl).catch(() => {});
-        } else {
-            const efs = doc.exitFullscreen || doc.webkitExitFullscreen || doc.mozCancelFullScreen || doc.msExitFullscreen;
-            if (efs) efs.call(doc).catch(() => {});
-        }
-    });
-'@
-
 $headerHtml = @'
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Whack-a-Mole | Punch &amp; Slap Arcade</title>
-    <meta name="description" content="Infinite arcade Whack-a-Mole game featuring Punch and Slap hand animations, dynamic moving background, comic insult reactions, and predictable red rage mole pattern.">
+    <title>Mazaaq Tha | Interactive Kiosk Experience</title>
+    <meta name="description" content="Mazaaq Tha - Interactive bilingual Whack-A-Mole reflection on jokes, bullying, and spoken words.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;700&family=Noto+Sans+Arabic:wght@400;700&family=Outfit:wght@400;600;700;800;900&display=swap" rel="stylesheet">
     <style>
 '@
 
@@ -268,148 +47,195 @@ $middleHtml = @'
     </style>
 </head>
 <body>
-<div id="game-container">
-    <!-- Floating Glassmorphism Arcade HUD -->
-    <header class="arcade-hud" role="toolbar" aria-label="Game Controls">
-        <div class="brand-badge">
-            <svg viewBox="0 0 24 24"><path d="M19.7 7.3l-2.4-2.4c-.4-.4-1-.4-1.4 0l-1.9 1.9 3.8 3.8 1.9-1.9c.4-.4.4-1 0-1.4zM4.3 18.3l8.8-8.8 1.4 1.4-8.8 8.8c-.4.4-1 .4-1.4 0l-.01-.01c-.39-.39-.39-1.02.01-1.39zM14 6l4 4-1 1-4-4 1-1z"/></svg>
-            WHACK-A-MOLE
-        </div>
+<div id="game-wrapper">
+    <div id="game-container">
+        <!-- Minimalist Kiosk Top HUD -->
+        <header class="kiosk-hud" role="toolbar" aria-label="Game Controls">
+            <div class="hud-top-bar">
+                <div class="hud-group-left">
+                    <!-- Hit Counter (Top Left) -->
+                    <div class="hud-hits-pill" id="hud-hits-pill" title="Normal Hits">
+                        <span id="hud-hits-val">Hits: 0</span>
+                    </div>
 
-        <div class="hud-row-top">
-            <!-- Score Display Pill -->
-            <div class="hud-pill hud-score-pill" title="Moles Whacked">
-                <span class="hud-pill-label">SCORE</span>
-                <span id="hud-score-val" class="hud-pill-val">0</span>
+                    <!-- Heart Health Icon (Cracks on Bomb Hit) -->
+                    <div class="hud-heart-wrap" id="hud-heart-wrap" title="Health">
+                        <img id="hud-heart-img" class="hud-heart-img" src="" alt="Health Bar" />
+                    </div>
+                </div>
+
+                <!-- Always Visible Main Timer (1:30 Countdown) -->
+                <div class="hud-timer-wrap" id="hud-timer-wrap" title="Main Timeline">
+                    <span class="hud-timer-label">TIMER</span>
+                    <span class="hud-timer-val" id="hud-timer-val">1:30</span>
+                    <span class="timer-penalty-badge" id="timer-penalty-badge">-3s</span>
+                </div>
+
+                <div class="hud-group-right">
+                    <!-- Sound Toggle Button -->
+                    <button id="btn-sound-toggle" class="hud-pixel-btn sound-toggle active" title="Toggle Sound">
+                        <img id="btn-sound-img" class="hud-pixel-btn-img circle" src="" alt="Sound" />
+                    </button>
+
+                    <!-- Pause Button (Top Right) -->
+                    <button id="btn-pause" class="hud-pixel-btn" title="Pause Game">
+                        <img id="btn-pause-img" class="hud-pixel-btn-img" src="" alt="Pause" />
+                    </button>
+                </div>
             </div>
 
-            <!-- Red Rage Predictor Pill -->
-            <div class="hud-pill hud-predictor-pill" id="hud-predictor-pill" title="Predicts when Yellow mole will turn RED and explode!">
-                <span class="hud-pill-label">RAGE</span>
-                <span class="hud-pill-val" id="hud-predictor-val-wrap"><span id="hud-predictor-dot" class="rage-indicator-dot"></span><span id="hud-predictor-val">IN: 4</span></span>
+            <!-- Sub Bar: Speed Bar & Mystery Box Progress -->
+            <div class="hud-sub-bar">
+                <!-- Speed Bar -->
+                <div class="hud-speed-gauge" title="Game Speed">
+                    <span class="hud-speed-label">SPEED</span>
+                    <div class="speed-track">
+                        <div id="speed-fill" class="speed-fill"></div>
+                    </div>
+                </div>
+
+                <!-- Mystery Box Progress Bar (Target 30 normal hits) -->
+                <div class="hud-progress-gauge" title="Progress toward Mystery Box (30 Hits)">
+                    <img id="mystery-icon" class="mystery-box-icon" src="" alt="Box" />
+                    <div class="progress-track">
+                        <div id="progress-fill" class="progress-fill"></div>
+                    </div>
+                    <span id="progress-text" class="progress-text">0 / 30</span>
+                </div>
             </div>
+        </header>
 
-            <!-- 3 Hearts Health Bar -->
-            <div class="hud-pill hud-health-pill" id="hud-health-bar" title="3 Lives - Exploding Red Mole loses 1 heart!">
-                <span class="hud-heart active" id="heart-0" aria-label="Heart 1">
-                    <svg class="heart-svg" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
-                </span>
-                <span class="hud-heart active" id="heart-1" aria-label="Heart 2">
-                    <svg class="heart-svg" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
-                </span>
-                <span class="hud-heart active" id="heart-2" aria-label="Heart 3">
-                    <svg class="heart-svg" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
-                </span>
-            </div>
-        </div>
+        <!-- Red Hurt Flash Overlay -->
+        <div id="hurt-overlay" class="hurt-overlay" aria-hidden="true"></div>
 
-        <div class="hud-row-bottom">
-            <!-- Hand Attack Mode Toggle (Combo / Punch / Slap) -->
-            <button id="btn-hand-mode" class="hud-btn btn-hand-mode" title="Switch Hand Mode" aria-label="Switch Hand Mode">
-                <span id="icon-hand-mode"><svg class="hud-mode-icon" viewBox="0 0 24 24"><path d="M7 2v11h3v9l7-12h-4l4-8z"/></svg></span>
-                <span id="text-hand-mode">COMBO</span>
-            </button>
+        <!-- Main Game Canvas (9:16 Portrait) -->
+        <canvas id="game-canvas"></canvas>
 
-            <!-- SFX Button -->
-            <button id="btn-sfx" class="hud-btn active" title="Toggle Sound Effects" aria-label="Toggle Sound Effects">
-                <svg id="svg-sfx" class="hud-icon" viewBox="0 0 24 24">
-                    <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
-                </svg>
-                <span>SFX</span>
-            </button>
+        <!-- Home / Menu Screen Modal (Active on Page Load) -->
+        <div id="menu-modal" class="modal-overlay show" role="dialog" aria-modal="true">
+            <div class="menu-card">
+                <div class="menu-hero-wrap">
+                    <img id="menu-hero-img" class="menu-hero-img" src="" alt="Mazaaq Tha" />
+                    <div class="menu-hero-badge">1080 x 1920 KIOSK EDITION</div>
+                </div>
+                <div class="menu-content">
+                    <h1 class="menu-title">MAZAAQ THA</h1>
+                    <h2 class="menu-title-urdu urdu-text">&#1605;&#1584;&#1575;&#1602; &#1578;&#1726;&#1575;</h2>
+                    <p class="menu-subtitle">Interactive Kiosk Reflection on Words &amp; Jokes</p>
+                    
+                    <div class="menu-rules-box">
+                        <div class="menu-rule-item">
+                            <span class="rule-icon">&#127919;</span>
+                            <span class="rule-text"><strong>30 Normal Hits</strong> to unlock the Mystery Box</span>
+                        </div>
+                        <div class="menu-rule-item">
+                            <span class="rule-icon">&#9201;&#65039;</span>
+                            <span class="rule-text"><strong>90-Second</strong> continuous countdown</span>
+                        </div>
+                        <div class="menu-rule-item">
+                            <span class="rule-icon">&#9888;&#65039;</span>
+                            <span class="rule-text"><strong>Disguised Bombs</strong> trigger insults, speed-ups &amp; cool-downs</span>
+                        </div>
+                    </div>
 
-            <!-- Music Button -->
-            <button id="btn-music" class="hud-btn active" title="Toggle Music" aria-label="Toggle Music">
-                <svg id="svg-music" class="hud-icon" viewBox="0 0 24 24">
-                    <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
-                </svg>
-                <span>Music</span>
-            </button>
+                    <!-- Personal Best Record Display -->
+                    <div id="menu-pb-box" class="menu-pb-box" style="display:none;">
+                        <span class="menu-pb-label">PERSONAL BEST:</span>
+                        <span id="menu-pb-time" class="menu-pb-val">--:--</span>
+                        <span class="menu-pb-divider">&bull;</span>
+                        <span id="menu-pb-bombs" class="menu-pb-val">0 Bomb Hits</span>
+                    </div>
 
-            <!-- Stats Button -->
-            <button id="btn-stats" class="hud-btn" title="View Stats" aria-label="View Stats">
-                <svg class="hud-icon" viewBox="0 0 24 24">
-                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
-                </svg>
-                <span>Stats</span>
-            </button>
-
-            <!-- Fullscreen Button -->
-            <button id="btn-fullscreen" class="hud-btn" title="Fullscreen" aria-label="Fullscreen">
-                <svg class="hud-icon" viewBox="0 0 24 24">
-                    <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
-                </svg>
-            </button>
-        </div>
-    </header>
-
-    <!-- Red Screen Hurt Flash Overlay -->
-    <div id="hurt-overlay" class="hurt-overlay" aria-hidden="true"></div>
-
-    <!-- Main Game Canvas -->
-    <canvas id="game-canvas"></canvas>
-
-    <!-- Gameplay Tip -->
-    <div class="bottom-tip">
-        <span>3 Rows (9 or 12 Holes) | Yellow that turns RED instantly EXPLODES!</span>
-    </div>
-
-    <!-- Backdrop -->
-    <div id="modal-backdrop" class="modal-backdrop"></div>
-
-    <!-- Game Over Modal -->
-    <div id="gameover-modal" class="gameover-modal" role="dialog" aria-modal="true" aria-labelledby="go-title">
-        <div class="modal-header">
-            <h2 id="go-title" style="color: #ef4444;">GAME OVER!</h2>
-        </div>
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-label">Total Hits</div>
-                <div id="go-hits" class="stat-value">0</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Best Streak</div>
-                <div id="go-streak" class="stat-value">0</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Play Time</div>
-                <div id="go-time" class="stat-value">00:00</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Rage Dodges</div>
-                <div id="go-dodges" class="stat-value">0</div>
+                    <button id="btn-start-game" class="menu-pixel-start-btn" title="Start Game">
+                        <img id="btn-start-img" class="menu-pixel-start-img" src="" alt="START" />
+                    </button>
+                </div>
             </div>
         </div>
-        <button id="btn-restart" class="btn-restart">PLAY AGAIN (SPACE)</button>
-    </div>
 
-    <!-- Stats Modal -->
-    <div id="stats-modal" class="stats-modal" role="dialog" aria-modal="true" aria-labelledby="stats-title">
-        <div class="modal-header">
-            <h2 id="stats-title">ARCADE STATS</h2>
-            <button id="btn-close-stats" class="stats-close-btn">&times;</button>
-        </div>
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-label">Total Whacks</div>
-                <div id="stat-hits" class="stat-value">0</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Highest Streak</div>
-                <div id="stat-streak" class="stat-value">0</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Play Time</div>
-                <div id="stat-time" class="stat-value">00:00</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Total Misses</div>
-                <div id="stat-misses" class="stat-value">0</div>
+        <!-- Cool-Down Pop-Up Overlay (Every 2 Bomb Hits) -->
+        <div id="cooldown-modal" class="modal-overlay" role="dialog" aria-modal="true">
+            <img id="cooldown-bg" class="cooldown-fullscreen-glitch" src="" alt="Glitch" />
+            <div class="cooldown-card">
+                <div class="cooldown-header-row">
+                    <img id="cooldown-badge-img" class="cooldown-window-badge" src="" alt="Error" />
+                    <div class="cooldown-tag">&#9888;&#65039; SYSTEM ERROR &bull; COOL-DOWN</div>
+                </div>
+                <div class="reflection-box">
+                    <p id="cooldown-reflection-eng" class="reflection-line"></p>
+                    <p id="cooldown-reflection-urdu" class="reflection-line urdu-text"></p>
+                </div>
+                <div class="fact-divider"></div>
+                <div class="fact-box">
+                    <p id="cooldown-fact-eng" class="fact-line"></p>
+                    <p id="cooldown-fact-urdu" class="fact-line urdu-text"></p>
+                </div>
+                <div class="cooldown-penalty-notice">-3s Timeline Penalty</div>
+                <button id="btn-continue" class="btn-continue">Continue (-1s)</button>
             </div>
         </div>
-        <p style="font-size: 12px; color: var(--text-muted); text-align: center;">
-            Punch &bull; Slap &bull; 3 Lives &bull; Predictable Red Rage Pattern
-        </p>
+
+        <!-- Lose Sequence Overlay (Time's Up) -->
+        <div id="lose-modal" class="modal-overlay" role="dialog" aria-modal="true">
+            <div class="sequence-card">
+                <img id="lose-window-img" class="sequence-window-img" src="" alt="Error Window" />
+                <img id="lose-hero-img" class="sequence-hero-img" src="" alt="" />
+                <h2 id="lose-title" class="sequence-title red">TIME'S UP</h2>
+                <div class="sequence-line-box">
+                    <p id="lose-text-eng" class="sequence-text-main"></p>
+                    <p id="lose-text-urdu" class="sequence-text-urdu"></p>
+                </div>
+                <button id="btn-lose-next" class="btn-pixel-nav" style="display:none;" title="Next">
+                    <img id="btn-lose-next-img" class="btn-pixel-nav-img" src="" alt="Next" />
+                </button>
+                <button id="btn-lose-restart" class="btn-pixel-nav" style="display:none;" title="Play Again">
+                    <img id="btn-lose-restart-img" class="btn-pixel-nav-img" src="" alt="Play Again" />
+                </button>
+            </div>
+        </div>
+
+        <!-- Win Sequence Overlay (30 Hits: Mystery Box Opened) -->
+        <div id="win-modal" class="modal-overlay" role="dialog" aria-modal="true">
+            <div class="sequence-card">
+                <img id="win-window-img" class="sequence-window-img" src="" alt="High Score" />
+                <img id="win-hero-img" class="sequence-hero-img" src="" alt="Mystery Box" />
+                <h2 id="win-title" class="sequence-title">MYSTERY BOX</h2>
+                <div class="sequence-line-box">
+                    <p id="win-text-eng" class="sequence-text-main"></p>
+                    <p id="win-text-urdu" class="sequence-text-urdu"></p>
+                </div>
+                <!-- Personal Best High Score Board -->
+                <div id="win-pb-box" class="pb-summary-box" style="display:none;">
+                    <div class="pb-summary-title">PERSONAL BEST</div>
+                    <div class="pb-stats-row">
+                        <div>
+                            <div id="pb-time-val" class="pb-stat-val">0:00</div>
+                            <div class="pb-stat-lbl">Fastest Time</div>
+                        </div>
+                        <div>
+                            <div id="pb-bombs-val" class="pb-stat-val">0</div>
+                            <div class="pb-stat-lbl">Bomb Contacts</div>
+                        </div>
+                    </div>
+                </div>
+                <button id="btn-win-next" class="btn-pixel-nav" style="display:none;" title="Next">
+                    <img id="btn-win-next-img" class="btn-pixel-nav-img" src="" alt="Next" />
+                </button>
+                <button id="btn-win-restart" class="btn-pixel-nav" style="display:none;" title="Play Again">
+                    <img id="btn-win-restart-img" class="btn-pixel-nav-img" src="" alt="Play Again" />
+                </button>
+            </div>
+        </div>
+
+        <!-- Pause Modal -->
+        <div id="pause-modal" class="modal-overlay" role="dialog" aria-modal="true">
+            <div class="pause-card">
+                <h2 class="pause-title">GAME PAUSED</h2>
+                <button id="btn-resume" class="btn-pixel-nav" title="Resume">
+                    <img id="btn-resume-img" class="btn-pixel-nav-img" src="" alt="Resume" />
+                </button>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -417,8 +243,377 @@ $middleHtml = @'
 (function() {
     'use strict';
 
-    // --- Embedded Base64 Sprites & Background Assets ---
+    // --- Embedded Base64 Assets ---
     const ASSETS_DATA = 
+'@
+
+$uiWiring = @'
+    // --- Instantiate Game Engine ---
+    const game = new GameManager('game-canvas');
+    window.game = game;
+
+    // --- DOM Elements ---
+    const hudHitsVal = document.getElementById('hud-hits-val');
+    const hudHeartWrap = document.getElementById('hud-heart-wrap');
+    const hudTimerVal = document.getElementById('hud-timer-val');
+    const timerPenaltyBadge = document.getElementById('timer-penalty-badge');
+    const btnSoundToggle = document.getElementById('btn-sound-toggle');
+    const soundToggleText = document.getElementById('sound-toggle-text');
+    const btnPause = document.getElementById('btn-pause');
+    const speedFill = document.getElementById('speed-fill');
+    const progressFill = document.getElementById('progress-fill');
+    const progressText = document.getElementById('progress-text');
+    const mysteryIcon = document.getElementById('mystery-icon');
+    const hurtOverlay = document.getElementById('hurt-overlay');
+
+    const menuModal = document.getElementById('menu-modal');
+    const menuHeroImg = document.getElementById('menu-hero-img');
+    const btnStartGame = document.getElementById('btn-start-game');
+    const menuPbBox = document.getElementById('menu-pb-box');
+    const menuPbTime = document.getElementById('menu-pb-time');
+    const menuPbBombs = document.getElementById('menu-pb-bombs');
+
+    const cooldownModal = document.getElementById('cooldown-modal');
+    const cooldownBg = document.getElementById('cooldown-bg');
+    const cooldownRefEng = document.getElementById('cooldown-reflection-eng');
+    const cooldownRefUrdu = document.getElementById('cooldown-reflection-urdu');
+    const cooldownFactEng = document.getElementById('cooldown-fact-eng');
+    const cooldownFactUrdu = document.getElementById('cooldown-fact-urdu');
+    const btnContinue = document.getElementById('btn-continue');
+
+    const pauseModal = document.getElementById('pause-modal');
+    const btnResume = document.getElementById('btn-resume');
+
+    const loseModal = document.getElementById('lose-modal');
+    const loseHeroImg = document.getElementById('lose-hero-img');
+    const loseTitle = document.getElementById('lose-title');
+    const loseTextEng = document.getElementById('lose-text-eng');
+    const loseTextUrdu = document.getElementById('lose-text-urdu');
+    const btnLoseNext = document.getElementById('btn-lose-next');
+    const btnLoseRestart = document.getElementById('btn-lose-restart');
+
+    const winModal = document.getElementById('win-modal');
+    const winHeroImg = document.getElementById('win-hero-img');
+    const winTitle = document.getElementById('win-title');
+    const winTextEng = document.getElementById('win-text-eng');
+    const winTextUrdu = document.getElementById('win-text-urdu');
+    const winPbBox = document.getElementById('win-pb-box');
+    const pbTimeVal = document.getElementById('pb-time-val');
+    const pbBombsVal = document.getElementById('pb-bombs-val');
+    const btnWinNext = document.getElementById('btn-win-next');
+    const btnWinRestart = document.getElementById('btn-win-restart');
+
+    const hudHeartImg = document.getElementById('hud-heart-img');
+    const btnPauseImg = document.getElementById('btn-pause-img');
+    const btnSoundImg = document.getElementById('btn-sound-img');
+    const btnStartImg = document.getElementById('btn-start-img');
+    const cooldownBadgeImg = document.getElementById('cooldown-badge-img');
+    const loseWindowImg = document.getElementById('lose-window-img');
+    const btnLoseNextImg = document.getElementById('btn-lose-next-img');
+    const btnLoseRestartImg = document.getElementById('btn-lose-restart-img');
+    const winWindowImg = document.getElementById('win-window-img');
+    const btnWinNextImg = document.getElementById('btn-win-next-img');
+    const btnWinRestartImg = document.getElementById('btn-win-restart-img');
+    const btnResumeImg = document.getElementById('btn-resume-img');
+
+    // Populate icons and authentic UI button elements from ASSETS_DATA
+    if (typeof ASSETS_DATA !== 'undefined') {
+        if (hudHeartImg) hudHeartImg.src = ASSETS_DATA.healthBarFull || ASSETS_DATA.heartClean;
+        if (btnPauseImg) btnPauseImg.src = ASSETS_DATA.btnGreenPause;
+        if (btnSoundImg) btnSoundImg.src = ASSETS_DATA.btnCirclePlay;
+        if (btnStartImg) btnStartImg.src = ASSETS_DATA.btnGreenStart;
+        if (cooldownBg) cooldownBg.src = ASSETS_DATA.coolDownBg;
+        if (cooldownBadgeImg) cooldownBadgeImg.src = ASSETS_DATA.windowErrorPink;
+        if (menuHeroImg && ASSETS_DATA.homeScreen) menuHeroImg.src = ASSETS_DATA.homeScreen;
+        if (mysteryIcon && ASSETS_DATA.mysteryClosed) mysteryIcon.src = ASSETS_DATA.mysteryClosed;
+        if (loseWindowImg) loseWindowImg.src = ASSETS_DATA.windowErrorPink;
+        if (btnLoseNextImg) btnLoseNextImg.src = ASSETS_DATA.btnGreenNext;
+        if (btnLoseRestartImg) btnLoseRestartImg.src = ASSETS_DATA.btnGreenStart;
+        if (winWindowImg) winWindowImg.src = ASSETS_DATA.windowHighScore;
+        if (btnWinNextImg) btnWinNextImg.src = ASSETS_DATA.btnGreenNext;
+        if (btnWinRestartImg) btnWinRestartImg.src = ASSETS_DATA.btnGreenStart;
+        if (btnResumeImg) btnResumeImg.src = ASSETS_DATA.btnGreenStart;
+    }
+
+    // Helper: format MM:SS
+    function formatTime(seconds) {
+        const s = Math.max(0, Math.ceil(seconds));
+        const mins = Math.floor(s / 60);
+        const secs = s % 60;
+        return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+    }
+
+    // Bilingual text helper with automatic Bidi / script detection
+    function setBilingualText(elemTop, elemBottom, line) {
+        if (!line) {
+            if (elemTop) elemTop.textContent = '';
+            if (elemBottom) elemBottom.textContent = '';
+            return;
+        }
+        const parts = line.split(' / ');
+        const top = parts[0] || '';
+        const bottom = parts[1] || '';
+
+        if (elemTop) elemTop.textContent = top;
+        if (elemBottom) {
+            elemBottom.textContent = bottom;
+            // Check if bottom contains Arabic / Urdu script (U+0600 - U+06FF)
+            const isUrdu = /[\u0600-\u06FF]/.test(bottom);
+            if (isUrdu) {
+                elemBottom.classList.add('urdu-font');
+                elemBottom.classList.remove('latin-font');
+                elemBottom.setAttribute('dir', 'rtl');
+            } else {
+                elemBottom.classList.remove('urdu-font');
+                elemBottom.classList.add('latin-font');
+                elemBottom.setAttribute('dir', 'ltr');
+            }
+        }
+    }
+
+    // Update Menu Personal Best Display
+    function updateMenuPB() {
+        try {
+            const raw = localStorage.getItem('mazaaq_tha_best_run');
+            if (raw) {
+                const pb = JSON.parse(raw);
+                if (menuPbBox && menuPbTime && menuPbBombs) {
+                    menuPbTime.textContent = formatTime(pb.timeTaken);
+                    menuPbBombs.textContent = `${pb.bombHits} Bomb Contact${pb.bombHits === 1 ? '' : 's'}`;
+                    menuPbBox.style.display = 'flex';
+                }
+            }
+        } catch(e) {}
+    }
+    updateMenuPB();
+
+    // Menu Start Button
+    if (btnStartGame) {
+        btnStartGame.addEventListener('click', () => {
+            if (menuModal) menuModal.classList.remove('show');
+            game.startGame();
+        });
+    }
+
+    // UI Event Listeners from GameManager
+    window.addEventListener('timertick', (e) => {
+        const { timeRemaining, speedPercent } = e.detail;
+        if (hudTimerVal) hudTimerVal.textContent = formatTime(timeRemaining);
+        if (speedFill && typeof speedPercent !== 'undefined') {
+            speedFill.style.width = `${speedPercent}%`;
+        }
+    });
+
+    window.addEventListener('normalhit', (e) => {
+        const { normalHits, targetHits, progress } = e.detail;
+        if (hudHitsVal) hudHitsVal.textContent = `Hits: ${normalHits}`;
+        if (progressFill) progressFill.style.width = `${Math.round(progress * 100)}%`;
+        if (progressText) progressText.textContent = `${normalHits} / ${targetHits}`;
+    });
+
+    window.addEventListener('bombhit', (e) => {
+        const { heartCrackLevel, speedPercent } = e.detail;
+        if (hudHeartWrap) {
+            hudHeartWrap.className = `hud-heart-wrap crack-${heartCrackLevel}`;
+        }
+        if (hudHeartImg && typeof ASSETS_DATA !== 'undefined') {
+            if (heartCrackLevel === 1) hudHeartImg.src = ASSETS_DATA.healthBarHalf || ASSETS_DATA.heartCrack1;
+            else if (heartCrackLevel >= 2) hudHeartImg.src = ASSETS_DATA.healthBarEmpty || ASSETS_DATA.heartCrack2;
+            else hudHeartImg.src = ASSETS_DATA.healthBarFull || ASSETS_DATA.heartClean;
+        }
+        if (speedFill) {
+            speedFill.style.width = `${speedPercent}%`;
+        }
+        if (hurtOverlay) {
+            hurtOverlay.classList.remove('flash');
+            void hurtOverlay.offsetWidth;
+            hurtOverlay.classList.add('flash');
+            setTimeout(() => hurtOverlay.classList.remove('flash'), 220);
+        }
+    });
+
+    window.addEventListener('timerpenalty', (e) => {
+        const { text } = e.detail;
+        if (timerPenaltyBadge) {
+            timerPenaltyBadge.textContent = text;
+            timerPenaltyBadge.classList.remove('pulse');
+            void timerPenaltyBadge.offsetWidth;
+            timerPenaltyBadge.classList.add('pulse');
+            setTimeout(() => timerPenaltyBadge.classList.remove('pulse'), 900);
+        }
+    });
+
+    // Cool-Down Pop-Up
+    window.addEventListener('cooldownshow', (e) => {
+        const { reflection, fact } = e.detail;
+        setBilingualText(cooldownRefEng, cooldownRefUrdu, reflection);
+        setBilingualText(cooldownFactEng, cooldownFactUrdu, fact);
+        cooldownModal.classList.add('show');
+    });
+
+    window.addEventListener('cooldownhide', () => {
+        cooldownModal.classList.remove('show');
+    });
+
+    // Skip cool-down early with Continue button (costs only -1s)
+    btnContinue.addEventListener('click', () => {
+        game.skipCoolDownEarly();
+    });
+
+    // Pause Controls
+    btnPause.addEventListener('click', () => {
+        game.togglePause();
+    });
+
+    btnResume.addEventListener('click', () => {
+        game.togglePause();
+    });
+
+    window.addEventListener('pausechange', (e) => {
+        const { isPaused } = e.detail;
+        if (pauseModal) {
+            if (isPaused) pauseModal.classList.add('show');
+            else pauseModal.classList.remove('show');
+        }
+    });
+
+    // Sound Toggle
+    if (btnSoundToggle) {
+        btnSoundToggle.addEventListener('click', () => {
+            const active = game.toggleAudio();
+            btnSoundToggle.classList.toggle('active', active);
+            if (btnSoundImg && typeof ASSETS_DATA !== 'undefined') {
+                btnSoundImg.src = active ? ASSETS_DATA.btnCirclePlay : ASSETS_DATA.btnCircleClose;
+            }
+        });
+    }
+
+    // Lose Sequence Flow
+    let loseStep = 0;
+
+    function advanceLoseSequence() {
+        loseStep++;
+        const lines = CONFIG.LOSE_DIALOGUE_LINES;
+
+        if (loseStep < lines.length) {
+            setBilingualText(loseTextEng, loseTextUrdu, lines[loseStep]);
+            btnLoseNext.style.display = 'inline-block';
+            btnLoseRestart.style.display = 'none';
+        } else if (loseStep === lines.length) {
+            // Final insult
+            loseTextEng.textContent = CONFIG.FINAL_LOSE_INSULT;
+            loseTextUrdu.textContent = '';
+            btnLoseNext.style.display = 'inline-block';
+            btnLoseRestart.style.display = 'none';
+        } else if (loseStep === lines.length + 1) {
+            // Final reflection line
+            setBilingualText(loseTextEng, loseTextUrdu, CONFIG.FINAL_LOSE_REFLECTION);
+            btnLoseNext.style.display = 'inline-block';
+            btnLoseRestart.style.display = 'none';
+        } else {
+            // Last screen (Lose): Time's up | Pehle ruko, phir hanso. | Play Again
+            loseTitle.textContent = CONFIG.LOSE_LAST_HEADING;
+            setBilingualText(loseTextEng, loseTextUrdu, CONFIG.LOSE_LAST_LINE);
+            btnLoseNext.style.display = 'none';
+            btnLoseRestart.style.display = 'inline-block';
+        }
+    }
+
+    window.addEventListener('gamelose', () => {
+        loseStep = 0;
+        if (loseHeroImg && typeof ASSETS_DATA !== 'undefined') {
+            loseHeroImg.src = ASSETS_DATA.zine;
+        }
+        loseTitle.textContent = "TIME'S UP";
+        setBilingualText(loseTextEng, loseTextUrdu, CONFIG.LOSE_DIALOGUE_LINES[0]);
+        btnLoseNext.style.display = 'inline-block';
+        btnLoseRestart.style.display = 'none';
+        loseModal.classList.add('show');
+    });
+
+    btnLoseNext.addEventListener('click', () => {
+        advanceLoseSequence();
+    });
+
+    btnLoseRestart.addEventListener('click', () => {
+        loseModal.classList.remove('show');
+        game.restartGame();
+    });
+
+    // Win Sequence Flow
+    let winStep = 0;
+
+    function advanceWinSequence(bestRun) {
+        winStep++;
+        const lines = CONFIG.WIN_BOX_LINES;
+
+        if (winStep < lines.length) {
+            setBilingualText(winTextEng, winTextUrdu, lines[winStep]);
+            btnWinNext.style.display = 'inline-block';
+            btnWinRestart.style.display = 'none';
+            winPbBox.style.display = 'none';
+            if (winWindowImg) winWindowImg.style.display = 'none';
+        } else {
+            // Final screen (Win): Is it funny, or is it fair? + Personal Best (only if new record) + Play Again
+            winTitle.textContent = "REFLECT";
+            setBilingualText(winTextEng, winTextUrdu, CONFIG.WIN_LAST_LINE);
+
+            if (bestRun && bestRun.isNewRecord) {
+                pbTimeVal.textContent = formatTime(bestRun.timeTaken);
+                pbBombsVal.textContent = bestRun.bombHits;
+                winPbBox.style.display = 'block';
+                if (winWindowImg) winWindowImg.style.display = 'block';
+            } else {
+                winPbBox.style.display = 'none';
+                if (winWindowImg) winWindowImg.style.display = 'none';
+            }
+
+            btnWinNext.style.display = 'none';
+            btnWinRestart.style.display = 'inline-block';
+        }
+    }
+
+    window.addEventListener('gamewin', (e) => {
+        winStep = 0;
+        const { bestRun } = e.detail;
+        if (winHeroImg && typeof ASSETS_DATA !== 'undefined') {
+            winHeroImg.src = ASSETS_DATA.mysteryOpen;
+        }
+        if (winWindowImg) winWindowImg.style.display = 'none';
+        winTitle.textContent = "MYSTERY BOX OPENED!";
+        setBilingualText(winTextEng, winTextUrdu, CONFIG.WIN_BOX_LINES[0]);
+        btnWinNext.style.display = 'inline-block';
+        btnWinRestart.style.display = 'none';
+        winPbBox.style.display = 'none';
+        winModal.classList.add('show');
+
+        btnWinNext.onclick = () => advanceWinSequence(bestRun);
+    });
+
+    btnWinRestart.addEventListener('click', () => {
+        winModal.classList.remove('show');
+        game.restartGame();
+    });
+
+    window.addEventListener('gamerestart', (e) => {
+        const { targetHits } = e.detail;
+        if (hudHitsVal) hudHitsVal.textContent = 'Hits: 0';
+        if (progressFill) progressFill.style.width = '0%';
+        if (progressText) progressText.textContent = `0 / ${targetHits}`;
+        if (speedFill) speedFill.style.width = '0%';
+        if (hudHeartWrap) hudHeartWrap.className = 'hud-heart-wrap';
+        if (hudHeartImg && typeof ASSETS_DATA !== 'undefined') hudHeartImg.src = ASSETS_DATA.healthBarFull || ASSETS_DATA.heartClean;
+        if (hudTimerVal) hudTimerVal.textContent = '1:30';
+        if (timerPenaltyBadge) timerPenaltyBadge.classList.remove('pulse');
+
+        if (menuModal) menuModal.classList.remove('show');
+        cooldownModal.classList.remove('show');
+        loseModal.classList.remove('show');
+        winModal.classList.remove('show');
+        pauseModal.classList.remove('show');
+
+        updateMenuPB();
+    });
 '@
 
 $footerHtml = @'
@@ -430,7 +625,7 @@ $footerHtml = @'
 
 $fullHtml = $headerHtml + $styleCss + $middleHtml + $assetsJson + ";" + $combinedModules + $uiWiring + $footerHtml
 
-[System.IO.File]::WriteAllText((Join-Path (Get-Location) "index.html"), $fullHtml, [System.Text.UTF8Encoding]::new($false))
-[System.IO.File]::WriteAllText((Join-Path (Get-Location) "whack-a-mole-standalone.html"), $fullHtml, [System.Text.UTF8Encoding]::new($false))
+[System.IO.File]::WriteAllText((Join-Path (Get-Location) "index.html"), $fullHtml, $utf8)
+[System.IO.File]::WriteAllText((Join-Path (Get-Location) "whack-a-mole-standalone.html"), $fullHtml, $utf8)
 
-Write-Output "Successfully built index.html and whack-a-mole-standalone.html. File size: $((Get-Item index.html).Length)"
+Write-Output "Successfully built index.html and whack-a-mole-standalone.html. File size: $((Get-Item index.html).Length) bytes"

@@ -1,32 +1,40 @@
-// src/ParallaxManager.js - Seamless Procedural Scrolling Background & 18-Hole Coordinate Mapping
-export const TILE_NATIVE_WIDTH = 1024;
-export const TILE_NATIVE_HEIGHT = 1200;
+// src/ParallaxManager.js - Seamless Procedural Scrolling Background & Exact 13-Hole Ring Coordinate Mapping
+export const TILE_NATIVE_WIDTH = 1080;
+export const TILE_NATIVE_HEIGHT = 1920;
 
 export const NATIVE_HOLES = [
-    // Row 0 (Y = 100)
-    { col: 0, row: 0, x: 205, y: 100, rx: 90, ry: 41, depthScale: 1.0 },
-    { col: 1, row: 0, x: 512, y: 100, rx: 90, ry: 41, depthScale: 1.0 },
-    { col: 2, row: 0, x: 819, y: 100, rx: 90, ry: 41, depthScale: 1.0 },
-    // Row 1 (Y = 300)
-    { col: 0, row: 1, x: 205, y: 300, rx: 90, ry: 41, depthScale: 1.0 },
-    { col: 1, row: 1, x: 512, y: 300, rx: 90, ry: 41, depthScale: 1.0 },
-    { col: 2, row: 1, x: 819, y: 300, rx: 90, ry: 41, depthScale: 1.0 },
-    // Row 2 (Y = 500)
-    { col: 0, row: 2, x: 205, y: 500, rx: 90, ry: 41, depthScale: 1.0 },
-    { col: 1, row: 2, x: 512, y: 500, rx: 90, ry: 41, depthScale: 1.0 },
-    { col: 2, row: 2, x: 819, y: 500, rx: 90, ry: 41, depthScale: 1.0 },
-    // Row 3 (Y = 700)
-    { col: 0, row: 3, x: 205, y: 700, rx: 90, ry: 41, depthScale: 1.0 },
-    { col: 1, row: 3, x: 512, y: 700, rx: 90, ry: 41, depthScale: 1.0 },
-    { col: 2, row: 3, x: 819, y: 700, rx: 90, ry: 41, depthScale: 1.0 },
-    // Row 4 (Y = 900)
-    { col: 0, row: 4, x: 205, y: 900, rx: 90, ry: 41, depthScale: 1.0 },
-    { col: 1, row: 4, x: 512, y: 900, rx: 90, ry: 41, depthScale: 1.0 },
-    { col: 2, row: 4, x: 819, y: 900, rx: 90, ry: 41, depthScale: 1.0 },
-    // Row 5 (Y = 1100)
-    { col: 0, row: 5, x: 205, y: 1100, rx: 90, ry: 41, depthScale: 1.0 },
-    { col: 1, row: 5, x: 512, y: 1100, rx: 90, ry: 41, depthScale: 1.0 },
-    { col: 2, row: 5, x: 819, y: 1100, rx: 90, ry: 41, depthScale: 1.0 }
+    // Exact hole coordinates mapped directly to the pink and lime green rings in the poster art
+    // Row 0 (Y ≈ 153)
+    { col: 0, row: 0, x: 282, y: 151, rx: 126, ry: 60, depthScale: 1.0 },
+    { col: 2, row: 0, x: 819, y: 156, rx: 126, ry: 60, depthScale: 1.0 },
+
+    // Row 1 (Y ≈ 336 - Center)
+    { col: 1, row: 1, x: 551, y: 336, rx: 126, ry: 60, depthScale: 1.0 },
+
+    // Row 2 (Y ≈ 552)
+    { col: 0, row: 2, x: 306, y: 548, rx: 126, ry: 60, depthScale: 1.0 },
+    { col: 2, row: 2, x: 808, y: 557, rx: 126, ry: 60, depthScale: 1.0 },
+
+    // Row 3 (Y ≈ 759 - Center)
+    { col: 1, row: 3, x: 551, y: 759, rx: 126, ry: 60, depthScale: 1.0 },
+
+    // Row 4 (Y ≈ 947)
+    { col: 0, row: 4, x: 294, y: 947, rx: 126, ry: 60, depthScale: 1.0 },
+    { col: 2, row: 4, x: 808, y: 947, rx: 126, ry: 60, depthScale: 1.0 },
+
+    // Row 5 (Y ≈ 1146 - Center)
+    { col: 1, row: 5, x: 547, y: 1146, rx: 126, ry: 60, depthScale: 1.0 },
+
+    // Row 6 (Y ≈ 1346)
+    { col: 0, row: 6, x: 301, y: 1344, rx: 126, ry: 60, depthScale: 1.0 },
+    { col: 2, row: 6, x: 809, y: 1348, rx: 126, ry: 60, depthScale: 1.0 },
+
+    // Row 7 (Y ≈ 1564 - Center)
+    { col: 1, row: 7, x: 554, y: 1564, rx: 126, ry: 60, depthScale: 1.0 },
+
+    // Row 8 (Y ≈ 1750)
+    { col: 0, row: 8, x: 273, y: 1744, rx: 126, ry: 60, depthScale: 1.0 },
+    { col: 2, row: 8, x: 804, y: 1754, rx: 126, ry: 60, depthScale: 1.0 }
 ];
 
 export class ParallaxManager {
@@ -34,23 +42,24 @@ export class ParallaxManager {
         this.config = config;
         this.bgImg = null;
 
-        // Procedural scrolling parameters
-        this.scrollSpeed = config.SCROLL_SPEED || 55; // pixels per second downward scroll
+        // Procedural infinite scrolling parameters
+        this.scrollSpeed = config.SCROLL_SPEED || 60; // Base downward conveyor speed in px/s
+        this.speedMultiplier = 1.0;
         this.onTileRecycled = null;
 
-        // Render bounds for Background_Seamless.jpg (1024 x 1200 native)
+        // Render bounds for 1080 x 1920 Kiosk standard
         this.bounds = {
-            renderTileW: 1024,
-            renderTileH: 1200,
+            renderTileW: 1080,
+            renderTileH: 1920,
             offsetX: 0,
             scale: 1.0
         };
 
-        // 3 continuous repeating tiles (conveyor belt)
+        // 3 continuous repeating tiles (infinite conveyor belt)
         this.tiles = [
-            { y: -1200 },
+            { y: -1920 },
             { y: 0 },
-            { y: 1200 }
+            { y: 1920 }
         ];
 
         this.loadAssets();
@@ -58,20 +67,29 @@ export class ParallaxManager {
 
     loadAssets() {
         const img = new Image();
-        img.src = 'assets/BG_NEW/Background_Seamless.jpg';
+        img.src = 'assets/normalized/poster_bg_1080.png';
         img.onload = () => {
             this.bgImg = img;
             this.calculateBounds();
         };
     }
 
+    setSpeedMultiplier(factor) {
+        this.speedMultiplier = Math.max(1.0, factor);
+    }
+
     resetTiles() {
-        const rh = this.bounds.renderTileH || 1200;
+        const rh = this.bounds.renderTileH || 1920;
         this.tiles = [
             { y: -rh },
             { y: 0 },
             { y: rh }
         ];
+    }
+
+    reset() {
+        this.resetTiles();
+        this.speedMultiplier = 1.0;
     }
 
     resize(config) {
@@ -80,28 +98,23 @@ export class ParallaxManager {
     }
 
     calculateBounds() {
-        const w = this.config.VIEWPORT_WIDTH || 1200;
-        const h = this.config.VIEWPORT_HEIGHT || 800;
-        const nativeW = TILE_NATIVE_WIDTH;   // 1024
-        const nativeH = TILE_NATIVE_HEIGHT;  // 1200
+        const w = this.config.VIEWPORT_WIDTH || 1080;
+        const h = this.config.VIEWPORT_HEIGHT || 1920;
+        const nativeW = TILE_NATIVE_WIDTH;   // 1080
+        const nativeH = TILE_NATIVE_HEIGHT;  // 1920
         const isPortrait = h > w;
         let scale;
 
         if (isPortrait) {
-            // In portrait, board fills screen width
             scale = w / nativeW;
         } else {
-            // In landscape, preserve natural aspect ratio with ZERO stretching
-            // Frame board comfortably centered as a deluxe arcade table
             const targetW = Math.min(w * 0.85, Math.max(760, h * 0.95));
             scale = targetW / nativeW;
-            scale = Math.max(0.70, Math.min(scale, 1.20));
+            scale = Math.max(0.60, Math.min(scale, 1.20));
         }
 
         const renderTileW = nativeW * scale;
         const renderTileH = nativeH * scale;
-
-        // Center horizontally
         const offsetX = Math.round((w - renderTileW) * 0.5);
 
         const oldRh = this.bounds.renderTileH;
@@ -117,7 +130,6 @@ export class ParallaxManager {
         }
     }
 
-    // Returns the current screen Y of tile repetition k
     getTileOffsetY(tileIndex) {
         if (this.tiles && this.tiles[tileIndex]) {
             return this.tiles[tileIndex].y;
@@ -130,12 +142,13 @@ export class ParallaxManager {
         const H = this.config.VIEWPORT_HEIGHT;
         if (rh <= 0) return;
 
-        // Move all 3 conveyor tiles downward continuously
+        // Move all 3 conveyor tiles downward continuously (speed scales with game speed!)
+        const speed = this.scrollSpeed * this.speedMultiplier;
         for (let i = 0; i < this.tiles.length; i++) {
-            this.tiles[i].y += this.scrollSpeed * dt;
+            this.tiles[i].y += speed * dt;
         }
 
-        // When a tile completely scrolls past the bottom (its top edge >= H + 30):
+        // When a tile completely scrolls past the bottom (top edge >= H + 30):
         for (let i = 0; i < this.tiles.length; i++) {
             if (this.tiles[i].y >= H + 30) {
                 // Find top-most tile among all tiles
@@ -143,7 +156,7 @@ export class ParallaxManager {
                 for (let j = 0; j < this.tiles.length; j++) {
                     if (this.tiles[j].y < minY) minY = this.tiles[j].y;
                 }
-                // Wrap cleanly to the top without gap
+                // Wrap cleanly to the top without any gap
                 this.tiles[i].y = minY - rh;
 
                 if (this.onTileRecycled) {
@@ -157,15 +170,14 @@ export class ParallaxManager {
         const w = this.config.VIEWPORT_WIDTH;
         const h = this.config.VIEWPORT_HEIGHT;
         const b = this.bounds;
-        const rw = b.renderTileW;
-        const rh = b.renderTileH;
-        const ox = b.offsetX;
+        const rw = b.renderTileW || w;
+        const rh = b.renderTileH || h;
+        const ox = b.offsetX || 0;
 
         ctx.save();
 
-        // 1. Sleek Arcade Cabinet Flanks on left & right if widescreen
+        // 1. Arcade Cabinet Flanks on left & right in landscape
         if (ox > 0) {
-            // Left flank gradient
             const leftGrad = ctx.createLinearGradient(0, 0, ox, 0);
             leftGrad.addColorStop(0, '#060911');
             leftGrad.addColorStop(0.7, '#0b101c');
@@ -173,7 +185,6 @@ export class ParallaxManager {
             ctx.fillStyle = leftGrad;
             ctx.fillRect(0, 0, ox, h);
 
-            // Right flank gradient
             const rightGrad = ctx.createLinearGradient(ox + rw, 0, w, 0);
             rightGrad.addColorStop(0, '#111827');
             rightGrad.addColorStop(0.3, '#0b101c');
@@ -181,7 +192,7 @@ export class ParallaxManager {
             ctx.fillStyle = rightGrad;
             ctx.fillRect(ox + rw, 0, w - (ox + rw), h);
 
-            // Playfield 3D heavy drop shadow onto flanks
+            // Drop shadow onto flanks
             ctx.save();
             ctx.shadowColor = 'rgba(0, 0, 0, 0.88)';
             ctx.shadowBlur = 35;
@@ -190,7 +201,7 @@ export class ParallaxManager {
             ctx.restore();
         }
 
-        // 2. Draw seamlessly scrolling playfield tiles
+        // 2. Draw seamlessly scrolling playfield tiles (Infinite Scroll!)
         if (this.bgImg && this.bgImg.complete && this.bgImg.naturalWidth > 0 && rh > 0) {
             for (let i = 0; i < this.tiles.length; i++) {
                 const ty = this.tiles[i].y;
@@ -199,14 +210,18 @@ export class ParallaxManager {
                 }
             }
         } else {
-            ctx.fillStyle = '#e6e1da';
+            // Warm poster orange gradient fallback
+            const grad = ctx.createLinearGradient(0, 0, 0, h);
+            grad.addColorStop(0, '#ee7116');
+            grad.addColorStop(0.5, '#e56408');
+            grad.addColorStop(1, '#cb4700');
+            ctx.fillStyle = grad;
             ctx.fillRect(ox, 0, rw, h);
         }
 
-        // 3. Arcade Bezel Neon Edge Accent Lines
+        // 3. Arcade bezel neon accent lines for widescreen
         if (ox > 0) {
             ctx.save();
-            // Left neon strip
             ctx.strokeStyle = 'rgba(245, 158, 11, 0.45)';
             ctx.lineWidth = 2.5;
             ctx.shadowColor = '#f59e0b';
@@ -216,21 +231,9 @@ export class ParallaxManager {
             ctx.lineTo(ox, h);
             ctx.stroke();
 
-            // Right neon strip
             ctx.beginPath();
             ctx.moveTo(ox + rw, 0);
             ctx.lineTo(ox + rw, h);
-            ctx.stroke();
-
-            // Inner crisp specular white line
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
-            ctx.lineWidth = 1;
-            ctx.shadowBlur = 0;
-            ctx.beginPath();
-            ctx.moveTo(ox + 1, 0);
-            ctx.lineTo(ox + 1, h);
-            ctx.moveTo(ox + rw - 1, 0);
-            ctx.lineTo(ox + rw - 1, h);
             ctx.stroke();
             ctx.restore();
         }
@@ -238,7 +241,7 @@ export class ParallaxManager {
         // 4. Subtle ambient lighting vignette
         const vignette = ctx.createRadialGradient(w * 0.5, h * 0.52, h * 0.38, w * 0.5, h * 0.52, Math.hypot(w, h) * 0.62);
         vignette.addColorStop(0, 'rgba(0, 0, 0, 0)');
-        vignette.addColorStop(1, 'rgba(0, 0, 0, 0.38)');
+        vignette.addColorStop(1, 'rgba(0, 0, 0, 0.25)');
         ctx.fillStyle = vignette;
         ctx.fillRect(0, 0, w, h);
 

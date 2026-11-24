@@ -16,6 +16,14 @@ export class CameraShake {
         this.dirY = dirY;
     }
 
+    reset() {
+        this.trauma = 0;
+        this.offsetX = 0;
+        this.offsetY = 0;
+        this.angle = 0;
+        this.time = 0;
+    }
+
     update(dt) {
         this.time += dt * 35; // Shake frequency
 
