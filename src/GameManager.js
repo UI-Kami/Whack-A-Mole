@@ -47,6 +47,7 @@ export class GameManager {
             yellow_peek: null,
             yellow_push: null,
             yellow_idle: null,
+            yellow_retract: null,
             yellow_hit: null,
             red_peek: null,
             red_push: null,
@@ -137,11 +138,12 @@ export class GameManager {
         });
 
         if (typeof ASSETS_DATA !== 'undefined' && ASSETS_DATA) {
-            this.assets.yellow_peek = await loadImg(ASSETS_DATA.yellow_peek);
-            this.assets.yellow_push = await loadImg(ASSETS_DATA.yellow_push);
-            this.assets.yellow_idle = await loadImg(ASSETS_DATA.yellow_idle);
-            this.assets.yellow_hit  = await loadImg(ASSETS_DATA.yellow_hit);
-            this.assets.yellow      = await loadImg(ASSETS_DATA.yellow);
+            this.assets.yellow_peek    = await loadImg(ASSETS_DATA.yellow_peek);
+            this.assets.yellow_push    = await loadImg(ASSETS_DATA.yellow_push || ASSETS_DATA.yellow_idle);
+            this.assets.yellow_idle    = await loadImg(ASSETS_DATA.yellow_idle);
+            this.assets.yellow_retract = await loadImg(ASSETS_DATA.yellow_retract || ASSETS_DATA.yellow_hit);
+            this.assets.yellow_hit     = await loadImg(ASSETS_DATA.yellow_hit);
+            this.assets.yellow         = await loadImg(ASSETS_DATA.yellow);
 
             this.assets.red_peek    = await loadImg(ASSETS_DATA.red_peek);
             this.assets.red_push    = await loadImg(ASSETS_DATA.red_push);
@@ -165,11 +167,12 @@ export class GameManager {
             this.assets.bgImg       = await loadImg(ASSETS_DATA.bg);
         } else {
             // Direct file fallbacks
-            this.assets.yellow_peek = await loadImg('assets/normalized/lime_peek.png');
-            this.assets.yellow_push = await loadImg('assets/normalized/lime_push.png');
-            this.assets.yellow_idle = await loadImg('assets/normalized/lime_idle.png');
-            this.assets.yellow_hit  = await loadImg('assets/normalized/lime_hit.png');
-            this.assets.yellow      = await loadImg('assets/normalized/lime_idle.png');
+            this.assets.yellow_peek    = await loadImg('assets/normalized/lime_peek.png');
+            this.assets.yellow_push    = await loadImg('assets/normalized/lime_hit.png');
+            this.assets.yellow_idle    = await loadImg('assets/normalized/lime_hit.png');
+            this.assets.yellow_retract = await loadImg('assets/normalized/lime_idle.png');
+            this.assets.yellow_hit     = await loadImg('assets/normalized/lime_idle.png');
+            this.assets.yellow         = await loadImg('assets/normalized/lime_hit.png');
 
             this.assets.red_peek    = await loadImg('assets/normalized/red_peek.png');
             this.assets.red_push    = await loadImg('assets/normalized/red_push.png');
@@ -456,7 +459,7 @@ export class GameManager {
     gameLoop(now) {
         if (!this.isRunning) return;
 
-        const dt = Math.min((now - this.lastTime) / 1000, 0.1);
+        const dt = Math.min(Math.max(0, (now - this.lastTime) / 1000), 0.05);
         this.lastTime = now;
 
         if (this.isStarted && !this.isPaused && !this.isGameOver) {
@@ -525,12 +528,15 @@ export class GameManager {
                 this.triggerLoseSequence();
             }
 
-            // Update Subsystems (simDt drives cinematic slow-motion during bomb hits!)
-            this.parallaxManager.update(simDt);
-            this.moleSpawner.update(simDt, elapsed);
-            this.hammer.update(simDt);
-            this.vfxManager.update(simDt);
-            this.cameraShake.update(simDt);
+            // Update Canvas Subsystems only when Cooldown Modal is NOT active so exploding red
+            // characters resume their post-explosion poppingIn retreat smoothly upon Continue!
+            if (!this.isCoolingDown) {
+                this.parallaxManager.update(simDt);
+                this.moleSpawner.update(simDt, elapsed);
+                this.hammer.update(simDt);
+                this.vfxManager.update(simDt);
+                this.cameraShake.update(simDt);
+            }
 
             // Update Live Timer and Speed UI continuously
             this.dispatchUIEvent('timertick', {
@@ -552,12 +558,16 @@ export class GameManager {
         ctx.save();
         this.cameraShake.apply(ctx);
 
-        // 1. Scrolling Ground Plane
+        // Layer 1: Hole Shadow, Back Rim & Black Interior (complete ground holes base)
         this.parallaxManager.drawGroundPlane(ctx);
 
-        // 2. Moles emerging out of holes (clipped by bottom hole rim)
-        for (let i = 0; i < this.moleSpawner.holes.length; i++) {
-            this.moleSpawner.holes[i].drawMole(ctx);
+        // Layer 2 & Layer 3: Character clipped to inner opening + Front colored rim overlay
+        if (this.moleSpawner.drawActiveHoles) {
+            this.moleSpawner.drawActiveHoles(ctx);
+        } else {
+            for (let i = 0; i < this.moleSpawner.holes.length; i++) {
+                this.moleSpawner.holes[i].drawMole(ctx, this.parallaxManager);
+            }
         }
 
         // 3. VFX (Particles, Insult Bubbles, Screen Flash)

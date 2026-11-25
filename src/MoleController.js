@@ -1,4 +1,4 @@
-// src/MoleController.js - Laughing Mouths & Disguised Bomb Character State Machine
+// src/MoleController.js - 3-Phase Hole Emergence, Rim-Aligned Hands & Disguised Bombs
 export const MOLE_STATE = {
     HIDDEN: 'HIDDEN',
     PEEKING: 'PEEKING',
@@ -21,29 +21,35 @@ export class MoleController {
         this.idleDuration = 1.4;
 
         // Visual animation properties
-        this.riseProgress = 0; // 0 = fully down, 1 = fully up
+        this.riseProgress = 0; // 0 = completely submerged inside hole, 1 = fully popped out on rim
         this.scaleX = 1;
         this.scaleY = 1;
         this.idleBobTimer = 0;
         this.isHit = false;
+        this.triggered = false;
+        this.transformedRed = false;
 
         // Bomb detonation timer
         this.detonationTimer = 0;
         this.onDetonate = null;
     }
 
-    spawn(isBomb = false, idleDuration = 1.4, speedFactor = 1.0) {
-        const speedScale = Math.min(2.2, Math.max(1.0, speedFactor));
+    spawn(isBomb = false, idleDuration = 1.15, speedFactor = 1.0) {
+        // Gentle speed influence so pop-in/out stay smooth (~0.38-0.45s rise, ~0.32-0.40s sink)
+        const animSpeed = Math.min(1.12, Math.max(1.0, 1.0 + (speedFactor - 1.0) * 0.14));
         this.isBomb = isBomb;
         this.state = MOLE_STATE.PEEKING;
-        this.timer = (this.config.MOLE_PEEK_TIME || 0.20) / speedScale;
-        this.riseProgress = 0.25;
+        this.phaseTotal = (this.config.MOLE_POP_DURATION || 0.42) / animSpeed;
+        this.timer = this.phaseTotal;
+        this.riseProgress = 0;
         this.isHit = false;
-        this.scaleX = 1;
-        this.scaleY = 1;
+        this.triggered = false;
+        this.transformedRed = false;
+        this.scaleX = 0.94;
+        this.scaleY = 1.06;
         this.idleBobTimer = Math.random() * Math.PI * 2;
         this.idleDuration = idleDuration;
-        this.speedFactor = speedScale;
+        this.speedFactor = animSpeed;
         this.detonationTimer = 0;
         this.onDetonate = null;
     }
@@ -52,6 +58,8 @@ export class MoleController {
         this.state = MOLE_STATE.HIDDEN;
         this.riseProgress = 0;
         this.isHit = false;
+        this.triggered = false;
+        this.transformedRed = false;
         this.detonationTimer = 0;
     }
 
@@ -59,6 +67,8 @@ export class MoleController {
         this.state = MOLE_STATE.HIDDEN;
         this.riseProgress = 0;
         this.isHit = false;
+        this.triggered = false;
+        this.transformedRed = false;
         this.isBomb = false;
         this.detonationTimer = 0;
         this.timer = 0;
@@ -68,17 +78,21 @@ export class MoleController {
     }
 
     onHit(hitType = 'punch') {
-        if (this.state === MOLE_STATE.HIDDEN || this.isHit || this.state === MOLE_STATE.TRANSFORMING_RED) {
+        if (this.state === MOLE_STATE.HIDDEN || this.isHit || this.triggered || this.state === MOLE_STATE.TRANSFORMING_RED) {
             return null;
         }
 
-        // Bomb hit sequence trigger
+        // Hidden Bomb hit: lock trigger, transform sprite set from green -> red,
+        // play exploding animation (~0.40s), then smoothly pop back in as red_sink.
         if (this.isBomb) {
             this.isHit = true;
+            this.triggered = true;
+            this.transformedRed = true;
             this.state = MOLE_STATE.TRANSFORMING_RED;
-            this.detonationTimer = 0.25;
+            this.detonationTimer = this.config.MOLE_RED_EXPLODE_TIME || 0.40;
+            this.riseProgress = 1.0;
             this.scaleX = 1.20;
-            this.scaleY = 0.85;
+            this.scaleY = 0.86;
 
             return {
                 success: true,
@@ -90,12 +104,14 @@ export class MoleController {
             };
         }
 
-        // Normal laughing mouth hit
+        // Normal green hit -> lock trigger, squash & cubic ease-in retreat as green
         this.isHit = true;
+        this.triggered = true;
         this.state = MOLE_STATE.HIT;
-        this.timer = this.config.MOLE_HIT_RETREAT_TIME || 0.20;
-        this.scaleX = 1.35;
-        this.scaleY = 0.55;
+        this.phaseTotal = this.config.MOLE_HIT_RETREAT_TIME || 0.34;
+        this.timer = this.phaseTotal;
+        this.scaleX = 1.18;
+        this.scaleY = 0.78;
 
         return {
             success: true,
@@ -110,37 +126,23 @@ export class MoleController {
     update(dt) {
         if (this.state === MOLE_STATE.HIDDEN) return;
 
-        this.idleBobTimer += dt * 6.0;
+        const clampedDt = Math.min(Math.max(0, dt), 0.05);
+        this.idleBobTimer += clampedDt * 5.2;
 
         switch (this.state) {
             case MOLE_STATE.PEEKING:
-                this.timer -= dt;
-                this.riseProgress = 0.25;
-                this.scaleX = 1.0 + Math.sin(this.idleBobTimer * 3) * 0.03;
-                this.scaleY = 1.0 - Math.sin(this.idleBobTimer * 3) * 0.03;
-                if (this.timer <= 0) {
-                    this.state = MOLE_STATE.EMERGING;
-                    this.timer = (this.config.MOLE_POP_DURATION || 0.24) / (this.speedFactor || 1);
-                }
-                break;
+            case MOLE_STATE.EMERGING: {
+                // Pop-Out (Rise) Phase (~0.38-0.45s): Continuous cubic ease-out (1 - (1 - t)^3)
+                this.timer -= clampedDt;
+                const popTotal = this.phaseTotal || ((this.config.MOLE_POP_DURATION || 0.42) / (this.speedFactor || 1));
+                const t = Math.max(0, Math.min(1.0, 1.0 - (this.timer / popTotal)));
+                const easeOut = 1.0 - Math.pow(1.0 - t, 3);
+                this.riseProgress = easeOut;
 
-            case MOLE_STATE.EMERGING:
-                this.timer -= dt;
-                const emergeTotal = (this.config.MOLE_POP_DURATION || 0.24) / (this.speedFactor || 1);
-                const p = Math.max(0, Math.min(1.0, 1 - (this.timer / emergeTotal)));
-
-                if (p < 0.25) {
-                    const sub = p / 0.25;
-                    this.riseProgress = 0.25 + 0.35 * sub;
-                    this.scaleX = 1.0 - 0.10 * Math.sin(sub * Math.PI);
-                    this.scaleY = 1.0 + 0.15 * Math.sin(sub * Math.PI);
-                } else {
-                    const sub = (p - 0.25) / 0.75;
-                    const ease = sub * (2 - sub);
-                    this.riseProgress = 0.60 + 0.40 * ease;
-                    this.scaleX = 1.0;
-                    this.scaleY = 1.0;
-                }
+                // Subtle vertical stretch rising out, settling cleanly to 1.0 as paws reach rim
+                const swell = Math.sin(t * Math.PI);
+                this.scaleX = 1.0 - 0.06 * swell;
+                this.scaleY = 1.0 + 0.09 * swell;
 
                 if (this.timer <= 0) {
                     this.state = MOLE_STATE.IDLE;
@@ -150,90 +152,112 @@ export class MoleController {
                     this.timer = this.idleDuration;
                 }
                 break;
+            }
 
-            case MOLE_STATE.IDLE:
-                this.timer -= dt;
-                // Gentle rhythmic laughing bob
-                this.scaleX = 1.0 + Math.sin(this.idleBobTimer * 2.5) * 0.04;
-                this.scaleY = 1.0 - Math.sin(this.idleBobTimer * 2.5) * 0.04;
-                this.riseProgress = 1.0 + Math.sin(this.idleBobTimer * 2.5) * 0.02;
+            case MOLE_STATE.IDLE: {
+                // Hold (Idle) Phase (~0.95-1.30s): Smooth breathing/bobbing at peak position
+                this.timer -= clampedDt;
+                const wave = Math.sin(this.idleBobTimer * 0.9);
+                this.scaleX = 1.0 + wave * 0.025;
+                this.scaleY = 1.0 - wave * 0.025;
+                this.riseProgress = 1.0;
 
                 if (this.timer <= 0) {
                     this.state = MOLE_STATE.DUCKING;
-                    this.timer = (this.config.MOLE_DUCK_DURATION || 0.18) / (this.speedFactor || 1);
+                    this.phaseTotal = (this.config.MOLE_DUCK_DURATION || 0.36) / (this.speedFactor || 1);
+                    this.timer = this.phaseTotal;
                 }
                 break;
+            }
 
             case MOLE_STATE.TRANSFORMING_RED:
-                this.detonationTimer -= dt;
-                this.scaleX = 1.10 + (Math.random() - 0.5) * 0.20;
-                this.scaleY = 1.10 + (Math.random() - 0.5) * 0.20;
+                this.detonationTimer -= clampedDt;
+                this.scaleX = 1.08 + (Math.random() - 0.5) * 0.14;
+                this.scaleY = 1.08 + (Math.random() - 0.5) * 0.14;
                 this.riseProgress = 1.0;
 
                 if (this.detonationTimer <= 0) {
+                    // Chain cleanly into poppingIn (DUCKING) using downward red_sink frame behind front rim!
                     const cb = this.onDetonate;
                     this.onDetonate = null;
-                    this.explode();
+                    this.state = MOLE_STATE.DUCKING;
+                    this.phaseTotal = this.config.MOLE_RED_RETREAT_TIME || 0.38;
+                    this.timer = this.phaseTotal;
+                    this.scaleX = 1.0;
+                    this.scaleY = 1.0;
+                    this.riseProgress = 1.0;
                     if (cb) cb();
                 }
                 break;
 
-            case MOLE_STATE.HIT:
-                this.timer -= dt;
-                const hitTotal = this.config.MOLE_HIT_RETREAT_TIME || 0.20;
-                const hitProg = 1 - Math.max(0, this.timer / hitTotal);
-                this.riseProgress = 0.85 * (1 - hitProg * hitProg);
-                this.scaleX = 1.35 - hitProg * 0.35;
-                this.scaleY = 0.55 + hitProg * 0.45;
+            case MOLE_STATE.HIT: {
+                // Pop-In Hit Retreat (~0.34s): Squash recover + cubic ease-in (t^3) downward
+                this.timer -= clampedDt;
+                const hitTotal = this.phaseTotal || (this.config.MOLE_HIT_RETREAT_TIME || 0.34);
+                const t = Math.max(0, Math.min(1.0, 1.0 - (this.timer / hitTotal)));
+                const easeIn = t * t * t;
+                this.riseProgress = Math.max(0, 1.0 - easeIn);
+                this.scaleX = 1.18 - t * 0.22;
+                this.scaleY = 0.78 + t * 0.24;
 
                 if (this.timer <= 0) {
                     this.state = MOLE_STATE.HIDDEN;
                     this.riseProgress = 0;
                     this.isHit = false;
+                    this.triggered = false;
+                    this.transformedRed = false;
                 }
                 break;
+            }
 
-            case MOLE_STATE.DUCKING:
-                this.timer -= dt;
-                const duckTotal = this.config.MOLE_DUCK_DURATION || 0.18;
-                const duckProg = Math.max(0, this.timer / duckTotal);
-                this.riseProgress = duckProg;
-                this.scaleX = 0.95;
-                this.scaleY = 1.05;
+            case MOLE_STATE.DUCKING: {
+                // Pop-In (Retreat) Phase (~0.32-0.40s): Switch to downward frame & cubic ease-in (t^3)
+                this.timer -= clampedDt;
+                const duckTotal = this.phaseTotal || ((this.config.MOLE_DUCK_DURATION || 0.36) / (this.speedFactor || 1));
+                const t = Math.max(0, Math.min(1.0, 1.0 - (this.timer / duckTotal)));
+                const easeIn = t * t * t;
+                this.riseProgress = Math.max(0, 1.0 - easeIn);
+
+                // Smoothly transition from IDLE scale toward gentle downward elongation (no jump!)
+                this.scaleX = 1.0 - 0.04 * easeIn;
+                this.scaleY = 1.0 + 0.05 * easeIn;
 
                 if (this.timer <= 0) {
                     this.state = MOLE_STATE.HIDDEN;
                     this.riseProgress = 0;
+                    this.isHit = false;
+                    this.triggered = false;
+                    this.transformedRed = false;
                 }
                 break;
+            }
         }
     }
 
     getSpriteFrame() {
-        // Disguised bomb: Look identical to normal laughing mouths until struck!
-        if (this.state === MOLE_STATE.TRANSFORMING_RED) {
-            return this.assets.red_idle || this.assets.red_push || this.assets.red;
+        // Post-Hit Exploding / Retreat Red State (ONLY when a hidden bomb has been struck!)
+        if (this.transformedRed) {
+            if (this.state === MOLE_STATE.TRANSFORMING_RED) {
+                return this.assets.red_push || this.assets.red_idle || this.assets.red;
+            }
+            if (this.state === MOLE_STATE.DUCKING || this.state === MOLE_STATE.HIT) {
+                return this.assets.red_sink || this.assets.red_peek;
+            }
+            return this.assets.red_push || this.assets.red_idle;
         }
 
-        // Normal mouth or disguised bomb while unhit
-        if (this.state === MOLE_STATE.HIT) {
-            return this.assets.yellow_hit || this.assets.yellow;
-        }
-        if (this.state === MOLE_STATE.PEEKING) {
-            return this.assets.yellow_peek || this.assets.yellow;
-        }
-        if (this.state === MOLE_STATE.EMERGING) {
-            return (this.riseProgress < 0.60) 
-                ? (this.assets.yellow_push || this.assets.yellow_peek || this.assets.yellow) 
+        // ALL Initial Emergence (poppingOut), Hold (IDLE), and Unhit Retreat (DUCKING)
+        // render strictly as GREEN characters — hidden bombs look identical until tapped!
+        if (this.state === MOLE_STATE.PEEKING || this.state === MOLE_STATE.EMERGING) {
+            return (this.riseProgress < 0.72)
+                ? (this.assets.yellow_peek || this.assets.yellow_idle)
                 : (this.assets.yellow_idle || this.assets.yellow);
         }
-        if (this.state === MOLE_STATE.DUCKING) {
-            return (this.riseProgress > 0.45) 
-                ? (this.assets.yellow_push || this.assets.yellow) 
-                : (this.assets.yellow_peek || this.assets.yellow);
+        if (this.state === MOLE_STATE.DUCKING || this.state === MOLE_STATE.HIT) {
+            return this.assets.yellow_retract || this.assets.yellow_hit || this.assets.yellow_idle;
         }
-        // IDLE
-        return this.assets.yellow_idle || this.assets.yellow;
+        // IDLE (Fully popped out)
+        return this.assets.yellow_idle || this.assets.yellow_push || this.assets.yellow;
     }
 
     draw(ctx, screenX, screenY, holeRadiusX, holeRadiusY) {
@@ -251,38 +275,56 @@ export class MoleController {
         const natH = sprite.naturalHeight;
         const aspect = natH / natW;
 
-        // Size character proportionally to fit snugly in hole
-        const charW = holeRadiusX * 2.20;
-        const charH = charW * aspect;
+        let charW, charH, anchorY;
 
-        let anchorY;
-        const bob = (this.state === MOLE_STATE.IDLE) ? Math.sin(this.idleBobTimer * 2.5) * 3 : 0;
-
-        if (this.state === MOLE_STATE.PEEKING) {
-            anchorY = screenY + (holeRadiusY * 0.12);
-        } else if (this.state === MOLE_STATE.EMERGING || this.state === MOLE_STATE.DUCKING) {
-            const offset = (1.0 - this.riseProgress) * (holeRadiusY * 1.5);
-            anchorY = screenY + (holeRadiusY * 0.06) - offset;
-        } else if (this.state === MOLE_STATE.HIT) {
-            anchorY = screenY - (holeRadiusY * 0.05);
+        if (isDetonating) {
+            // Furious red full-body burst with legs strictly for explosion reaction pop-up above hole
+            charW = holeRadiusX * 2.35;
+            charH = charW * aspect;
+            anchorY = screenY + holeRadiusY * 1.05;
+        } else if (sprite === this.assets.red_peek) {
+            // 981x744 clinging red sprite: round torso sits cleanly behind center lip while
+            // wide red paws align cleanly with left/right outer paw pockets on front rim.
+            charW = holeRadiusX * 2.52;
+            charH = charW * aspect;
+            const frontLipY = screenY + (holeRadiusY * 1.38);
+            const submergeDistance = charH * 0.88;
+            const downwardHideOffset = (1.0 - Math.min(1.0, Math.max(0.0, this.riseProgress))) * submergeDistance;
+            anchorY = frontLipY + downwardHideOffset;
+        } else if (sprite === this.assets.red_sink) {
+            // 524x679 downward-moving red sprite with vertical motion lines
+            charW = holeRadiusX * 2.24;
+            charH = charW * aspect;
+            const frontLipY = screenY + (holeRadiusY * 1.38);
+            const submergeDistance = charH * 0.90;
+            const downwardHideOffset = (1.0 - Math.min(1.0, Math.max(0.0, this.riseProgress))) * submergeDistance;
+            anchorY = frontLipY + downwardHideOffset;
         } else {
-            // IDLE / TRANSFORMING_RED
-            anchorY = screenY - (holeRadiusY * 0.10) + bob;
+            // Canonical 900x980 green sprites (torso + paws on rim, no legs):
+            // FrontLipY seats lower belly past dark pit bottom behind Layer 3 center rim
+            // while both hands reach outside into the open left/right paw pockets at peak height.
+            charW = holeRadiusX * 3.55;
+            charH = charW * aspect;
+
+            const frontLipY = screenY + (holeRadiusY * 1.38);
+            const submergeRatio = (sprite === this.assets.yellow_retract || sprite === this.assets.yellow_hit) ? 0.88 : 0.58;
+            const submergeDistance = charH * submergeRatio;
+            const downwardHideOffset = (1.0 - Math.min(1.0, Math.max(0.0, this.riseProgress))) * submergeDistance;
+            anchorY = frontLipY + downwardHideOffset;
         }
 
         ctx.save();
         ctx.translate(screenX, anchorY);
         ctx.scale(this.scaleX, this.scaleY);
 
-        // If detonating angry red, show red fiery shock pulse
         if (isDetonating) {
             ctx.fillStyle = 'rgba(239, 68, 68, 0.45)';
             ctx.beginPath();
-            ctx.arc(0, -charH * 0.5, charW * 0.55, 0, Math.PI * 2);
+            ctx.arc(0, -charH * 0.48, charW * 0.46, 0, Math.PI * 2);
             ctx.fill();
         }
 
-        // Draw crisp normalized sprite centered horizontally, anchored from bottom
+        // Draw crisp sprite anchored at bottom center (hands aligned at anchorY = frontLipY)
         ctx.drawImage(sprite, -charW * 0.5, -charH, charW, charH);
 
         ctx.restore();

@@ -239,12 +239,98 @@ export class ParallaxManager {
         }
 
         // 4. Subtle ambient lighting vignette
+        this.drawAmbientVignette(ctx);
+
+        ctx.restore();
+    }
+
+    drawAmbientVignette(ctx) {
+        const w = this.config.VIEWPORT_WIDTH;
+        const h = this.config.VIEWPORT_HEIGHT;
         const vignette = ctx.createRadialGradient(w * 0.5, h * 0.52, h * 0.38, w * 0.5, h * 0.52, Math.hypot(w, h) * 0.62);
         vignette.addColorStop(0, 'rgba(0, 0, 0, 0)');
         vignette.addColorStop(1, 'rgba(0, 0, 0, 0.25)');
         ctx.fillStyle = vignette;
         ctx.fillRect(0, 0, w, h);
+    }
 
+    /**
+     * Smooth paw-pocket exposure factor from pop progress:
+     * < 0.45: paws stay behind inner black opening; >= 0.45: paws emerge onto front colored rim.
+     */
+    getPawPocketBlend(riseProgress) {
+        const raw = Math.max(0, Math.min(1, (riseProgress - 0.45) / 0.45));
+        return raw * raw * (3 - 2 * raw);
+    }
+
+    /**
+     * Trace the split bottom rim curve from right (+outerRx) to left (-outerRx):
+     * - Center ~56% width stays along the inner black pit arc (keeping lower torso behind front rim).
+     * - Left & right ~22% paw pockets smoothly extend down toward the outer lower colored rim edge
+     *   according to pawBlend so hands/paws sit visibly outside on top of the front rim at peak.
+     */
+    traceSplitFrontCurve(ctx, cx, cy, rx, ry, pawBlend, innerRxScale = 1.02, innerRyScale = 1.05, outerRxScale = 1.48, outerRyScale = 2.04) {
+        const outRx = rx * outerRxScale;
+        const outRy = ry * outerRyScale;
+        const inRx = rx * innerRxScale;
+        const inRy = ry * innerRyScale;
+        const steps = 40;
+
+        for (let i = 0; i <= steps; i++) {
+            const xOff = outRx - (2 * outRx * (i / steps));
+            const uOut = Math.min(1, Math.abs(xOff) / outRx);
+            const yOut = cy + outRy * Math.sqrt(Math.max(0, 1 - uOut * uOut));
+
+            const vIn = Math.abs(xOff) / inRx;
+            const yIn = (vIn < 1) ? (cy + inRy * Math.sqrt(Math.max(0, 1 - vIn * vIn))) : cy;
+
+            // Smooth pocket mask: 0 across center torso (|x| <= 0.56*rx), 1 across outer paw pockets
+            const absRatio = Math.abs(xOff) / rx;
+            const pocketT = Math.max(0, Math.min(1, (absRatio - 0.54) / 0.10));
+            const pocketWeight = pocketT * pocketT * (3 - 2 * pocketT);
+
+            const yVal = yIn + (yOut - yIn) * (pocketWeight * pawBlend);
+            ctx.lineTo(cx + xOff, yVal);
+        }
+    }
+
+    /**
+     * Layer 3 (Front Colored Rim Overlay):
+     * Redraws only the front half of the colored outer rim (excluding the black pit across the center,
+     * and smoothly opening the left/right paw pockets as pawBlend reaches 1 so paws rest cleanly ON TOP
+     * of the front rim while the torso belly remains tucked strictly BEHIND it).
+     */
+    drawHoleFrontRim(ctx, hole, pawBlend = 0) {
+        if (!this.bgImg || !this.bgImg.complete || this.bgImg.naturalWidth === 0) return;
+        const b = this.bounds;
+        const rw = b.renderTileW || this.config.VIEWPORT_WIDTH;
+        const rh = b.renderTileH || this.config.VIEWPORT_HEIGHT;
+        const ox = b.offsetX || 0;
+        const ty = this.getTileOffsetY(hole.tileIndex);
+
+        if (ty + rh <= -40 || ty >= (this.config.VIEWPORT_HEIGHT || 1920) + 40) return;
+
+        const cx = hole.screenX;
+        const cy = hole.screenY;
+        const rx = hole.radiusX;
+        const ry = hole.radiusY;
+
+        ctx.save();
+        ctx.beginPath();
+
+        // Outer lower semi-ellipse covering bottom front half of colored rim & outer shadow
+        ctx.moveTo(cx + rx * 1.50, cy);
+        ctx.ellipse(cx, cy, rx * 1.50, ry * 2.12, 0, 0, Math.PI, false);
+        ctx.closePath();
+
+        // Inner cutout matching Layer 2's split curve (excludes black pit + revealed paw pockets)
+        ctx.moveTo(cx + rx * 1.50, cy);
+        this.traceSplitFrontCurve(ctx, cx, cy, rx, ry, pawBlend, 0.99, 0.99, 1.50, 2.12);
+        ctx.closePath();
+
+        ctx.clip('evenodd');
+        ctx.drawImage(this.bgImg, ox, Math.floor(ty), rw, Math.ceil(rh) + 1);
+        this.drawAmbientVignette(ctx);
         ctx.restore();
     }
 }

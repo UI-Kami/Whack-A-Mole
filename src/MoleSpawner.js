@@ -17,6 +17,7 @@ export class Hole {
         this.radiusY = (nativeHole.ry || 60);
         this.depthScale = nativeHole.depthScale || 1.0;
         this.isVisible = true;
+        this.lastSpawnWasBomb = false;
 
         this.mole = new MoleController(this, config, assets);
     }
@@ -29,24 +30,54 @@ export class Hole {
         return this.radiusY;
     }
 
-    drawMole(ctx) {
+    drawMole(ctx, parallaxManager = null) {
         if (!this.isVisible || this.mole.state === MOLE_STATE.HIDDEN || this.mole.riseProgress <= 0.01) return;
 
-        ctx.save();
-        // Mask with hole rim so lower body stays neatly inside the hole
+        const cx = this.screenX;
+        const cy = this.screenY;
         const rx = this.radiusX;
         const ry = this.radiusY;
+        // Keep paw pockets open ONLY when the character is emerging/clinging on the rim;
+        // retract pockets immediately during green DUCKING/HIT (yellow_retract cheeks stay behind rim)
+        // and rapidly pull red_sink paws back inside as red character sinks post-explosion.
+        let pawBlend = 0;
+        if (parallaxManager) {
+            if (!this.mole.transformedRed && (this.mole.state === MOLE_STATE.DUCKING || this.mole.state === MOLE_STATE.HIT)) {
+                pawBlend = 0;
+            } else if (this.mole.transformedRed && this.mole.state === MOLE_STATE.DUCKING) {
+                const redT = Math.max(0, Math.min(1, (this.mole.riseProgress - 0.72) / 0.25));
+                pawBlend = redT * redT * (3 - 2 * redT);
+            } else if (this.mole.state !== MOLE_STATE.TRANSFORMING_RED) {
+                pawBlend = parallaxManager.getPawPocketBlend(this.mole.riseProgress);
+            }
+        }
 
+        // Layer 2: Character Sprite with Split Rim Clipping
+        // Generous top & side bounds (cy - 700, cx +/- 2.2*rx) so head, hair, and radiating lines never clip;
+        // along the bottom curve, center ~56% stays tucked behind the inner opening while left/right ~22% paw pockets
+        // smoothly reveal hands outside on top of the colored front rim when popProgress >= 0.45.
+        ctx.save();
         ctx.beginPath();
-        ctx.moveTo(this.screenX - rx * 2.5, this.screenY - 700);
-        ctx.lineTo(this.screenX + rx * 2.5, this.screenY - 700);
-        ctx.lineTo(this.screenX + rx * 1.05, this.screenY);
-        ctx.ellipse(this.screenX, this.screenY, rx * 1.05, ry * 0.44, 0, 0, Math.PI, false);
+        ctx.moveTo(cx - rx * 2.2, cy - 700);
+        ctx.lineTo(cx + rx * 2.2, cy - 700);
+        ctx.lineTo(cx + rx * 2.2, cy);
+        if (parallaxManager) {
+            parallaxManager.traceSplitFrontCurve(ctx, cx, cy, rx, ry, pawBlend, 1.03, 1.06, 1.48, 2.04);
+        } else {
+            ctx.lineTo(cx + rx * 1.04, cy);
+            ctx.ellipse(cx, cy, rx * 1.04, ry * 1.06, 0, 0, Math.PI, false);
+        }
+        ctx.lineTo(cx - rx * 2.2, cy);
         ctx.closePath();
         ctx.clip();
 
-        this.mole.draw(ctx, this.screenX, this.screenY, rx, ry);
+        this.mole.draw(ctx, cx, cy, rx, ry);
         ctx.restore();
+
+        // Layer 3: Front Colored Rim Overlay matching center + unrevealed paw pocket complement
+        if (parallaxManager) {
+            parallaxManager.drawHoleFrontRim(ctx, this, pawBlend);
+        }
     }
 }
 
@@ -64,6 +95,7 @@ export class MoleSpawner {
 
         this.warmupBombSpawned = false;
         this.warmupBomb2Spawned = false;
+        this.lastBombHoleId = -1;
         this.totalBombsSpawned = 0;
         this.speedFactor = 1.0;
 
@@ -77,10 +109,13 @@ export class MoleSpawner {
     onTileRecycled(tileIdx) {
         for (let i = 0; i < this.holes.length; i++) {
             const h = this.holes[i];
-            if (h.tileIndex === tileIdx && h.mole.state !== MOLE_STATE.HIDDEN) {
-                h.mole.state = MOLE_STATE.HIDDEN;
-                h.mole.riseProgress = 0;
-                h.mole.isHit = false;
+            if (h.tileIndex === tileIdx) {
+                h.lastSpawnWasBomb = false;
+                if (h.mole.state !== MOLE_STATE.HIDDEN) {
+                    h.mole.state = MOLE_STATE.HIDDEN;
+                    h.mole.riseProgress = 0;
+                    h.mole.isHit = false;
+                }
             }
         }
     }
@@ -124,14 +159,16 @@ export class MoleSpawner {
     }
 
     reset() {
-        this.spawnTimer = 0.5;
+        this.spawnTimer = 0.45;
         this.elapsedTimeline = 0;
         this.warmupBombSpawned = false;
         this.warmupBomb2Spawned = false;
+        this.lastBombHoleId = -1;
         this.totalBombsSpawned = 0;
         this.speedFactor = 1.0;
 
         for (let i = 0; i < this.holes.length; i++) {
+            this.holes[i].lastSpawnWasBomb = false;
             this.holes[i].mole.reset();
         }
         this.updateHolePositions();
@@ -159,82 +196,116 @@ export class MoleSpawner {
 
     attemptSpawn() {
         const time = this.elapsedTimeline;
+        const totalDuration = this.config.TOTAL_DURATION || 90.0;
+        const timeProgress = Math.min(1.0, Math.max(0.0, time / totalDuration));
+
         let baseInterval = this.config.SPAWN_INTERVAL_WARMUP;
         let maxSimultaneous = 2;
         let idleDuration = this.config.MOLE_IDLE_WARMUP;
-        let shouldSpawnBomb = false;
 
-        // Phase 1: 0:00–0:20 Warm-up (Slow pop-ups, introduce disguised bombs early so players learn the mechanic)
         if (time < this.config.PHASE_WARMUP_END) {
             baseInterval = this.config.SPAWN_INTERVAL_WARMUP;
             maxSimultaneous = 2;
             idleDuration = this.config.MOLE_IDLE_WARMUP;
-
-            if (!this.warmupBombSpawned && time >= 6.5) {
-                shouldSpawnBomb = true;
-                this.warmupBombSpawned = true;
-            } else if (this.warmupBombSpawned && !this.warmupBomb2Spawned && time >= 13.5) {
-                shouldSpawnBomb = true;
-                this.warmupBomb2Spawned = true;
-            }
-        }
-        // Phase 2: 0:20–0:50 Middle (Faster, bombs appear with steady cadence)
-        else if (time < this.config.PHASE_MIDDLE_END) {
+        } else if (time < this.config.PHASE_MIDDLE_END) {
             baseInterval = this.config.SPAWN_INTERVAL_MIDDLE;
-            maxSimultaneous = 2;
+            maxSimultaneous = 3;
             idleDuration = this.config.MOLE_IDLE_MIDDLE;
-
-            if (Math.random() < 0.24) {
-                shouldSpawnBomb = true;
-            }
-        }
-        // Phase 3: 0:50–1:20 Pressure (Highest density, bombs more frequent)
-        else if (time < this.config.PHASE_PRESSURE_END) {
+        } else if (time < this.config.PHASE_PRESSURE_END) {
             baseInterval = this.config.SPAWN_INTERVAL_PRESSURE;
-            maxSimultaneous = 3;
+            maxSimultaneous = 4;
             idleDuration = this.config.MOLE_IDLE_PRESSURE;
-
-            if (Math.random() < 0.34) {
-                shouldSpawnBomb = true;
-            }
-        }
-        // Phase 4: 1:20–1:30 Final push (Fastest speed, maximum clock pressure)
-        else {
+        } else {
             baseInterval = this.config.SPAWN_INTERVAL_FINAL;
-            maxSimultaneous = 3;
+            maxSimultaneous = 4;
             idleDuration = this.config.MOLE_IDLE_FINAL;
-
-            if (Math.random() < 0.45) {
-                shouldSpawnBomb = true;
-            }
         }
 
-        // Apply speedFactor acceleration from bomb hits and progression
-        const interval = Math.max(0.35, baseInterval / this.speedFactor);
-        this.spawnTimer = interval * (0.85 + Math.random() * 0.30);
+        // Gentle speed scaling for intervals so 30 hits in 90s stays very responsive
+        const interval = Math.max(0.32, baseInterval / (1.0 + (this.speedFactor - 1.0) * 0.72));
+        this.spawnTimer = interval * (0.85 + Math.random() * 0.25);
 
-        // Count currently active moles on screen
+        // Count active board state before picking target type/hole
         const visibleHoles = this.holes.filter(h => h.isVisible);
         const activeMoles = visibleHoles.filter(h => h.mole.state !== MOLE_STATE.HIDDEN);
-
         if (activeMoles.length >= maxSimultaneous) return;
 
-        // Pick an available visible hole
         const availableHoles = visibleHoles.filter(h => h.mole.state === MOLE_STATE.HIDDEN);
         if (availableHoles.length === 0) return;
 
-        const chosenHole = availableHoles[Math.floor(Math.random() * availableHoles.length)];
-        const idle = Math.max(0.40, (idleDuration / this.speedFactor) * (0.85 + Math.random() * 0.30));
+        const activeBombs = activeMoles.filter(h => h.mole.isBomb).length;
+        const activeNormals = activeMoles.length - activeBombs;
+        const maxSimultaneousBombs = (time < 45.0) ? 1 : 2;
+
+        // Smooth bomb probability: 35% at start -> 55% toward 90s (after initial 1.5s warm pop)
+        const baseBombStart = this.config.BOMB_PROB_START ?? 0.35;
+        const baseBombMax = this.config.BOMB_PROB_MAX ?? 0.55;
+        const currentBombProb = baseBombStart + (baseBombMax - baseBombStart) * timeProgress;
+        let shouldSpawnBomb = (time >= 1.5) && (Math.random() < currentBombProb);
+
+        // Anti-flood & normal target prioritization guards:
+        // 1. Cap simultaneous active bombs (max 1 in first 45s, max 2 in final 45s)
+        if (activeBombs >= maxSimultaneousBombs) {
+            shouldSpawnBomb = false;
+        }
+        // 2. When 2+ moles are up together, ensure at least 1 normal target exists;
+        //    when 3+ moles are up together, prioritize at least 2 normal targets.
+        if (activeMoles.length >= 1 && activeNormals < 1) {
+            shouldSpawnBomb = false;
+        } else if (activeMoles.length >= 2 && activeNormals < 2) {
+            shouldSpawnBomb = false;
+        }
+
+        // 3. Prevent back-to-back bomb spawns in the same hole
+        let candidateHoles = availableHoles;
+        if (shouldSpawnBomb) {
+            const nonRepeatHoles = availableHoles.filter(h => !h.lastSpawnWasBomb && h.id !== this.lastBombHoleId);
+            if (nonRepeatHoles.length > 0) {
+                candidateHoles = nonRepeatHoles;
+            } else {
+                shouldSpawnBomb = false;
+            }
+        }
+
+        const chosenHole = candidateHoles[Math.floor(Math.random() * candidateHoles.length)];
+        const minIdle = shouldSpawnBomb ? 0.85 : 0.95;
+        const effSpeed = 1.0 + (this.speedFactor - 1.0) * 0.25;
+        const idle = Math.max(minIdle, Math.min(1.30, (idleDuration / effSpeed) * (0.94 + Math.random() * 0.12)));
 
         chosenHole.mole.spawn(shouldSpawnBomb, idle, this.speedFactor);
+        chosenHole.lastSpawnWasBomb = shouldSpawnBomb;
 
         if (shouldSpawnBomb) {
+            this.lastBombHoleId = chosenHole.id;
             this.totalBombsSpawned++;
+
+            // Pair any bomb spawn on an otherwise empty board with a hittable normal target nearby
+            if (activeNormals === 0 && (activeMoles.length + 1) < maxSimultaneous && availableHoles.length >= 2) {
+                const partnerPool = availableHoles.filter(h => h.id !== chosenHole.id);
+                if (partnerPool.length > 0) {
+                    const partnerHole = partnerPool[Math.floor(Math.random() * partnerPool.length)];
+                    const partnerIdle = Math.max(0.95, Math.min(1.30, (idleDuration / effSpeed) * (0.96 + Math.random() * 0.12)));
+                    partnerHole.mole.spawn(false, partnerIdle, this.speedFactor);
+                    partnerHole.lastSpawnWasBomb = false;
+                }
+            }
         }
 
         // Pop audio & dust puff
         if (this.audioManager) this.audioManager.playMoleEmerge();
         if (this.vfxManager) this.vfxManager.spawnMoleEmergeVFX(chosenHole.screenX, chosenHole.screenY);
+    }
+
+    drawActiveHoles(ctx) {
+        // Render Layer 2 (inner-clipped character) + Layer 3 (front rim overlay) top-to-bottom
+        const activeVisible = this.holes.filter(
+            h => h.isVisible && h.mole.state !== MOLE_STATE.HIDDEN && h.mole.riseProgress > 0.01
+        );
+        activeVisible.sort((a, b) => a.screenY - b.screenY);
+
+        for (let i = 0; i < activeVisible.length; i++) {
+            activeVisible[i].drawMole(ctx, this.parallaxManager);
+        }
     }
 
     checkHit(hitX, hitY, hitRadius, hitType = 'punch') {

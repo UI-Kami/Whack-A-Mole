@@ -22,9 +22,7 @@ $modules = @(
 $combinedModules = ""
 foreach ($m in $modules) {
     $content = [System.IO.File]::ReadAllText((Resolve-Path "src\$m"), $utf8)
-    # Strip import statements
     $content = [System.Text.RegularExpressions.Regex]::Replace($content, "(?m)^\s*import\s+[^;]+;\s*\r?\n?", "")
-    # Strip export keywords
     $content = [System.Text.RegularExpressions.Regex]::Replace($content, "(?m)^\s*export\s+(class|const|let|var|function|default)\s+", '$1 ')
     $combinedModules += "`n    // ========================================== `n    // Module: $m `n    // ========================================== `n" + $content + "`n"
 }
@@ -36,7 +34,7 @@ $headerHtml = @'
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Mazaaq Tha | Interactive Kiosk Experience</title>
-    <meta name="description" content="Mazaaq Tha - Interactive bilingual Whack-A-Mole reflection on jokes, bullying, and spoken words.">
+    <meta name="description" content="Mazaaq Tha - Interactive Whack-A-Mole reflection on jokes, bullying, and spoken words.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;700&family=Noto+Sans+Arabic:wght@400;700&family=Outfit:wght@400;600;700;800;900&display=swap" rel="stylesheet">
@@ -49,18 +47,12 @@ $middleHtml = @'
 <body>
 <div id="game-wrapper">
     <div id="game-container">
-        <!-- Minimalist Kiosk Top HUD -->
+        <!-- Transparent Top HUD (Speed Limit Removed, Assets Transparent) -->
         <header class="kiosk-hud" role="toolbar" aria-label="Game Controls">
             <div class="hud-top-bar">
                 <div class="hud-group-left">
-                    <!-- Hit Counter (Top Left) -->
                     <div class="hud-hits-pill" id="hud-hits-pill" title="Normal Hits">
                         <span id="hud-hits-val">Hits: 0</span>
-                    </div>
-
-                    <!-- Heart Health Icon (Cracks on Bomb Hit) -->
-                    <div class="hud-heart-wrap" id="hud-heart-wrap" title="Health">
-                        <img id="hud-heart-img" class="hud-heart-img" src="" alt="Health Bar" />
                     </div>
                 </div>
 
@@ -72,29 +64,17 @@ $middleHtml = @'
                 </div>
 
                 <div class="hud-group-right">
-                    <!-- Sound Toggle Button -->
                     <button id="btn-sound-toggle" class="hud-pixel-btn sound-toggle active" title="Toggle Sound">
                         <img id="btn-sound-img" class="hud-pixel-btn-img circle" src="" alt="Sound" />
                     </button>
-
-                    <!-- Pause Button (Top Right) -->
                     <button id="btn-pause" class="hud-pixel-btn" title="Pause Game">
                         <img id="btn-pause-img" class="hud-pixel-btn-img" src="" alt="Pause" />
                     </button>
                 </div>
             </div>
 
-            <!-- Sub Bar: Speed Bar & Mystery Box Progress -->
+            <!-- Mystery Box Progress Bar (Box Icon Transparent Over Playfield) -->
             <div class="hud-sub-bar">
-                <!-- Speed Bar -->
-                <div class="hud-speed-gauge" title="Game Speed">
-                    <span class="hud-speed-label">SPEED</span>
-                    <div class="speed-track">
-                        <div id="speed-fill" class="speed-fill"></div>
-                    </div>
-                </div>
-
-                <!-- Mystery Box Progress Bar (Target 30 normal hits) -->
                 <div class="hud-progress-gauge" title="Progress toward Mystery Box (30 Hits)">
                     <img id="mystery-icon" class="mystery-box-icon" src="" alt="Box" />
                     <div class="progress-track">
@@ -102,6 +82,11 @@ $middleHtml = @'
                     </div>
                     <span id="progress-text" class="progress-text">0 / 30</span>
                 </div>
+            </div>
+
+            <!-- Header Row-3 Lives / Health Indicator (Right-Aligned below Progress Bar) -->
+            <div class="hud-side-lives" id="hud-heart-wrap" title="Lives">
+                <img id="hud-heart-img" class="hud-heart-img" src="" alt="Health Bar" />
             </div>
         </header>
 
@@ -111,22 +96,21 @@ $middleHtml = @'
         <!-- Main Game Canvas (9:16 Portrait) -->
         <canvas id="game-canvas"></canvas>
 
-        <!-- Home / Menu Screen Modal (Active on Page Load) -->
+        <!-- Home / Menu Screen Modal (Single-Language Title, Compact Typography) -->
         <div id="menu-modal" class="modal-overlay show" role="dialog" aria-modal="true">
             <div class="menu-card">
                 <div class="menu-hero-wrap">
                     <img id="menu-hero-img" class="menu-hero-img" src="" alt="Mazaaq Tha" />
-                    <div class="menu-hero-badge">1080 x 1920 KIOSK EDITION</div>
+                    <div class="menu-hero-badge">1080 x 1920 KIOSK</div>
                 </div>
                 <div class="menu-content">
-                    <h1 class="menu-title">MAZAAQ THA</h1>
-                    <h2 class="menu-title-urdu urdu-text">&#1605;&#1584;&#1575;&#1602; &#1578;&#1726;&#1575;</h2>
-                    <p class="menu-subtitle">Interactive Kiosk Reflection on Words &amp; Jokes</p>
-                    
+                    <h1 class="menu-title font-en">MAZAAQ THA</h1>
+                    <p class="menu-subtitle font-en">Interactive Kiosk Reflection on Words &amp; Jokes</p>
+
                     <div class="menu-rules-box">
                         <div class="menu-rule-item">
                             <span class="rule-icon">&#127919;</span>
-                            <span class="rule-text"><strong>30 Normal Hits</strong> to unlock the Mystery Box</span>
+                            <span class="rule-text"><strong>30 Hits</strong> unlock the Mystery Box</span>
                         </div>
                         <div class="menu-rule-item">
                             <span class="rule-icon">&#9201;&#65039;</span>
@@ -134,16 +118,15 @@ $middleHtml = @'
                         </div>
                         <div class="menu-rule-item">
                             <span class="rule-icon">&#9888;&#65039;</span>
-                            <span class="rule-text"><strong>Disguised Bombs</strong> trigger insults, speed-ups &amp; cool-downs</span>
+                            <span class="rule-text"><strong>Red Traps</strong> trigger insults &amp; cool-downs</span>
                         </div>
                     </div>
 
-                    <!-- Personal Best Record Display -->
                     <div id="menu-pb-box" class="menu-pb-box" style="display:none;">
                         <span class="menu-pb-label">PERSONAL BEST:</span>
                         <span id="menu-pb-time" class="menu-pb-val">--:--</span>
                         <span class="menu-pb-divider">&bull;</span>
-                        <span id="menu-pb-bombs" class="menu-pb-val">0 Bomb Hits</span>
+                        <span id="menu-pb-bombs" class="menu-pb-val">0 Contacts</span>
                     </div>
 
                     <button id="btn-start-game" class="menu-pixel-start-btn" title="Start Game">
@@ -153,37 +136,37 @@ $middleHtml = @'
             </div>
         </div>
 
-        <!-- Cool-Down Pop-Up Overlay (Every 2 Bomb Hits) -->
+        <!-- Cool-Down Overlay: Fullscreen Blur + Prominent Error Window Asset + Large Single-Language Text -->
         <div id="cooldown-modal" class="modal-overlay" role="dialog" aria-modal="true">
-            <img id="cooldown-bg" class="cooldown-fullscreen-glitch" src="" alt="Glitch" />
-            <div class="cooldown-card">
-                <div class="cooldown-header-row">
-                    <img id="cooldown-badge-img" class="cooldown-window-badge" src="" alt="Error" />
-                    <div class="cooldown-tag">&#9888;&#65039; SYSTEM ERROR &bull; COOL-DOWN</div>
+            <div class="cooldown-error-wrap">
+                <img id="cooldown-window-bg" class="cooldown-error-bg" src="" alt="System Error" />
+                <div class="cooldown-error-inner">
+                    <div class="cooldown-top-zone">
+                        <div class="cooldown-tag">&#9888;&#65039; COOL-DOWN</div>
+                        <p id="cooldown-reflection" class="cooldown-reflection-text"></p>
+                    </div>
+                    <div class="cooldown-bottom-zone">
+                        <p id="cooldown-fact" class="cooldown-fact-text"></p>
+                        <div class="cooldown-actions-row">
+                            <span class="cooldown-penalty-notice">-3s Penalty</span>
+                            <button id="btn-continue" class="btn-continue">Continue (-1s)</button>
+                        </div>
+                    </div>
                 </div>
-                <div class="reflection-box">
-                    <p id="cooldown-reflection-eng" class="reflection-line"></p>
-                    <p id="cooldown-reflection-urdu" class="reflection-line urdu-text"></p>
-                </div>
-                <div class="fact-divider"></div>
-                <div class="fact-box">
-                    <p id="cooldown-fact-eng" class="fact-line"></p>
-                    <p id="cooldown-fact-urdu" class="fact-line urdu-text"></p>
-                </div>
-                <div class="cooldown-penalty-notice">-3s Timeline Penalty</div>
-                <button id="btn-continue" class="btn-continue">Continue (-1s)</button>
             </div>
         </div>
 
-        <!-- Lose Sequence Overlay (Time's Up) -->
+        <!-- Lose Sequence Overlay (Time's Up inside Error Screen Asset) -->
         <div id="lose-modal" class="modal-overlay" role="dialog" aria-modal="true">
-            <div class="sequence-card">
-                <img id="lose-window-img" class="sequence-window-img" src="" alt="Error Window" />
-                <img id="lose-hero-img" class="sequence-hero-img" src="" alt="" />
-                <h2 id="lose-title" class="sequence-title red">TIME'S UP</h2>
-                <div class="sequence-line-box">
-                    <p id="lose-text-eng" class="sequence-text-main"></p>
-                    <p id="lose-text-urdu" class="sequence-text-urdu"></p>
+            <div class="sequence-transparent-wrap">
+                <div class="lose-error-frame">
+                    <img id="lose-window-img" class="cooldown-error-bg" src="" alt="Error Window" />
+                    <div class="lose-error-inner">
+                        <h2 id="lose-title" class="sequence-title red">TIME'S UP</h2>
+                        <div class="sequence-line-box">
+                            <p id="lose-text" class="sequence-text-single dark"></p>
+                        </div>
+                    </div>
                 </div>
                 <button id="btn-lose-next" class="btn-pixel-nav" style="display:none;" title="Next">
                     <img id="btn-lose-next-img" class="btn-pixel-nav-img" src="" alt="Next" />
@@ -194,27 +177,26 @@ $middleHtml = @'
             </div>
         </div>
 
-        <!-- Win Sequence Overlay (30 Hits: Mystery Box Opened) -->
+        <!-- Win Sequence Overlay (Mystery Box + Single-Language Dialogue + High Score Asset) -->
         <div id="win-modal" class="modal-overlay" role="dialog" aria-modal="true">
-            <div class="sequence-card">
-                <img id="win-window-img" class="sequence-window-img" src="" alt="High Score" />
-                <img id="win-hero-img" class="sequence-hero-img" src="" alt="Mystery Box" />
-                <h2 id="win-title" class="sequence-title">MYSTERY BOX</h2>
-                <div class="sequence-line-box">
-                    <p id="win-text-eng" class="sequence-text-main"></p>
-                    <p id="win-text-urdu" class="sequence-text-urdu"></p>
+            <div class="sequence-transparent-wrap">
+                <img id="win-hero-img" class="win-hero-transparent" src="" alt="Mystery Box" />
+                <div class="win-glass-box">
+                    <h2 id="win-title" class="sequence-title">MYSTERY BOX OPENED!</h2>
+                    <div class="sequence-line-box">
+                        <p id="win-text" class="sequence-text-single"></p>
+                    </div>
                 </div>
-                <!-- Personal Best High Score Board -->
-                <div id="win-pb-box" class="pb-summary-box" style="display:none;">
-                    <div class="pb-summary-title">PERSONAL BEST</div>
-                    <div class="pb-stats-row">
+                <div id="win-pb-box" class="pb-window-wrap" style="display:none;">
+                    <img id="win-window-img" class="pb-window-img" src="" alt="High Score" />
+                    <div class="pb-window-stats">
                         <div>
                             <div id="pb-time-val" class="pb-stat-val">0:00</div>
                             <div class="pb-stat-lbl">Fastest Time</div>
                         </div>
                         <div>
                             <div id="pb-bombs-val" class="pb-stat-val">0</div>
-                            <div class="pb-stat-lbl">Bomb Contacts</div>
+                            <div class="pb-stat-lbl">Red Hits</div>
                         </div>
                     </div>
                 </div>
@@ -258,9 +240,7 @@ $uiWiring = @'
     const hudTimerVal = document.getElementById('hud-timer-val');
     const timerPenaltyBadge = document.getElementById('timer-penalty-badge');
     const btnSoundToggle = document.getElementById('btn-sound-toggle');
-    const soundToggleText = document.getElementById('sound-toggle-text');
     const btnPause = document.getElementById('btn-pause');
-    const speedFill = document.getElementById('speed-fill');
     const progressFill = document.getElementById('progress-fill');
     const progressText = document.getElementById('progress-text');
     const mysteryIcon = document.getElementById('mystery-icon');
@@ -274,29 +254,25 @@ $uiWiring = @'
     const menuPbBombs = document.getElementById('menu-pb-bombs');
 
     const cooldownModal = document.getElementById('cooldown-modal');
-    const cooldownBg = document.getElementById('cooldown-bg');
-    const cooldownRefEng = document.getElementById('cooldown-reflection-eng');
-    const cooldownRefUrdu = document.getElementById('cooldown-reflection-urdu');
-    const cooldownFactEng = document.getElementById('cooldown-fact-eng');
-    const cooldownFactUrdu = document.getElementById('cooldown-fact-urdu');
+    const cooldownWindowBg = document.getElementById('cooldown-window-bg');
+    const cooldownRefEl = document.getElementById('cooldown-reflection');
+    const cooldownFactEl = document.getElementById('cooldown-fact');
     const btnContinue = document.getElementById('btn-continue');
 
     const pauseModal = document.getElementById('pause-modal');
     const btnResume = document.getElementById('btn-resume');
 
     const loseModal = document.getElementById('lose-modal');
-    const loseHeroImg = document.getElementById('lose-hero-img');
+    const loseWindowImg = document.getElementById('lose-window-img');
     const loseTitle = document.getElementById('lose-title');
-    const loseTextEng = document.getElementById('lose-text-eng');
-    const loseTextUrdu = document.getElementById('lose-text-urdu');
+    const loseTextEl = document.getElementById('lose-text');
     const btnLoseNext = document.getElementById('btn-lose-next');
     const btnLoseRestart = document.getElementById('btn-lose-restart');
 
     const winModal = document.getElementById('win-modal');
     const winHeroImg = document.getElementById('win-hero-img');
     const winTitle = document.getElementById('win-title');
-    const winTextEng = document.getElementById('win-text-eng');
-    const winTextUrdu = document.getElementById('win-text-urdu');
+    const winTextEl = document.getElementById('win-text');
     const winPbBox = document.getElementById('win-pb-box');
     const pbTimeVal = document.getElementById('pb-time-val');
     const pbBombsVal = document.getElementById('pb-bombs-val');
@@ -307,8 +283,6 @@ $uiWiring = @'
     const btnPauseImg = document.getElementById('btn-pause-img');
     const btnSoundImg = document.getElementById('btn-sound-img');
     const btnStartImg = document.getElementById('btn-start-img');
-    const cooldownBadgeImg = document.getElementById('cooldown-badge-img');
-    const loseWindowImg = document.getElementById('lose-window-img');
     const btnLoseNextImg = document.getElementById('btn-lose-next-img');
     const btnLoseRestartImg = document.getElementById('btn-lose-restart-img');
     const winWindowImg = document.getElementById('win-window-img');
@@ -316,17 +290,16 @@ $uiWiring = @'
     const btnWinRestartImg = document.getElementById('btn-win-restart-img');
     const btnResumeImg = document.getElementById('btn-resume-img');
 
-    // Populate icons and authentic UI button elements from ASSETS_DATA
+    // Populate authentic UI button & window assets from ASSETS_DATA
     if (typeof ASSETS_DATA !== 'undefined') {
         if (hudHeartImg) hudHeartImg.src = ASSETS_DATA.healthBarFull || ASSETS_DATA.heartClean;
         if (btnPauseImg) btnPauseImg.src = ASSETS_DATA.btnGreenPause;
         if (btnSoundImg) btnSoundImg.src = ASSETS_DATA.btnCirclePlay;
         if (btnStartImg) btnStartImg.src = ASSETS_DATA.btnGreenStart;
-        if (cooldownBg) cooldownBg.src = ASSETS_DATA.coolDownBg;
-        if (cooldownBadgeImg) cooldownBadgeImg.src = ASSETS_DATA.windowErrorPink;
+        if (cooldownWindowBg) cooldownWindowBg.src = ASSETS_DATA.windowErrorCooldown || ASSETS_DATA.windowErrorPink;
+        if (loseWindowImg) loseWindowImg.src = ASSETS_DATA.windowErrorCooldown || ASSETS_DATA.windowErrorPink;
         if (menuHeroImg && ASSETS_DATA.homeScreen) menuHeroImg.src = ASSETS_DATA.homeScreen;
         if (mysteryIcon && ASSETS_DATA.mysteryClosed) mysteryIcon.src = ASSETS_DATA.mysteryClosed;
-        if (loseWindowImg) loseWindowImg.src = ASSETS_DATA.windowErrorPink;
         if (btnLoseNextImg) btnLoseNextImg.src = ASSETS_DATA.btnGreenNext;
         if (btnLoseRestartImg) btnLoseRestartImg.src = ASSETS_DATA.btnGreenStart;
         if (winWindowImg) winWindowImg.src = ASSETS_DATA.windowHighScore;
@@ -343,31 +316,28 @@ $uiWiring = @'
         return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
     }
 
-    // Bilingual text helper with automatic Bidi / script detection
-    function setBilingualText(elemTop, elemBottom, line) {
-        if (!line) {
-            if (elemTop) elemTop.textContent = '';
-            if (elemBottom) elemBottom.textContent = '';
+    // Single-Language Text Renderer (Strictly NO duplicate bilingual text on same element!)
+    // Applies .font-ur + RTL for Urdu entries, and .font-en + LTR for English entries.
+    function setSingleLanguageText(elem, entry) {
+        if (!elem) return;
+        if (!entry) {
+            elem.textContent = '';
             return;
         }
-        const parts = line.split(' / ');
-        const top = parts[0] || '';
-        const bottom = parts[1] || '';
+        const text = (typeof entry === 'string') ? entry : (entry.text || '');
+        const isUrdu = (typeof entry === 'object' && entry.lang)
+            ? (entry.lang === 'ur')
+            : /[\u0600-\u06FF]/.test(text);
 
-        if (elemTop) elemTop.textContent = top;
-        if (elemBottom) {
-            elemBottom.textContent = bottom;
-            // Check if bottom contains Arabic / Urdu script (U+0600 - U+06FF)
-            const isUrdu = /[\u0600-\u06FF]/.test(bottom);
-            if (isUrdu) {
-                elemBottom.classList.add('urdu-font');
-                elemBottom.classList.remove('latin-font');
-                elemBottom.setAttribute('dir', 'rtl');
-            } else {
-                elemBottom.classList.remove('urdu-font');
-                elemBottom.classList.add('latin-font');
-                elemBottom.setAttribute('dir', 'ltr');
-            }
+        elem.textContent = text;
+        if (isUrdu) {
+            elem.classList.add('font-ur');
+            elem.classList.remove('font-en');
+            elem.setAttribute('dir', 'rtl');
+        } else {
+            elem.classList.add('font-en');
+            elem.classList.remove('font-ur');
+            elem.setAttribute('dir', 'ltr');
         }
     }
 
@@ -379,7 +349,7 @@ $uiWiring = @'
                 const pb = JSON.parse(raw);
                 if (menuPbBox && menuPbTime && menuPbBombs) {
                     menuPbTime.textContent = formatTime(pb.timeTaken);
-                    menuPbBombs.textContent = `${pb.bombHits} Bomb Contact${pb.bombHits === 1 ? '' : 's'}`;
+                    menuPbBombs.textContent = `${pb.bombHits} Red Hit${pb.bombHits === 1 ? '' : 's'}`;
                     menuPbBox.style.display = 'flex';
                 }
             }
@@ -395,13 +365,10 @@ $uiWiring = @'
         });
     }
 
-    // UI Event Listeners from GameManager
+    // Timer updates (Speed UI removed per spec)
     window.addEventListener('timertick', (e) => {
-        const { timeRemaining, speedPercent } = e.detail;
+        const { timeRemaining } = e.detail;
         if (hudTimerVal) hudTimerVal.textContent = formatTime(timeRemaining);
-        if (speedFill && typeof speedPercent !== 'undefined') {
-            speedFill.style.width = `${speedPercent}%`;
-        }
     });
 
     window.addEventListener('normalhit', (e) => {
@@ -412,17 +379,14 @@ $uiWiring = @'
     });
 
     window.addEventListener('bombhit', (e) => {
-        const { heartCrackLevel, speedPercent } = e.detail;
+        const { heartCrackLevel } = e.detail;
         if (hudHeartWrap) {
-            hudHeartWrap.className = `hud-heart-wrap crack-${heartCrackLevel}`;
+            hudHeartWrap.className = `hud-side-lives crack-${heartCrackLevel}`;
         }
         if (hudHeartImg && typeof ASSETS_DATA !== 'undefined') {
             if (heartCrackLevel === 1) hudHeartImg.src = ASSETS_DATA.healthBarHalf || ASSETS_DATA.heartCrack1;
             else if (heartCrackLevel >= 2) hudHeartImg.src = ASSETS_DATA.healthBarEmpty || ASSETS_DATA.heartCrack2;
             else hudHeartImg.src = ASSETS_DATA.healthBarFull || ASSETS_DATA.heartClean;
-        }
-        if (speedFill) {
-            speedFill.style.width = `${speedPercent}%`;
         }
         if (hurtOverlay) {
             hurtOverlay.classList.remove('flash');
@@ -443,19 +407,39 @@ $uiWiring = @'
         }
     });
 
+    // Auto-fit Cool-Down text inside Error window interior bounds
+    function autoFitCooldownText() {
+        const inner = cooldownModal ? cooldownModal.querySelector('.cooldown-error-inner') : null;
+        if (!inner || !cooldownRefEl || !cooldownFactEl) return;
+        let refSize = parseFloat(window.getComputedStyle(cooldownRefEl).fontSize);
+        let factSize = parseFloat(window.getComputedStyle(cooldownFactEl).fontSize);
+        while (inner.scrollHeight > inner.clientHeight && (refSize > 13 || factSize > 13)) {
+            if (refSize > 13) {
+                refSize = Math.max(13, refSize - 1);
+                cooldownRefEl.style.fontSize = `${refSize}px`;
+            }
+            if (factSize > 13) {
+                factSize = Math.max(13, factSize - 1);
+                cooldownFactEl.style.fontSize = `${factSize}px`;
+            }
+        }
+    }
+
     // Cool-Down Pop-Up
     window.addEventListener('cooldownshow', (e) => {
         const { reflection, fact } = e.detail;
-        setBilingualText(cooldownRefEng, cooldownRefUrdu, reflection);
-        setBilingualText(cooldownFactEng, cooldownFactUrdu, fact);
+        if (cooldownRefEl) cooldownRefEl.style.fontSize = '';
+        if (cooldownFactEl) cooldownFactEl.style.fontSize = '';
+        setSingleLanguageText(cooldownRefEl, reflection);
+        setSingleLanguageText(cooldownFactEl, fact);
         cooldownModal.classList.add('show');
+        autoFitCooldownText();
     });
 
     window.addEventListener('cooldownhide', () => {
         cooldownModal.classList.remove('show');
     });
 
-    // Skip cool-down early with Continue button (costs only -1s)
     btnContinue.addEventListener('click', () => {
         game.skipCoolDownEarly();
     });
@@ -496,24 +480,20 @@ $uiWiring = @'
         const lines = CONFIG.LOSE_DIALOGUE_LINES;
 
         if (loseStep < lines.length) {
-            setBilingualText(loseTextEng, loseTextUrdu, lines[loseStep]);
+            setSingleLanguageText(loseTextEl, lines[loseStep]);
             btnLoseNext.style.display = 'inline-block';
             btnLoseRestart.style.display = 'none';
         } else if (loseStep === lines.length) {
-            // Final insult
-            loseTextEng.textContent = CONFIG.FINAL_LOSE_INSULT;
-            loseTextUrdu.textContent = '';
+            setSingleLanguageText(loseTextEl, CONFIG.FINAL_LOSE_INSULT);
             btnLoseNext.style.display = 'inline-block';
             btnLoseRestart.style.display = 'none';
         } else if (loseStep === lines.length + 1) {
-            // Final reflection line
-            setBilingualText(loseTextEng, loseTextUrdu, CONFIG.FINAL_LOSE_REFLECTION);
+            setSingleLanguageText(loseTextEl, CONFIG.FINAL_LOSE_REFLECTION);
             btnLoseNext.style.display = 'inline-block';
             btnLoseRestart.style.display = 'none';
         } else {
-            // Last screen (Lose): Time's up | Pehle ruko, phir hanso. | Play Again
             loseTitle.textContent = CONFIG.LOSE_LAST_HEADING;
-            setBilingualText(loseTextEng, loseTextUrdu, CONFIG.LOSE_LAST_LINE);
+            setSingleLanguageText(loseTextEl, CONFIG.LOSE_LAST_LINE);
             btnLoseNext.style.display = 'none';
             btnLoseRestart.style.display = 'inline-block';
         }
@@ -521,11 +501,8 @@ $uiWiring = @'
 
     window.addEventListener('gamelose', () => {
         loseStep = 0;
-        if (loseHeroImg && typeof ASSETS_DATA !== 'undefined') {
-            loseHeroImg.src = ASSETS_DATA.zine;
-        }
         loseTitle.textContent = "TIME'S UP";
-        setBilingualText(loseTextEng, loseTextUrdu, CONFIG.LOSE_DIALOGUE_LINES[0]);
+        setSingleLanguageText(loseTextEl, CONFIG.LOSE_DIALOGUE_LINES[0]);
         btnLoseNext.style.display = 'inline-block';
         btnLoseRestart.style.display = 'none';
         loseModal.classList.add('show');
@@ -548,24 +525,20 @@ $uiWiring = @'
         const lines = CONFIG.WIN_BOX_LINES;
 
         if (winStep < lines.length) {
-            setBilingualText(winTextEng, winTextUrdu, lines[winStep]);
+            setSingleLanguageText(winTextEl, lines[winStep]);
             btnWinNext.style.display = 'inline-block';
             btnWinRestart.style.display = 'none';
             winPbBox.style.display = 'none';
-            if (winWindowImg) winWindowImg.style.display = 'none';
         } else {
-            // Final screen (Win): Is it funny, or is it fair? + Personal Best (only if new record) + Play Again
             winTitle.textContent = "REFLECT";
-            setBilingualText(winTextEng, winTextUrdu, CONFIG.WIN_LAST_LINE);
+            setSingleLanguageText(winTextEl, CONFIG.WIN_LAST_LINE);
 
             if (bestRun && bestRun.isNewRecord) {
                 pbTimeVal.textContent = formatTime(bestRun.timeTaken);
                 pbBombsVal.textContent = bestRun.bombHits;
                 winPbBox.style.display = 'block';
-                if (winWindowImg) winWindowImg.style.display = 'block';
             } else {
                 winPbBox.style.display = 'none';
-                if (winWindowImg) winWindowImg.style.display = 'none';
             }
 
             btnWinNext.style.display = 'none';
@@ -579,9 +552,8 @@ $uiWiring = @'
         if (winHeroImg && typeof ASSETS_DATA !== 'undefined') {
             winHeroImg.src = ASSETS_DATA.mysteryOpen;
         }
-        if (winWindowImg) winWindowImg.style.display = 'none';
         winTitle.textContent = "MYSTERY BOX OPENED!";
-        setBilingualText(winTextEng, winTextUrdu, CONFIG.WIN_BOX_LINES[0]);
+        setSingleLanguageText(winTextEl, CONFIG.WIN_BOX_LINES[0]);
         btnWinNext.style.display = 'inline-block';
         btnWinRestart.style.display = 'none';
         winPbBox.style.display = 'none';
@@ -600,8 +572,7 @@ $uiWiring = @'
         if (hudHitsVal) hudHitsVal.textContent = 'Hits: 0';
         if (progressFill) progressFill.style.width = '0%';
         if (progressText) progressText.textContent = `0 / ${targetHits}`;
-        if (speedFill) speedFill.style.width = '0%';
-        if (hudHeartWrap) hudHeartWrap.className = 'hud-heart-wrap';
+        if (hudHeartWrap) hudHeartWrap.className = 'hud-side-lives';
         if (hudHeartImg && typeof ASSETS_DATA !== 'undefined') hudHeartImg.src = ASSETS_DATA.healthBarFull || ASSETS_DATA.heartClean;
         if (hudTimerVal) hudTimerVal.textContent = '1:30';
         if (timerPenaltyBadge) timerPenaltyBadge.classList.remove('pulse');

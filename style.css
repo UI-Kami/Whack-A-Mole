@@ -1,7 +1,28 @@
-/* style.css - Mazaaq Tha: Minimalist Poster Palette & 9:16 Portrait Kiosk Adaptation */
+/* style.css - Mazaaq Tha: Portrait Kiosk (1080x1920), Transparent UI Assets & Custom Font Hooks */
 @import url('https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;700&family=Noto+Sans+Arabic:wght@400;700&family=Outfit:wght@400;600;700;800;900&display=swap');
 
+/* =====================================================================
+   CUSTOM FONT HOOKS — Drop your own @font-face files below & swap vars
+   =====================================================================
+@font-face {
+    font-family: 'CustomEnglish';
+    src: url('assets/fonts/custom-english.woff2') format('woff2');
+    font-weight: 100 900;
+    font-display: swap;
+}
+@font-face {
+    font-family: 'CustomUrdu';
+    src: url('assets/fonts/custom-urdu.woff2') format('woff2');
+    font-weight: 400 700;
+    font-display: swap;
+}
+*/
+
 :root {
+    /* Plug-in Typography Variables (Edit here to swap entire app + Canvas fonts) */
+    --font-en: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-ur: 'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq', 'Noto Sans Arabic', 'Urdu Typesetting', Arial, sans-serif;
+
     --bg-poster: #faf7f2;
     --bg-dark: #121214;
     --text-dark: #141416;
@@ -11,10 +32,25 @@
     --color-lime: #bef264;
     --color-lime-dark: #84cc16;
     --color-yellow: #facc15;
-    --border-color: rgba(20, 20, 22, 0.12);
+    --border-color: rgba(20, 20, 22, 0.14);
     --border-dark: #27272a;
     --kiosk-w: 1080px;
     --kiosk-h: 1920px;
+}
+
+/* Explicit Single-Language Font Utility Classes */
+.font-en {
+    font-family: var(--font-en);
+    direction: ltr;
+    unicode-bidi: normal;
+}
+
+.font-ur,
+.urdu-text,
+.urdu-font {
+    font-family: var(--font-ur);
+    direction: rtl;
+    unicode-bidi: isolate;
 }
 
 * {
@@ -31,7 +67,7 @@ html, body {
     height: 100%;
     overflow: hidden;
     background: #09090b;
-    font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-family: var(--font-en);
     color: var(--text-dark);
     touch-action: none;
 }
@@ -81,21 +117,19 @@ html, body {
     z-index: 10;
 }
 
-/* Minimalist HUD Header */
+/* Transparent Minimalist HUD Header (No White Banner Box) */
 .kiosk-hud {
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
-    padding: 16px 20px 10px 20px;
+    padding: 12px 16px 6px 16px;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
     z-index: 100;
     pointer-events: none;
-    background: linear-gradient(to bottom, rgba(250, 247, 242, 0.95) 0%, rgba(250, 247, 242, 0.82) 75%, rgba(250, 247, 242, 0) 100%);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    background: transparent;
 }
 
 .hud-top-bar {
@@ -108,104 +142,108 @@ html, body {
 .hud-group-left, .hud-group-right {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     pointer-events: auto;
 }
 
-/* Hit Counter */
+/* Hit Counter (Compact & Crisp) */
 .hud-hits-pill {
-    background: #ffffff;
+    background: rgba(255, 255, 255, 0.94);
     border: 2px solid var(--text-dark);
-    padding: 6px 14px;
+    padding: 5px 13px;
     border-radius: 9999px;
+    font-family: var(--font-en);
     font-weight: 900;
     font-size: 16px;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.3px;
     color: var(--text-dark);
     box-shadow: 2px 2px 0px var(--text-dark);
     display: flex;
     align-items: center;
-    gap: 4px;
+    height: 38px;
+    line-height: 1;
 }
 
-/* Authentic Pixel-Art Heart Health Bar (from Game_Button_Elements) */
-.hud-heart-wrap {
+/* Relocated Header Row-3 Lives Indicator (Below Progress Bar, Right-Aligned, Transparent) */
+.hud-side-lives {
+    position: relative;
+    top: auto;
+    right: auto;
+    transform: none;
+    transform-origin: right center;
+    width: 100%;
     display: flex;
+    justify-content: flex-end;
     align-items: center;
-    justify-content: center;
-    height: 40px;
-    width: auto;
-    min-width: 148px;
-    max-width: 165px;
-    padding: 2px 8px;
-    background: #ffffff;
-    border: 2px solid var(--text-dark);
-    border-radius: 9999px;
-    box-shadow: 2px 2px 0px var(--text-dark);
-    overflow: hidden;
+    padding-right: 4px;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    pointer-events: none;
     transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.2s ease;
 }
 
 .hud-heart-img {
-    height: 32px;
-    width: 144px;
-    max-width: 100%;
+    height: clamp(20px, 2.8vw, 28px);
+    width: auto;
+    max-width: clamp(92px, 12vw, 124px);
     object-fit: contain;
     image-rendering: pixelated;
     image-rendering: -moz-crisp-edges;
     image-rendering: crisp-edges;
-    filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.18));
+    filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.45));
     transition: transform 0.15s ease, filter 0.15s ease;
 }
 
-.hud-heart-wrap.crack-1 {
+.hud-side-lives.crack-1 {
     transform: scale(0.97);
-    filter: drop-shadow(0 0 6px rgba(239, 68, 68, 0.6));
+    filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.75));
 }
 
-.hud-heart-wrap.crack-2 {
-    transform: scale(0.93);
-    filter: drop-shadow(0 0 10px #ef4444);
-}
-
-.hud-heart-wrap.crack-3 {
-    transform: scale(0.90);
-    filter: grayscale(0.2) drop-shadow(0 0 14px #ef4444);
+.hud-side-lives.crack-2,
+.hud-side-lives.crack-3 {
+    transform: scale(0.94);
+    filter: drop-shadow(0 0 12px #ef4444);
 }
 
 /* Center Timer Display */
 .hud-timer-wrap {
     display: flex;
     align-items: center;
-    gap: 6px;
-    background: #ffffff;
+    gap: 5px;
+    background: rgba(255, 255, 255, 0.94);
     border: 2px solid var(--text-dark);
-    padding: 6px 16px;
+    padding: 5px 14px;
     border-radius: 9999px;
     box-shadow: 2px 2px 0px var(--text-dark);
     position: relative;
+    height: 38px;
 }
 
 .hud-timer-label {
+    font-family: var(--font-en);
     font-size: 11px;
     font-weight: 800;
     color: var(--text-muted);
-    letter-spacing: 0.5px;
+    letter-spacing: 0.4px;
 }
 
 .hud-timer-val {
-    font-size: 20px;
+    font-family: var(--font-en);
+    font-size: 19px;
     font-weight: 900;
     color: var(--text-dark);
     font-variant-numeric: tabular-nums;
+    line-height: 1;
 }
 
 .timer-penalty-badge {
     position: absolute;
     top: -12px;
-    right: -16px;
+    right: -14px;
     background: var(--color-red);
     color: #ffffff;
+    font-family: var(--font-en);
     font-size: 13px;
     font-weight: 900;
     padding: 2px 8px;
@@ -228,10 +266,10 @@ html, body {
     to { transform: scale(1.22); }
 }
 
-/* Authentic UI Buttons (Game_Button_Elements) */
+/* Authentic UI Buttons (Transparent Pixel Art) */
 .hud-pixel-btn {
     pointer-events: auto;
-    background: none;
+    background: transparent;
     border: none;
     padding: 0;
     margin: 0;
@@ -251,100 +289,73 @@ html, body {
 }
 
 .hud-pixel-btn-img {
-    height: 44px;
+    height: 38px;
     width: auto;
     object-fit: contain;
     filter: drop-shadow(2px 2px 0px var(--text-dark));
 }
 
 .hud-pixel-btn-img.circle {
-    height: 46px;
+    height: 40px;
 }
 
-/* Speed Bar & Mystery Box Progress Row */
+/* Mystery Box Progress Row (Speed Limit Removed! Transparent behind Box icon) */
 .hud-sub-bar {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 12px;
+    justify-content: center;
     width: 100%;
 }
 
-.hud-speed-gauge {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: #ffffff;
-    border: 2px solid var(--text-dark);
-    padding: 5px 12px;
-    border-radius: 9999px;
-    box-shadow: 2px 2px 0px var(--text-dark);
-}
-
-.hud-speed-label {
-    font-size: 11px;
-    font-weight: 900;
-    letter-spacing: 0.5px;
-    color: var(--text-dark);
-}
-
-.speed-track {
-    flex: 1;
-    height: 10px;
-    background: rgba(20, 20, 22, 0.08);
-    border-radius: 9999px;
-    overflow: hidden;
-    position: relative;
-}
-
-.speed-fill {
-    width: 0%;
-    height: 100%;
-    background: linear-gradient(to right, var(--color-lime-dark), var(--color-yellow), var(--color-red));
-    border-radius: 9999px;
-    transition: width 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-/* Mystery Box Progress Bar */
 .hud-progress-gauge {
-    flex: 1.2;
+    width: 100%;
+    max-width: 540px;
     display: flex;
     align-items: center;
     gap: 8px;
-    background: #ffffff;
-    border: 2px solid var(--text-dark);
-    padding: 5px 12px;
-    border-radius: 9999px;
-    box-shadow: 2px 2px 0px var(--text-dark);
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 0;
 }
 
 .mystery-box-icon {
-    width: 22px;
-    height: 22px;
+    width: 30px;
+    height: 30px;
     object-fit: contain;
+    filter: drop-shadow(1px 2px 2px rgba(0, 0, 0, 0.40));
+    flex-shrink: 0;
 }
 
 .progress-track {
     flex: 1;
-    height: 10px;
-    background: rgba(20, 20, 22, 0.08);
+    height: 12px;
+    background: rgba(20, 20, 22, 0.25);
+    border: 2px solid var(--text-dark);
     border-radius: 9999px;
     overflow: hidden;
+    box-shadow: 2px 2px 0px var(--text-dark);
 }
 
 .progress-fill {
     width: 0%;
     height: 100%;
-    background: var(--color-lime-dark);
+    background: var(--color-lime);
     border-radius: 9999px;
     transition: width 0.25s ease;
 }
 
 .progress-text {
+    background: rgba(255, 255, 255, 0.94);
+    border: 2px solid var(--text-dark);
+    border-radius: 9999px;
+    padding: 2px 9px;
+    font-family: var(--font-en);
     font-size: 12px;
     font-weight: 900;
     color: var(--text-dark);
+    box-shadow: 2px 2px 0px var(--text-dark);
+    line-height: 1.2;
 }
 
 /* Full Screen Red Hurt Flash */
@@ -370,11 +381,11 @@ html, body {
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    padding: 24px;
+    padding: 16px;
     z-index: 500;
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    background: rgba(20, 20, 22, 0.75);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    background: rgba(15, 15, 20, 0.52);
     opacity: 0;
     transition: opacity 0.25s ease;
 }
@@ -384,155 +395,162 @@ html, body {
     opacity: 1;
 }
 
-/* Cool-Down Fullscreen Glitch Background (COOL DOWN bg glitch.png) */
-.cooldown-fullscreen-glitch {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    z-index: 1;
-    pointer-events: none;
-    opacity: 0.92;
-    mix-blend-mode: multiply;
-    animation: fullGlitchJitter 0.28s steps(2) infinite;
+/* =====================================================================
+   COOL-DOWN OVERLAY REDESIGN: Fullscreen Blur + Custom Error Screen Asset
+   Zero white card behind error screen; text renders directly ON TOP of it!
+   ===================================================================== */
+#cooldown-modal.modal-overlay {
+    background: rgba(15, 15, 22, 0.42);
+    backdrop-filter: blur(22px);
+    -webkit-backdrop-filter: blur(22px);
 }
 
-@keyframes fullGlitchJitter {
-    0% { transform: scale(1.0) translate(0, 0); filter: hue-rotate(0deg); }
-    33% { transform: scale(1.015) translate(-4px, 3px); filter: contrast(1.25) hue-rotate(15deg); }
-    66% { transform: scale(1.01) translate(3px, -2px); filter: contrast(1.1) hue-rotate(-10deg); }
-    100% { transform: scale(1.0) translate(0, 0); filter: hue-rotate(0deg); }
-}
-
-/* Cool-Down Pop-Up Card (Significantly Expanded for Kiosk Display) */
-.cooldown-card {
+.cooldown-error-wrap {
     position: relative;
-    z-index: 2;
-    width: 92%;
-    max-width: 860px;
-    background: #ffffff;
-    border: 4px solid var(--text-dark);
-    border-radius: 28px;
-    box-shadow: 0 0 50px rgba(239, 68, 68, 0.60), 12px 12px 0px var(--text-dark);
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 44px 38px;
-    text-align: center;
+    width: 94%;
+    max-width: 900px;
+    background: transparent;
+    border: none;
+    box-shadow: none;
     animation: cooldownCardPop 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
 }
 
 @keyframes cooldownCardPop {
-    0% { transform: scale(0.85); opacity: 0; }
+    0% { transform: scale(0.84); opacity: 0; }
     100% { transform: scale(1.0); opacity: 1; }
 }
 
-.cooldown-header-row {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 16px;
-    margin-bottom: 24px;
-    flex-wrap: wrap;
+.cooldown-error-bg {
+    width: 100%;
+    height: auto;
+    display: block;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    filter: drop-shadow(0 18px 42px rgba(0, 0, 0, 0.65));
 }
 
-.cooldown-window-badge {
-    height: 52px;
-    width: auto;
-    object-fit: contain;
-    filter: drop-shadow(2px 2px 0px var(--text-dark));
+/* Overlaid content sits directly inside the Error Window frame */
+.cooldown-error-inner {
+    position: absolute;
+    top: 14.5%;
+    left: 4%;
+    right: 4.5%;
+    bottom: 6%;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: center;
+    text-align: center;
+    padding: 1.5% 3%;
+    gap: 8px;
+}
+
+/* Top region sits cleanly beside the yellow warning (!) icon without overlap */
+.cooldown-top-zone {
+    width: 100%;
+    padding-left: 26%;
+    min-height: 24%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 6px;
 }
 
 .cooldown-tag {
     background: var(--color-lime);
-    border: 3px solid var(--text-dark);
-    padding: 8px 22px;
+    border: 2.5px solid var(--text-dark);
+    padding: 2px 12px;
     border-radius: 9999px;
-    font-size: 20px;
+    font-family: var(--font-en);
+    font-size: clamp(11px, 1.8vw, 15px);
     font-weight: 900;
-    letter-spacing: 1px;
+    letter-spacing: 0.6px;
     color: var(--text-dark);
-    box-shadow: 3px 3px 0px var(--text-dark);
+    box-shadow: 2px 2px 0px var(--text-dark);
+    line-height: 1.2;
 }
 
-.reflection-box {
-    margin-bottom: 22px;
-    width: 100%;
-}
-
-.reflection-line {
-    font-size: 32px;
-    font-weight: 800;
-    line-height: 1.4;
+.cooldown-reflection-text {
+    font-size: clamp(20px, 3.2vw, 32px);
+    font-weight: 900;
+    line-height: 1.18;
     color: var(--text-dark);
-    margin-bottom: 14px;
+    margin: 0;
 }
 
-.reflection-line.urdu-text {
-    font-size: 38px;
+.cooldown-reflection-text.font-ur {
+    font-size: clamp(16px, 2.3vw, 24px);
     font-weight: 700;
-    line-height: 1.55;
+    line-height: 1.35;
     color: var(--color-red);
+    margin: 0;
 }
 
-.fact-divider {
-    width: 120px;
-    height: 4px;
-    background: #e5e7eb;
-    margin: 20px auto;
-    border-radius: 9999px;
-}
-
-.fact-box {
+/* Lower region uses full width below the warning triangle */
+.cooldown-bottom-zone {
     width: 100%;
-    margin-bottom: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
 }
 
-.fact-line {
-    font-size: 24px;
-    font-weight: 700;
+.cooldown-fact-text {
+    font-size: clamp(16px, 2.5vw, 24px);
+    font-weight: 800;
     color: #374151;
-    line-height: 1.45;
-    margin-bottom: 8px;
+    line-height: 1.24;
+    margin: 0;
 }
 
-.fact-line.urdu-text {
-    font-size: 28px;
+.cooldown-fact-text.font-ur {
+    font-size: clamp(14px, 2.0vw, 21px);
     font-weight: 700;
-    color: #4b5563;
-    line-height: 1.5;
+    line-height: 1.35;
+    color: #374151;
+    margin: 0;
+}
+
+.cooldown-actions-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 0;
 }
 
 .cooldown-penalty-notice {
-    margin: 22px 0 16px 0;
-    font-size: 22px;
+    font-family: var(--font-en);
+    font-size: clamp(12px, 1.8vw, 16px);
     font-weight: 900;
     color: var(--color-red);
     background: #fef2f2;
-    padding: 10px 24px;
+    padding: 5px 14px;
     border-radius: 9999px;
     border: 2px dashed var(--color-red);
+    line-height: 1.2;
 }
 
 .btn-continue {
-    margin-top: 14px;
     background: var(--color-lime);
     color: var(--text-dark);
     border: 3px solid var(--text-dark);
     border-radius: 9999px;
-    padding: 18px 56px;
-    font-size: 26px;
+    padding: clamp(7px, 1.2vw, 12px) clamp(20px, 3.5vw, 34px);
+    font-family: var(--font-en);
+    font-size: clamp(14px, 2.2vw, 20px);
     font-weight: 900;
     cursor: pointer;
-    box-shadow: 5px 5px 0px var(--text-dark);
+    box-shadow: 3px 3px 0px var(--text-dark);
     transition: all 0.15s ease;
+    line-height: 1.1;
 }
 
 .btn-continue:hover {
-    transform: translate(-2px, -2px);
-    box-shadow: 7px 7px 0px var(--text-dark);
+    transform: translate(-1px, -1px);
+    box-shadow: 4px 4px 0px var(--text-dark);
 }
 
 .btn-continue:active {
@@ -540,84 +558,79 @@ html, body {
     box-shadow: 1px 1px 0px var(--text-dark);
 }
 
-/* Win / Lose Sequence Card (Centered Compact Dialog for Kiosk Display) */
-.sequence-card {
+/* =====================================================================
+   LOSE & WIN MODALS (Transparent Assets, Tight Grouping, Zero White Boxes Behind PNGs)
+   ===================================================================== */
+.sequence-transparent-wrap {
     position: relative;
-    width: 88%;
-    max-width: 520px;
-    background: #ffffff;
-    border: 4px solid var(--text-dark);
-    border-radius: 26px;
-    box-shadow: 8px 8px 0px var(--text-dark);
-    padding: 30px 24px;
-    text-align: center;
+    width: 92%;
+    max-width: 720px;
     display: flex;
     flex-direction: column;
     align-items: center;
+    text-align: center;
     gap: 12px;
+    background: transparent;
 }
 
-/* Compact Time's Up Lose Sequence Card (Small box modal) */
-#lose-modal .sequence-card {
-    max-width: 460px;
-    padding: 24px 20px;
+/* Lose uses crisp Pink Error Screen frame directly (same style as Error Window!) */
+.lose-error-frame {
+    position: relative;
+    width: 100%;
+    max-width: 780px;
+    background: transparent;
+}
+
+.lose-error-inner {
+    position: absolute;
+    top: 10.5%;
+    left: 4%;
+    right: 5%;
+    bottom: 5.5%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding-left: 26%;
+    padding-right: 3%;
+    gap: 8px;
+}
+
+/* Win modal: Mystery Box & HighScore window float transparently without clunky outer white card */
+.win-hero-transparent {
+    max-height: 135px;
+    width: auto;
+    object-fit: contain;
+    filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.55));
+}
+
+.win-glass-box {
+    width: 100%;
+    max-width: 560px;
+    background: rgba(18, 18, 22, 0.80);
+    border: 2.5px solid rgba(255, 255, 255, 0.22);
     border-radius: 22px;
-    box-shadow: 7px 7px 0px var(--text-dark);
-    gap: 10px;
-}
-
-#lose-modal .sequence-window-img {
-    max-height: 80px;
-    max-width: 190px;
-    margin-bottom: 2px;
-}
-
-#lose-modal .sequence-hero-img {
-    max-height: 80px;
-    max-width: 130px;
-    margin-bottom: 2px;
-}
-
-#lose-modal .sequence-title {
-    font-size: 26px;
-}
-
-#lose-modal .sequence-line-box {
-    min-height: 56px;
-    gap: 6px;
-}
-
-#lose-modal .sequence-text-main {
-    font-size: 20px;
-    line-height: 1.35;
-}
-
-#lose-modal .sequence-text-urdu {
-    font-size: 21px;
-    line-height: 1.4;
-}
-
-.sequence-window-img {
-    max-height: 95px;
-    max-width: 230px;
-    object-fit: contain;
-    filter: drop-shadow(3px 3px 0px var(--text-dark));
-    margin-bottom: 4px;
-}
-
-.sequence-hero-img {
-    max-height: 100px;
-    max-width: 160px;
-    object-fit: contain;
-    margin-bottom: 6px;
+    padding: 18px 22px;
+    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.55);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
 }
 
 .sequence-title {
-    font-size: 30px;
+    font-family: var(--font-en);
+    font-size: clamp(22px, 3.6vw, 32px);
     font-weight: 900;
-    color: var(--text-dark);
-    letter-spacing: -0.5px;
+    color: #ffffff;
+    letter-spacing: -0.3px;
+    line-height: 1.1;
     margin: 0;
+}
+
+.sequence-title.dark {
+    color: var(--text-dark);
 }
 
 .sequence-title.red {
@@ -625,43 +638,80 @@ html, body {
 }
 
 .sequence-line-box {
-    min-height: 70px;
+    min-height: 46px;
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    gap: 8px;
     width: 100%;
 }
 
-.sequence-text-main {
-    font-size: 22px;
+.sequence-text-single {
+    font-size: clamp(17px, 2.8vw, 24px);
     font-weight: 800;
+    color: #f4f4f5;
+    line-height: 1.3;
+    margin: 0;
+}
+
+.sequence-text-single.dark {
     color: var(--text-dark);
-    line-height: 1.4;
-    margin: 0;
 }
 
-.sequence-text-urdu {
-    font-size: 24px;
+.sequence-text-single.font-ur {
+    font-size: clamp(20px, 3.4vw, 29px);
     font-weight: 700;
-    color: var(--color-red);
-    line-height: 1.5;
-    margin: 0;
+    line-height: 1.55;
+    color: #f87171;
 }
 
-.sequence-text-urdu.urdu-font {
-    font-family: 'Noto Nastaliq Urdu', 'Noto Sans Arabic', 'Urdu Typesetting', 'Jameel Noori Nastaleeq', 'Arial', sans-serif;
-    font-size: 26px;
-    direction: rtl;
-    unicode-bidi: isolate;
-    line-height: 1.75;
+.sequence-text-single.dark.font-ur {
+    color: #dc2626;
 }
 
-.sequence-text-urdu.latin-font {
-    font-family: inherit;
-    direction: ltr;
-    unicode-bidi: normal;
+/* Personal Best overlaid directly inside windowHighScore asset (no white box behind asset!) */
+.pb-window-wrap {
+    position: relative;
+    width: 100%;
+    max-width: 310px;
+    margin-top: 2px;
+    background: transparent;
+}
+
+.pb-window-img {
+    width: 100%;
+    height: auto;
+    display: block;
+    filter: drop-shadow(0 8px 20px rgba(0, 0, 0, 0.55));
+}
+
+.pb-window-stats {
+    position: absolute;
+    left: 11%;
+    right: 11%;
+    bottom: 11%;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    background: transparent;
+    border-radius: 0;
+    padding: 2px 4px;
+}
+
+.pb-stat-val {
+    font-family: var(--font-en);
+    font-size: 20px;
+    font-weight: 900;
+    color: var(--text-dark);
+    line-height: 1.1;
+}
+
+.pb-stat-lbl {
+    font-family: var(--font-en);
+    font-size: 10px;
+    font-weight: 800;
+    color: var(--text-muted);
+    text-transform: uppercase;
 }
 
 /* Action Buttons using Game_Button_Elements */
@@ -669,7 +719,7 @@ html, body {
     background: transparent;
     border: none;
     padding: 0;
-    margin: 8px auto;
+    margin: 4px auto 0 auto;
     cursor: pointer;
     display: inline-block;
     transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
@@ -684,111 +734,62 @@ html, body {
 }
 
 .btn-pixel-nav-img {
-    height: 64px;
+    height: 60px;
     width: auto;
     object-fit: contain;
     filter: drop-shadow(4px 4px 0px var(--text-dark));
 }
 
-/* Personal Best Summary Table */
-.pb-summary-box {
-    background: rgba(20, 20, 22, 0.05);
-    border: 2px dashed var(--border-color);
-    border-radius: 12px;
-    padding: 12px 18px;
-    width: 100%;
-    margin-top: 6px;
-}
-
-.pb-summary-title {
-    font-size: 12px;
-    font-weight: 900;
-    color: var(--text-muted);
-    letter-spacing: 0.8px;
-    margin-bottom: 6px;
-}
-
-.pb-stats-row {
-    display: flex;
-    justify-content: space-around;
-    align-items: center;
-}
-
-.pb-stat-val {
-    font-size: 20px;
-    font-weight: 900;
-    color: var(--text-dark);
-}
-
-.pb-stat-lbl {
-    font-size: 11px;
-    font-weight: 700;
-    color: var(--text-muted);
-}
-
-/* Play Again Button (ONLY on final screens!) */
-.btn-play-again {
-    background: var(--color-lime);
-    color: var(--text-dark);
-    border: 3px solid var(--text-dark);
-    border-radius: 9999px;
-    padding: 12px 36px;
-    font-size: 18px;
-    font-weight: 900;
-    cursor: pointer;
-    box-shadow: 4px 4px 0px var(--text-dark);
-    transition: all 0.15s ease;
-    margin-top: 10px;
-}
-
-.btn-play-again:hover {
-    transform: translate(-1px, -1px);
-    box-shadow: 5px 5px 0px var(--text-dark);
-}
-
-.btn-play-again:active {
-    transform: translate(3px, 3px);
-    box-shadow: 0px 0px 0px var(--text-dark);
-}
-
-/* Pause Modal */
+/* Pause Modal (Transparent dark frosted glass, Start button floats cleanly) */
 .pause-card {
-    background: #ffffff;
-    border: 3px solid var(--text-dark);
-    border-radius: 20px;
-    box-shadow: 6px 6px 0px var(--text-dark);
-    padding: 30px;
+    background: rgba(18, 18, 22, 0.84);
+    border: 2.5px solid rgba(255, 255, 255, 0.22);
+    border-radius: 22px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+    padding: 24px 28px;
     text-align: center;
-    width: 100%;
+    width: 86%;
     max-width: 340px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
 }
 
 .pause-title {
+    font-family: var(--font-en);
     font-size: 26px;
     font-weight: 900;
-    margin-bottom: 16px;
+    color: #ffffff;
+    line-height: 1.1;
 }
 
-/* Home / Menu Screen Modal (Expanded for Kiosk Display) */
+/* Home / Menu Screen Modal (Tighter Typography & Alignment) */
 .menu-card {
-    background: #ffffff;
-    border: 4px solid var(--text-dark);
-    border-radius: 28px;
-    box-shadow: 10px 10px 0px var(--text-dark);
+    background: rgba(18, 18, 22, 0.86);
+    border: 3px solid rgba(255, 255, 255, 0.22);
+    border-radius: 26px;
+    box-shadow: 0 18px 46px rgba(0, 0, 0, 0.65);
     padding: 0;
     width: 90%;
-    max-width: 620px;
+    max-width: 560px;
     text-align: center;
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    color: #ffffff;
     animation: popIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes popIn {
+    0% { transform: scale(0.88); opacity: 0; }
+    100% { transform: scale(1.0); opacity: 1; }
 }
 
 .menu-hero-wrap {
     position: relative;
     width: 100%;
-    height: 300px;
+    height: 250px;
     background: #ee7116;
     overflow: hidden;
     display: flex;
@@ -805,96 +806,92 @@ html, body {
 
 .menu-hero-badge {
     position: absolute;
-    top: 16px;
-    right: 16px;
+    top: 12px;
+    right: 12px;
     background: var(--text-dark);
     color: #ffffff;
-    font-size: 12px;
+    font-family: var(--font-en);
+    font-size: 11px;
     font-weight: 800;
-    letter-spacing: 0.8px;
-    padding: 5px 12px;
+    letter-spacing: 0.6px;
+    padding: 4px 10px;
     border-radius: 9999px;
 }
 
 .menu-content {
-    padding: 28px 32px 32px 32px;
+    padding: 18px 22px 22px 22px;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 14px;
+    gap: 8px;
 }
 
 .menu-title {
-    font-size: 38px;
+    font-family: var(--font-en);
+    font-size: 34px;
     font-weight: 900;
     letter-spacing: -0.5px;
-    color: var(--text-dark);
-    line-height: 1.1;
-}
-
-.menu-title-urdu {
-    font-family: 'Noto Nastaliq Urdu', 'Noto Sans Arabic', 'Urdu Typesetting', 'Jameel Noori Nastaleeq', 'Arial', sans-serif;
-    font-size: 32px;
-    font-weight: 700;
-    color: var(--color-red);
-    direction: rtl;
-    unicode-bidi: isolate;
-    line-height: 1.35;
+    color: #ffffff;
+    line-height: 1.05;
 }
 
 .menu-subtitle {
-    font-size: 16px;
-    color: var(--text-muted);
+    font-family: var(--font-en);
+    font-size: 14px;
+    color: #d4d4d8;
     font-weight: 600;
-    margin-bottom: 4px;
+    line-height: 1.25;
+    margin-bottom: 2px;
 }
 
 .menu-rules-box {
-    background: #faf7f2;
-    border: 2px solid var(--border-color);
-    border-radius: 18px;
-    padding: 16px 20px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1.5px solid rgba(255, 255, 255, 0.16);
+    border-radius: 14px;
+    padding: 11px 14px;
     width: 100%;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 7px;
     text-align: left;
 }
 
 .menu-rule-item {
     display: flex;
     align-items: center;
-    gap: 14px;
-    font-size: 16px;
-    color: var(--text-dark);
+    gap: 10px;
+    font-family: var(--font-en);
+    font-size: 14px;
+    line-height: 1.25;
+    color: #f4f4f5;
 }
 
 .rule-icon {
-    font-size: 24px;
+    font-size: 18px;
     flex-shrink: 0;
 }
 
 .menu-pb-box {
-    background: rgba(190, 242, 100, 0.20);
-    border: 2px dashed #84cc16;
-    border-radius: 12px;
-    padding: 10px 18px;
+    background: rgba(190, 242, 100, 0.16);
+    border: 1.5px dashed var(--color-lime);
+    border-radius: 10px;
+    padding: 6px 14px;
     width: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    font-size: 15px;
+    gap: 6px;
+    font-family: var(--font-en);
+    font-size: 13px;
     font-weight: 800;
-    color: #3f6212;
+    color: var(--color-lime);
 }
 
-/* Authentic Pixel Start Button (Game_Button_Elements) */
 .menu-pixel-start-btn {
     background: transparent;
     border: none;
     padding: 0;
-    margin-top: 14px;
+    margin-top: 8px;
     cursor: pointer;
     display: inline-block;
     transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
@@ -909,36 +906,8 @@ html, body {
 }
 
 .menu-pixel-start-img {
-    height: 78px;
+    height: 70px;
     width: auto;
     object-fit: contain;
     filter: drop-shadow(4px 4px 0px var(--text-dark));
-}
-
-.btn-start-game {
-    background: var(--color-lime);
-    color: var(--text-dark);
-    border: 3px solid var(--text-dark);
-    border-radius: 9999px;
-    padding: 16px 44px;
-    font-size: 22px;
-    font-weight: 900;
-    cursor: pointer;
-    box-shadow: 5px 5px 0px var(--text-dark);
-    transition: all 0.15s ease;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-top: 8px;
-}
-
-.btn-start-game:hover {
-    transform: translate(-2px, -2px);
-    box-shadow: 7px 7px 0px var(--text-dark);
-    background: #bef264;
-}
-
-.btn-start-game:active {
-    transform: translate(3px, 3px);
-    box-shadow: 1px 1px 0px var(--text-dark);
 }

@@ -1,6 +1,24 @@
-// src/VFXManager.js - Insult Speech Bubbles, Blasts, Particles & Optional Emoji Details
+// src/VFXManager.js - Hit Reaction Curse Bubbles, Blasts, Particles & Side Emoji Details
 import { ObjectPool } from './ObjectPool.js';
 import { CONFIG } from './Config.js';
+
+// Helper to resolve custom font CSS variables with reliable fallbacks
+function getConfiguredFonts() {
+    try {
+        const cs = getComputedStyle(document.documentElement);
+        const en = (cs.getPropertyValue('--font-en') || '').trim();
+        const ur = (cs.getPropertyValue('--font-ur') || '').trim();
+        return {
+            en: en || '"Outfit", sans-serif',
+            ur: ur || '"Noto Nastaliq Urdu", "Jameel Noori Nastaleeq", "Noto Sans Arabic", Arial, sans-serif'
+        };
+    } catch (e) {
+        return {
+            en: '"Outfit", sans-serif',
+            ur: '"Noto Nastaliq Urdu", "Jameel Noori Nastaleeq", "Noto Sans Arabic", Arial, sans-serif'
+        };
+    }
+}
 
 // Particle definition
 class Particle {
@@ -15,7 +33,7 @@ class Particle {
         this.life = 1;
         this.maxLife = 1;
         this.gravity = 400;
-        this.type = 'spark'; // 'spark' | 'dirt' | 'smoke' | 'star' | 'confetti'
+        this.type = 'spark';
         this.rotation = 0;
         this.rotSpeed = 0;
         this.scale = 1;
@@ -144,7 +162,7 @@ class Shockwave {
     }
 }
 
-// Bomb Insult Speech Bubble (Using clean single speech bubble sprite + bilingual text)
+// Single-Language Speech Bubble (Used on BOTH every normal green hit & bomb explosions)
 export class InsultBubble {
     constructor() {
         this.startX = 0;
@@ -154,10 +172,11 @@ export class InsultBubble {
         this.x = 0;
         this.y = 0;
         this.text = '';
-        this.maxLife = 2.8;
-        this.life = 2.8;
+        this.lang = 'en';
+        this.maxLife = 0.90;
+        this.life = 0.90;
         this.delay = 0;
-        this.travelDuration = 0.38;
+        this.travelDuration = 0.24;
         this.travelTimer = 0;
         this.scale = 0;
         this.targetScale = 1.0;
@@ -165,27 +184,37 @@ export class InsultBubble {
         this.active = false;
     }
 
-    reset(startX, startY, targetX, targetY, text, maxLife = 2.8, delay = 0, travelDuration = 0.38) {
+    reset(startX, startY, targetX, targetY, entry, maxLife = 0.90, delay = 0, travelDuration = 0.24, baseScale = 1.0) {
         this.startX = startX;
         this.startY = startY;
         this.targetX = targetX;
         this.targetY = targetY;
         this.x = startX;
         this.y = startY;
-        this.text = text;
+
+        if (typeof entry === 'string') {
+            this.text = entry;
+            this.lang = /[\u0600-\u06FF]/.test(entry) ? 'ur' : 'en';
+        } else if (entry) {
+            this.text = entry.text || '';
+            this.lang = entry.lang || (/[\u0600-\u06FF]/.test(this.text) ? 'ur' : 'en');
+        } else {
+            this.text = '';
+            this.lang = 'en';
+        }
+
         this.maxLife = maxLife;
         this.life = maxLife;
         this.delay = delay;
         this.travelDuration = travelDuration;
         this.travelTimer = 0;
         this.scale = 0;
-        this.targetScale = 0.96 + Math.random() * 0.08;
+        this.targetScale = baseScale * (0.96 + Math.random() * 0.08);
         this.bobOffset = Math.random() * Math.PI * 2;
         this.active = true;
     }
 
     update(dt) {
-        // Wait for stagger delay before popping into view
         if (this.delay > 0) {
             this.delay -= dt;
             if (this.delay > 0) return true;
@@ -197,21 +226,19 @@ export class InsultBubble {
             return false;
         }
 
-        // Travel smoothly from start to target with smooth cubic ease-out
         this.travelTimer += dt;
         const progress = Math.min(1.0, this.travelTimer / this.travelDuration);
         const ease = 1 - Math.pow(1 - progress, 3);
         this.x = this.startX + (this.targetX - this.startX) * ease;
         this.y = this.startY + (this.targetY - this.startY) * ease;
 
-        // Pop-in spring scale animation
-        const popTime = 0.22;
+        const popTime = 0.18;
         if (this.travelTimer < popTime) {
             const p = this.travelTimer / popTime;
-            this.scale = this.targetScale * (1.15 * Math.sin(p * Math.PI * 0.5));
-        } else if (this.travelTimer < popTime + 0.10) {
-            const p = (this.travelTimer - popTime) / 0.10;
-            this.scale = this.targetScale * (1.15 - p * 0.15);
+            this.scale = this.targetScale * (1.16 * Math.sin(p * Math.PI * 0.5));
+        } else if (this.travelTimer < popTime + 0.09) {
+            const p = (this.travelTimer - popTime) / 0.09;
+            this.scale = this.targetScale * (1.16 - p * 0.16);
         } else {
             this.scale = this.targetScale;
         }
@@ -220,93 +247,77 @@ export class InsultBubble {
     }
 
     draw(ctx, bubbleImg) {
-        if (this.delay > 0) return; // Still waiting for pop delay
+        if (this.delay > 0 || !this.active || this.life <= 0) return;
 
-        // Smooth fade out in the last 0.35s
-        const alpha = (this.life < 0.35) ? Math.max(0, this.life / 0.35) : 1.0;
+        // Start rapid smooth fade-out at 38% of total lifetime so bubbles never linger
+        const elapsedProgress = (this.maxLife > 0) ? (1.0 - (this.life / this.maxLife)) : 1.0;
+        const fadeStart = 0.38;
+        let alpha = 1.0;
+        if (elapsedProgress >= fadeStart) {
+            const fadeT = Math.min(1.0, (elapsedProgress - fadeStart) / (1.0 - fadeStart));
+            alpha = Math.max(0, 1.0 - Math.pow(fadeT, 0.85));
+        }
+        if (alpha <= 0.005) return;
 
-        // Subtle gentle idle floating bob
-        const bob = Math.sin((this.maxLife - this.life) * 4.0 + this.bobOffset) * 3;
+        const bob = Math.sin((this.maxLife - this.life) * 4.0 + this.bobOffset) * 2.5;
 
         ctx.save();
         ctx.globalAlpha = alpha;
         ctx.translate(this.x, this.y + bob);
         ctx.scale(this.scale, this.scale);
 
-        // Aspect ratio of pristine bubble is 350x236 (1.48:1)
-        const bubbleW = 280;
-        const bubbleH = 190;
+        const bubbleW = 264;
+        const bubbleH = 178;
 
-        // Soft comic drop-shadow to separate overlapping bubbles cleanly
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.40)';
-        ctx.shadowBlur = 14;
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.38)';
+        ctx.shadowBlur = 12;
         ctx.shadowOffsetX = 0;
-        ctx.shadowOffsetY = 6;
+        ctx.shadowOffsetY = 5;
 
         if (bubbleImg && bubbleImg.complete && bubbleImg.naturalWidth > 0) {
             ctx.drawImage(bubbleImg, -bubbleW * 0.5, -bubbleH * 0.5, bubbleW, bubbleH);
         } else {
-            // High-quality procedural comic speech bubble fallback
             ctx.fillStyle = '#ffffff';
             ctx.strokeStyle = '#18181b';
             ctx.lineWidth = 3.5;
             ctx.beginPath();
-            if (ctx.roundRect) {
-                ctx.roundRect(-bubbleW * 0.5, -bubbleH * 0.5, bubbleW, bubbleH - 15, 24);
-            } else {
-                ctx.rect(-bubbleW * 0.5, -bubbleH * 0.5, bubbleW, bubbleH - 15);
-            }
+            if (ctx.roundRect) ctx.roundRect(-bubbleW * 0.5, -bubbleH * 0.5, bubbleW, bubbleH - 15, 22);
+            else ctx.rect(-bubbleW * 0.5, -bubbleH * 0.5, bubbleW, bubbleH - 15);
             ctx.fill();
             ctx.stroke();
 
-            // Pointer tail
             ctx.beginPath();
             ctx.moveTo(-15, (bubbleH - 15) * 0.5);
-            ctx.lineTo(-30, bubbleH * 0.5);
+            ctx.lineTo(-28, bubbleH * 0.5);
             ctx.lineTo(5, (bubbleH - 15) * 0.5);
             ctx.closePath();
             ctx.fill();
             ctx.stroke();
         }
 
-        // Reset shadow before drawing text for maximum razor sharpness
         ctx.shadowColor = 'transparent';
         ctx.shadowBlur = 0;
 
-        // Interior text center offset: dX = -5px, dY = -14px (centered in white body)
+        // Centered tightly in the white speech balloon (offset dX=-5, dY=-14 for tail headroom)
         const textOffsetX = -5;
         const textOffsetY = -14;
-
-        // Split text: e.g. "Bewakoof / بیوقوف" into English and Urdu
-        const parts = this.text.split(' / ');
-        const engText = parts[0] || '';
-        const urduText = parts[1] || '';
-
-        // Dynamic bold comic font size so text fills the speech balloon prominently
-        let engFontSize = 26;
-        let urduFontSize = 32;
-
-        if (engText.length > 15 || (urduText && urduText.length > 15)) {
-            engFontSize = 19;
-            urduFontSize = 24;
-        } else if (engText.length > 9 || (urduText && urduText.length > 9)) {
-            engFontSize = 23;
-            urduFontSize = 28;
-        }
+        const fonts = getConfiguredFonts();
 
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
 
-        // Render English line (bold, clean dark)
-        ctx.font = `900 ${engFontSize}px "Outfit", sans-serif`;
-        ctx.fillStyle = '#121214';
-        ctx.fillText(engText, textOffsetX, textOffsetY - Math.round(engFontSize * 0.65));
-
-        // Render Urdu line with Arabic/Urdu connected script and fallback fonts
-        if (urduText) {
-            ctx.font = `700 ${urduFontSize}px "Noto Nastaliq Urdu", "Noto Sans Arabic", "Urdu Typesetting", "Jameel Noori Nastaleeq", "Arial", sans-serif`;
+        if (this.lang === 'ur') {
+            ctx.direction = 'rtl';
+            const urSize = this.text.length > 14 ? 30 : this.text.length > 9 ? 34 : 40;
+            ctx.font = `700 ${urSize}px ${fonts.ur}`;
             ctx.fillStyle = '#dc2626';
-            ctx.fillText(urduText, textOffsetX, textOffsetY + Math.round(urduFontSize * 0.60));
+            ctx.fillText(this.text, textOffsetX, textOffsetY + 2);
+        } else {
+            ctx.direction = 'ltr';
+            const enSize = this.text.length > 14 ? 22 : this.text.length > 9 ? 26 : 32;
+            ctx.font = `900 ${enSize}px ${fonts.en}`;
+            ctx.fillStyle = '#141416';
+            ctx.fillText(this.text, textOffsetX, textOffsetY);
         }
 
         ctx.restore();
@@ -359,17 +370,18 @@ class BlastOverlay {
     }
 }
 
-// Optional Noticeable Emoji Interaction (Left Margin Reaction)
+// Optional Side Emoji Interaction (Left Margin Reaction — Single-Language Bubble!)
 class EmojiDetail {
     constructor(config) {
         this.config = config;
         this.active = false;
-        this.timer = 5.0; // Trigger after initial 5s, then every ~14 seconds
+        this.timer = 5.0;
         this.stage = 0;
         this.stageTimer = 0;
         this.x = 105;
         this.y = 420;
         this.scale = 0;
+        this.bubbleIndex = 0;
     }
 
     update(dt) {
@@ -382,11 +394,11 @@ class EmojiDetail {
                 this.y = 380 + Math.random() * 280;
                 this.timer = 14.0 + Math.random() * 6.0;
                 this.scale = 0;
+                this.bubbleIndex++;
             }
             return;
         }
 
-        // Animate entrance scale
         if (this.scale < 1.0) {
             this.scale = Math.min(1.0, this.scale + dt * 4.5);
         }
@@ -408,39 +420,36 @@ class EmojiDetail {
         ctx.translate(this.x, this.y);
         ctx.scale(this.scale, this.scale);
 
-        // Stage 0: Devil emoji laughing + speech bubble thrown
-        // Stage 1: Crying emoji in the middle reacts
-        // Stage 2: Laughing emoji on the right joins in
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
 
-        // Devil emoji
         ctx.font = '56px sans-serif';
         ctx.fillText('\uD83D\uDE08', 0, 0);
 
-        // Middle Crying emoji
         if (this.stage >= 1) {
             ctx.font = '52px sans-serif';
             ctx.fillText('\uD83D\uDE22', 64, 0);
         }
 
-        // Right Laughing emoji
         if (this.stage >= 2) {
             ctx.font = '56px sans-serif';
             ctx.fillText('\uD83D\uDE06', 128, 0);
         }
 
-        // Prominent comic speech bubble placed comfortably above emojis
-        const bX = -22;
-        const bY = -115;
-        const bW = 186;
-        const bH = 74;
+        const pool = (this.config && this.config.EMOJI_REACTION_BUBBLES)
+            ? this.config.EMOJI_REACTION_BUBBLES
+            : [{ text: '\u0628\u0633 \u0645\u0630\u0627\u0642!', lang: 'ur' }];
+        const item = pool[this.bubbleIndex % pool.length];
 
-        // Clean drop shadow
+        const bX = -22;
+        const bY = -102;
+        const bW = 172;
+        const bH = 60;
+
         ctx.shadowColor = 'rgba(0, 0, 0, 0.22)';
         ctx.shadowBlur = 10;
         ctx.shadowOffsetX = 2;
-        ctx.shadowOffsetY = 5;
+        ctx.shadowOffsetY = 4;
 
         ctx.fillStyle = '#ffffff';
         ctx.strokeStyle = '#18181b';
@@ -452,31 +461,32 @@ class EmojiDetail {
         ctx.fill();
         ctx.stroke();
 
-        // Pointer tail pointing down toward the laughing devil emoji (0, -28)
         ctx.beginPath();
-        ctx.moveTo(bX + 28, bY + bH);
+        ctx.moveTo(bX + 26, bY + bH);
         ctx.lineTo(0, -28);
-        ctx.lineTo(bX + 50, bY + bH);
+        ctx.lineTo(bX + 46, bY + bH);
         ctx.closePath();
         ctx.fill();
         ctx.stroke();
 
-        // Reset shadow for crisp text
         ctx.shadowColor = 'transparent';
         ctx.shadowBlur = 0;
 
-        // Clean bold text inside speech bubble
+        const fonts = getConfiguredFonts();
         const textCenterX = bX + bW * 0.5;
+        const textCenterY = bY + bH * 0.5;
 
-        // English text line
-        ctx.font = '900 18px "Outfit", sans-serif';
-        ctx.fillStyle = '#141416';
-        ctx.fillText('Bas mazaaq!', textCenterX, bY + 24);
-
-        // Urdu text line
-        ctx.font = '700 24px "Noto Nastaliq Urdu", "Noto Sans Arabic", serif';
-        ctx.fillStyle = '#dc2626';
-        ctx.fillText('\u0628\u0633 \u0645\u0630\u0627\u0642', textCenterX, bY + 52);
+        if (item.lang === 'ur') {
+            ctx.direction = 'rtl';
+            ctx.font = `700 28px ${fonts.ur}`;
+            ctx.fillStyle = '#dc2626';
+            ctx.fillText(item.text, textCenterX, textCenterY + 2);
+        } else {
+            ctx.direction = 'ltr';
+            ctx.font = `900 21px ${fonts.en}`;
+            ctx.fillStyle = '#141416';
+            ctx.fillText(item.text, textCenterX, textCenterY);
+        }
 
         ctx.restore();
     }
@@ -489,14 +499,12 @@ export class VFXManager {
 
         this.particles = new ObjectPool(() => new Particle(), (p, ...args) => p.reset(...args), 100);
         this.shockwaves = new ObjectPool(() => new Shockwave(), (s, ...args) => s.reset(...args), 15);
-        this.insultBubbles = new ObjectPool(() => new InsultBubble(), (b, ...args) => b.reset(...args), 25);
+        this.insultBubbles = new ObjectPool(() => new InsultBubble(), (b, ...args) => b.reset(...args), 40);
         this.blastOverlays = new ObjectPool(() => new BlastOverlay(), (o, ...args) => o.reset(...args), 10);
 
-        // Insult Deck Shuffler (Exhausts without repeating until all 22 shown)
         this.insultDeck = [];
         this.refillInsultDeck();
 
-        // Screen Flash System
         this.screenFlash = {
             color: '239, 68, 68',
             alpha: 0,
@@ -505,11 +513,9 @@ export class VFXManager {
             timer: 0
         };
 
-        // Digital Glitch System (Bomb Impact Distortion)
         this.glitchTimer = 0;
         this.glitchDuration = 0.35;
 
-        // Optional Emoji Detail
         this.emojiDetail = new EmojiDetail(config);
     }
 
@@ -524,7 +530,6 @@ export class VFXManager {
 
     refillInsultDeck() {
         const list = [...CONFIG.INSULTS];
-        // Fisher-Yates shuffle
         for (let i = list.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             const temp = list[i];
@@ -565,7 +570,7 @@ export class VFXManager {
         this.screenFlash.timer = duration;
     }
 
-    // Normal Laughing Mouth Whack VFX
+    // Normal Green Emoji Whack VFX + Consistent Hit Reaction Curse Speech Bubble!
     spawnHitVFX(x, y, hitType = 'punch') {
         const count = 14;
         const colors = (hitType === 'slap')
@@ -589,19 +594,32 @@ export class VFXManager {
         }
 
         this.shockwaves.get(x, y, 130, '#bef264', 0.28);
+
+        // Consistently pop up a curse/scold reaction speech bubble on every hit!
+        const insult = this.drawInsultFromDeck();
+        const jitterX = (Math.random() - 0.5) * 140;
+        const tx = Math.max(165, Math.min(915, x + jitterX));
+        const ty = Math.max(240, Math.min(1650, y - 155));
+
+        this.insultBubbles.get(
+            x, y - 35,
+            tx, ty,
+            insult,
+            0.85, // brisk 0.85s lifetime (~0.32s hold -> rapid fade)
+            0,    // instant pop!
+            0.18,
+            0.84
+        );
     }
 
     // Bomb Hit Sequence: Blast + 4-6 Insult Speech Bubbles
     spawnBombExplosionSequence(x, y) {
-        // 1. Red Screen Flash & Glitch
         this.triggerScreenFlash('239, 68, 68', 0.85, 0.30);
         this.triggerScreenGlitch(0.40);
 
-        // 2. Dual Shockwaves
         this.shockwaves.get(x, y, 300, '#ef4444', 0.50);
         this.shockwaves.get(x, y, 200, '#f59e0b', 0.40);
 
-        // 3. Dual Blast sprite overlays (Cinematic Slow-Mo Explosion!)
         if (this.assets && this.assets.blast1) {
             this.blastOverlays.get(x, y, this.assets.blast1, 0.45);
         }
@@ -609,7 +627,6 @@ export class VFXManager {
             this.blastOverlays.get(x, y, this.assets.blast2, 0.60);
         }
 
-        // 4. Explosion smoke & fiery sparks
         for (let i = 0; i < 32; i++) {
             const angle = Math.random() * Math.PI * 2;
             const speed = 120 + Math.random() * 260;
@@ -626,11 +643,7 @@ export class VFXManager {
             );
         }
 
-        // 5. Spawn 4 to 6 Insult Speech Bubbles pointing outward toward player / playfield
-        const bubbleCount = 4 + Math.floor(Math.random() * 3); // 4, 5, or 6
-        
-        // Generous radial distribution: 330px to 450px travel distance
-        // Bubble dimensions: 280 x 190. Wide angular step ensures center-to-center distance > 320px
+        const bubbleCount = 4 + Math.floor(Math.random() * 3);
         const totalAngle = Math.PI * 2;
         const baseAngle = -Math.PI * 0.5 + (Math.random() - 0.5) * 0.5;
         const step = totalAngle / bubbleCount;
@@ -638,20 +651,17 @@ export class VFXManager {
         for (let i = 0; i < bubbleCount; i++) {
             const insult = this.drawInsultFromDeck();
             const angle = baseAngle + (i * step) + (Math.random() - 0.5) * 0.18;
-
-            // Stagger radiuses: alternate 330px and 440px so adjacent bubbles never overlap
             const radius = (i % 2 === 0) ? (330 + Math.random() * 30) : (440 + Math.random() * 40);
 
             let tx = x + Math.cos(angle) * radius;
-            let ty = y + Math.sin(angle) * (radius * 1.15); // portrait aspect elongation
+            let ty = y + Math.sin(angle) * (radius * 1.15);
 
-            // Safe playfield bounds (prevent colliding with HUD or screen edge)
             tx = Math.max(165, Math.min(915, tx));
-            ty = Math.max(270, Math.min(1650, ty));
+            ty = Math.max(250, Math.min(1650, ty));
 
-            const delay = i * 0.06; // 60ms stagger for sequential popping
-            const life = 2.8 + Math.random() * 0.4;
-            const travelDuration = 0.36 + Math.random() * 0.08;
+            const delay = i * 0.04;
+            const life = 0.82 + Math.random() * 0.16;
+            const travelDuration = 0.24 + Math.random() * 0.06;
 
             this.insultBubbles.get(
                 x, y,
@@ -659,7 +669,8 @@ export class VFXManager {
                 insult,
                 life,
                 delay,
-                travelDuration
+                travelDuration,
+                1.0
             );
         }
     }
@@ -706,13 +717,11 @@ export class VFXManager {
         const p = Math.max(0, this.glitchTimer / (this.glitchDuration || 0.35));
 
         ctx.save();
-        // 1. Digital scanlines
         ctx.fillStyle = 'rgba(0, 0, 0, 0.18)';
         for (let y = 0; y < h; y += 8) {
             ctx.fillRect(0, y, w, 3);
         }
 
-        // 2. Horizontal slice glitch bars (Chromatic offset)
         const slices = 6;
         for (let i = 0; i < slices; i++) {
             const sliceY = (Math.random() * h * 0.95);
@@ -723,7 +732,6 @@ export class VFXManager {
             ctx.fillRect(shiftX, sliceY, w, sliceH);
         }
 
-        // 3. Glitch noise bars
         ctx.fillStyle = 'rgba(255, 255, 255, 0.40)';
         for (let i = 0; i < 4; i++) {
             const ny = Math.random() * h;
@@ -734,27 +742,22 @@ export class VFXManager {
     }
 
     draw(ctx) {
-        // Shockwaves & particles
         this.shockwaves.draw(ctx);
         this.particles.draw(ctx);
         this.blastOverlays.draw(ctx);
 
-        // Optional Emoji detail
         this.emojiDetail.draw(ctx);
 
-        // Insult Speech Bubbles (Render all active bubbles in the ObjectPool!)
         const bubbleImg = (this.assets && this.assets.speechBubble) ? this.assets.speechBubble : null;
         for (let i = 0; i < this.insultBubbles.active.length; i++) {
             const b = this.insultBubbles.active[i];
             b.draw(ctx, bubbleImg);
         }
 
-        // Full Screen Glitch Effect
         if (this.glitchTimer > 0) {
             this.drawScreenGlitch(ctx);
         }
 
-        // Full Screen Flash
         if (this.screenFlash.alpha > 0.005) {
             ctx.save();
             ctx.fillStyle = `rgba(${this.screenFlash.color}, ${this.screenFlash.alpha})`;
