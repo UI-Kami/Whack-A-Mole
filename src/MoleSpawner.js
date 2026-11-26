@@ -1,4 +1,5 @@
-// src/MoleSpawner.js - 90-Second Timeline Spawner & Disguised Bomb Scheduler
+// src/MoleSpawner.js - Two-Phase Timeline Spawner & Disguised Bomb Scheduler
+import { computePacingCurve } from './Config.js';
 import { MoleController, MOLE_STATE } from './MoleController.js';
 import { NATIVE_HOLES } from './ParallaxManager.js';
 
@@ -15,6 +16,7 @@ export class Hole {
         this.screenY = 0;
         this.radiusX = (nativeHole.rx || 126);
         this.radiusY = (nativeHole.ry || 60);
+        this.variant = nativeHole.variant || 'lime';
         this.depthScale = nativeHole.depthScale || 1.0;
         this.isVisible = true;
         this.lastSpawnWasBomb = false;
@@ -98,6 +100,7 @@ export class MoleSpawner {
         this.lastBombHoleId = -1;
         this.totalBombsSpawned = 0;
         this.speedFactor = 1.0;
+        this.pacingCurve = computePacingCurve(0);
 
         if (this.parallaxManager) {
             this.parallaxManager.onTileRecycled = (tileIdx) => this.onTileRecycled(tileIdx);
@@ -166,6 +169,7 @@ export class MoleSpawner {
         this.lastBombHoleId = -1;
         this.totalBombsSpawned = 0;
         this.speedFactor = 1.0;
+        this.pacingCurve = computePacingCurve(0);
 
         for (let i = 0; i < this.holes.length; i++) {
             this.holes[i].lastSpawnWasBomb = false;
@@ -178,8 +182,13 @@ export class MoleSpawner {
         this.speedFactor = Math.max(1.0, factor);
     }
 
+    setPacingCurve(curve) {
+        this.pacingCurve = curve;
+    }
+
     update(dt, elapsedTimeline) {
         this.elapsedTimeline = elapsedTimeline;
+        this.pacingCurve = computePacingCurve(elapsedTimeline);
         this.updateHolePositions();
 
         // Update all active moles
@@ -187,7 +196,7 @@ export class MoleSpawner {
             this.holes[i].mole.update(dt);
         }
 
-        // Spawning logic according to timeline
+        // Spawning logic driven cleanly by two-phase pacing curve
         this.spawnTimer -= dt;
         if (this.spawnTimer <= 0) {
             this.attemptSpawn();
@@ -198,32 +207,11 @@ export class MoleSpawner {
         const time = this.elapsedTimeline;
         const totalDuration = this.config.TOTAL_DURATION || 90.0;
         const timeProgress = Math.min(1.0, Math.max(0.0, time / totalDuration));
+        const curve = this.pacingCurve || computePacingCurve(time);
 
-        let baseInterval = this.config.SPAWN_INTERVAL_WARMUP;
-        let maxSimultaneous = 2;
-        let idleDuration = this.config.MOLE_IDLE_WARMUP;
-
-        if (time < this.config.PHASE_WARMUP_END) {
-            baseInterval = this.config.SPAWN_INTERVAL_WARMUP;
-            maxSimultaneous = 2;
-            idleDuration = this.config.MOLE_IDLE_WARMUP;
-        } else if (time < this.config.PHASE_MIDDLE_END) {
-            baseInterval = this.config.SPAWN_INTERVAL_MIDDLE;
-            maxSimultaneous = 3;
-            idleDuration = this.config.MOLE_IDLE_MIDDLE;
-        } else if (time < this.config.PHASE_PRESSURE_END) {
-            baseInterval = this.config.SPAWN_INTERVAL_PRESSURE;
-            maxSimultaneous = 4;
-            idleDuration = this.config.MOLE_IDLE_PRESSURE;
-        } else {
-            baseInterval = this.config.SPAWN_INTERVAL_FINAL;
-            maxSimultaneous = 4;
-            idleDuration = this.config.MOLE_IDLE_FINAL;
-        }
-
-        // Gentle speed scaling for intervals so 30 hits in 90s stays very responsive
-        const interval = Math.max(0.32, baseInterval / (1.0 + (this.speedFactor - 1.0) * 0.72));
-        this.spawnTimer = interval * (0.85 + Math.random() * 0.25);
+        // Two-Phase active target ceiling (2 early -> 3 through Phase 2) & exact curve spawn interval
+        const maxSimultaneous = (time < 22.0) ? 2 : 3;
+        this.spawnTimer = curve.spawnInterval * (0.92 + Math.random() * 0.16);
 
         // Count active board state before picking target type/hole
         const visibleHoles = this.holes.filter(h => h.isVisible);
@@ -268,24 +256,33 @@ export class MoleSpawner {
         }
 
         const chosenHole = candidateHoles[Math.floor(Math.random() * candidateHoles.length)];
-        const minIdle = shouldSpawnBomb ? 0.85 : 0.95;
-        const effSpeed = 1.0 + (this.speedFactor - 1.0) * 0.25;
-        const idle = Math.max(minIdle, Math.min(1.30, (idleDuration / effSpeed) * (0.94 + Math.random() * 0.12)));
+        const jitterHold = curve.holdDuration * (0.95 + Math.random() * 0.10);
+        const timings = {
+            popDuration: curve.popDuration,
+            holdDuration: jitterHold,
+            duckDuration: curve.duckDuration,
+            redRetreatDuration: curve.redRetreatDuration
+        };
 
-        chosenHole.mole.spawn(shouldSpawnBomb, idle, this.speedFactor);
+        chosenHole.mole.spawn(shouldSpawnBomb, jitterHold, timings);
         chosenHole.lastSpawnWasBomb = shouldSpawnBomb;
 
         if (shouldSpawnBomb) {
             this.lastBombHoleId = chosenHole.id;
             this.totalBombsSpawned++;
 
-            // Pair any bomb spawn on an otherwise empty board with a hittable normal target nearby
+            // Pair any bomb spawn with a hittable normal target nearby so skilled players stay supplied with hits
             if (activeNormals === 0 && (activeMoles.length + 1) < maxSimultaneous && availableHoles.length >= 2) {
                 const partnerPool = availableHoles.filter(h => h.id !== chosenHole.id);
                 if (partnerPool.length > 0) {
                     const partnerHole = partnerPool[Math.floor(Math.random() * partnerPool.length)];
-                    const partnerIdle = Math.max(0.95, Math.min(1.30, (idleDuration / effSpeed) * (0.96 + Math.random() * 0.12)));
-                    partnerHole.mole.spawn(false, partnerIdle, this.speedFactor);
+                    const partnerHold = curve.holdDuration * (0.96 + Math.random() * 0.10);
+                    partnerHole.mole.spawn(false, partnerHold, {
+                        popDuration: curve.popDuration,
+                        holdDuration: partnerHold,
+                        duckDuration: curve.duckDuration,
+                        redRetreatDuration: curve.redRetreatDuration
+                    });
                     partnerHole.lastSpawnWasBomb = false;
                 }
             }

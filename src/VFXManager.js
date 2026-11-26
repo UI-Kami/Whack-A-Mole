@@ -7,15 +7,14 @@ function getConfiguredFonts() {
     try {
         const cs = getComputedStyle(document.documentElement);
         const en = (cs.getPropertyValue('--font-en') || '').trim();
-        const ur = (cs.getPropertyValue('--font-ur') || '').trim();
         return {
-            en: en || '"Outfit", sans-serif',
-            ur: ur || '"Noto Nastaliq Urdu", "Jameel Noori Nastaleeq", "Noto Sans Arabic", Arial, sans-serif'
+            en: en || "'Unbounded', sans-serif",
+            ur: en || "'Unbounded', sans-serif"
         };
     } catch (e) {
         return {
-            en: '"Outfit", sans-serif',
-            ur: '"Noto Nastaliq Urdu", "Jameel Noori Nastaleeq", "Noto Sans Arabic", Arial, sans-serif'
+            en: "'Unbounded', sans-serif",
+            ur: "'Unbounded', sans-serif"
         };
     }
 }
@@ -423,16 +422,16 @@ class EmojiDetail {
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
 
-        ctx.font = '56px sans-serif';
+        ctx.font = "56px 'Unbounded', sans-serif";
         ctx.fillText('\uD83D\uDE08', 0, 0);
 
         if (this.stage >= 1) {
-            ctx.font = '52px sans-serif';
+            ctx.font = "52px 'Unbounded', sans-serif";
             ctx.fillText('\uD83D\uDE22', 64, 0);
         }
 
         if (this.stage >= 2) {
-            ctx.font = '56px sans-serif';
+            ctx.font = "56px 'Unbounded', sans-serif";
             ctx.fillText('\uD83D\uDE06', 128, 0);
         }
 
@@ -556,10 +555,7 @@ export class VFXManager {
         this.glitchTimer = 0;
         if (this.emojiDetail) {
             this.emojiDetail.active = false;
-            this.emojiDetail.timer = 5.0;
-            this.emojiDetail.scale = 0;
         }
-        this.refillInsultDeck();
     }
 
     triggerScreenFlash(color = '239, 68, 68', maxAlpha = 0.85, duration = 0.25) {
@@ -594,25 +590,10 @@ export class VFXManager {
         }
 
         this.shockwaves.get(x, y, 130, '#bef264', 0.28);
-
-        // Consistently pop up a curse/scold reaction speech bubble on every hit!
-        const insult = this.drawInsultFromDeck();
-        const jitterX = (Math.random() - 0.5) * 140;
-        const tx = Math.max(165, Math.min(915, x + jitterX));
-        const ty = Math.max(240, Math.min(1650, y - 155));
-
-        this.insultBubbles.get(
-            x, y - 35,
-            tx, ty,
-            insult,
-            0.85, // brisk 0.85s lifetime (~0.32s hold -> rapid fade)
-            0,    // instant pop!
-            0.18,
-            0.84
-        );
+        // Floating playfield insult bubbles disabled per client feedback
     }
 
-    // Bomb Hit Sequence: Blast + 4-6 Insult Speech Bubbles
+    // Bomb Hit Sequence: Blast sprites, shockwaves & local explosion sparks (NO floating insult bubbles)
     spawnBombExplosionSequence(x, y) {
         this.triggerScreenFlash('239, 68, 68', 0.85, 0.30);
         this.triggerScreenGlitch(0.40);
@@ -642,37 +623,6 @@ export class VFXManager {
                 'smoke'
             );
         }
-
-        const bubbleCount = 4 + Math.floor(Math.random() * 3);
-        const totalAngle = Math.PI * 2;
-        const baseAngle = -Math.PI * 0.5 + (Math.random() - 0.5) * 0.5;
-        const step = totalAngle / bubbleCount;
-
-        for (let i = 0; i < bubbleCount; i++) {
-            const insult = this.drawInsultFromDeck();
-            const angle = baseAngle + (i * step) + (Math.random() - 0.5) * 0.18;
-            const radius = (i % 2 === 0) ? (330 + Math.random() * 30) : (440 + Math.random() * 40);
-
-            let tx = x + Math.cos(angle) * radius;
-            let ty = y + Math.sin(angle) * (radius * 1.15);
-
-            tx = Math.max(165, Math.min(915, tx));
-            ty = Math.max(250, Math.min(1650, ty));
-
-            const delay = i * 0.04;
-            const life = 0.82 + Math.random() * 0.16;
-            const travelDuration = 0.24 + Math.random() * 0.06;
-
-            this.insultBubbles.get(
-                x, y,
-                tx, ty,
-                insult,
-                life,
-                delay,
-                travelDuration,
-                1.0
-            );
-        }
     }
 
     spawnMoleEmergeVFX(x, y) {
@@ -697,9 +647,7 @@ export class VFXManager {
     update(dt) {
         this.particles.update(dt);
         this.shockwaves.update(dt);
-        this.insultBubbles.update(dt);
         this.blastOverlays.update(dt);
-        this.emojiDetail.update(dt);
 
         if (this.screenFlash.timer > 0) {
             this.screenFlash.timer -= dt;
@@ -745,14 +693,6 @@ export class VFXManager {
         this.shockwaves.draw(ctx);
         this.particles.draw(ctx);
         this.blastOverlays.draw(ctx);
-
-        this.emojiDetail.draw(ctx);
-
-        const bubbleImg = (this.assets && this.assets.speechBubble) ? this.assets.speechBubble : null;
-        for (let i = 0; i < this.insultBubbles.active.length; i++) {
-            const b = this.insultBubbles.active[i];
-            b.draw(ctx, bubbleImg);
-        }
 
         if (this.glitchTimer > 0) {
             this.drawScreenGlitch(ctx);

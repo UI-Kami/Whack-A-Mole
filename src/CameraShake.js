@@ -9,11 +9,12 @@ export class CameraShake {
         this.time = 0;
     }
 
-    // Add trauma: 0.1 to 1.0
-    addTrauma(amount = 0.5, dirX = 0, dirY = 1) {
-        this.trauma = Math.min(1.0, this.trauma + amount);
-        this.dirX = dirX;
-        this.dirY = dirY;
+    // Add trauma: kept as no-op so full-background/container stay completely stationary
+    addTrauma() {
+        this.trauma = 0;
+        this.offsetX = 0;
+        this.offsetY = 0;
+        this.angle = 0;
     }
 
     reset() {
@@ -51,10 +52,7 @@ export class CameraShake {
         }
     }
 
-    apply(ctx) {
-        if (this.offsetX !== 0 || this.offsetY !== 0 || this.angle !== 0) {
-            ctx.translate(this.offsetX, this.offsetY);
-            ctx.rotate(this.angle);
-        }
+    apply() {
+        // Stationary viewport: do not shift/rotate background canvas (prevents white edge flash)
     }
 }

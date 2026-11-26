@@ -3,47 +3,50 @@ export const TILE_NATIVE_WIDTH = 1080;
 export const TILE_NATIVE_HEIGHT = 1920;
 
 export const NATIVE_HOLES = [
-    // Exact hole coordinates mapped directly to the pink and lime green rings in the poster art
-    // Row 0 (Y ≈ 153)
-    { col: 0, row: 0, x: 282, y: 151, rx: 126, ry: 60, depthScale: 1.0 },
-    { col: 2, row: 0, x: 819, y: 156, rx: 126, ry: 60, depthScale: 1.0 },
+    // Standalone hole coordinates & ring color variants (separated from background asset)
+    // Row 0 (Y ~ 153)
+    { col: 0, row: 0, x: 282, y: 151, rx: 126, ry: 60, variant: 'lime', depthScale: 1.0 },
+    { col: 2, row: 0, x: 819, y: 156, rx: 126, ry: 60, variant: 'pink', depthScale: 1.0 },
 
-    // Row 1 (Y ≈ 336 - Center)
-    { col: 1, row: 1, x: 551, y: 336, rx: 126, ry: 60, depthScale: 1.0 },
+    // Row 1 (Y ~ 336 - Center)
+    { col: 1, row: 1, x: 551, y: 336, rx: 126, ry: 60, variant: 'pink', depthScale: 1.0 },
 
-    // Row 2 (Y ≈ 552)
-    { col: 0, row: 2, x: 306, y: 548, rx: 126, ry: 60, depthScale: 1.0 },
-    { col: 2, row: 2, x: 808, y: 557, rx: 126, ry: 60, depthScale: 1.0 },
+    // Row 2 (Y ~ 552)
+    { col: 0, row: 2, x: 306, y: 548, rx: 126, ry: 60, variant: 'pink', depthScale: 1.0 },
+    { col: 2, row: 2, x: 808, y: 557, rx: 126, ry: 60, variant: 'lime', depthScale: 1.0 },
 
-    // Row 3 (Y ≈ 759 - Center)
-    { col: 1, row: 3, x: 551, y: 759, rx: 126, ry: 60, depthScale: 1.0 },
+    // Row 3 (Y ~ 759 - Center)
+    { col: 1, row: 3, x: 551, y: 759, rx: 126, ry: 60, variant: 'lime', depthScale: 1.0 },
 
-    // Row 4 (Y ≈ 947)
-    { col: 0, row: 4, x: 294, y: 947, rx: 126, ry: 60, depthScale: 1.0 },
-    { col: 2, row: 4, x: 808, y: 947, rx: 126, ry: 60, depthScale: 1.0 },
+    // Row 4 (Y ~ 947)
+    { col: 0, row: 4, x: 294, y: 947, rx: 126, ry: 60, variant: 'lime', depthScale: 1.0 },
+    { col: 2, row: 4, x: 808, y: 947, rx: 126, ry: 60, variant: 'pink', depthScale: 1.0 },
 
-    // Row 5 (Y ≈ 1146 - Center)
-    { col: 1, row: 5, x: 547, y: 1146, rx: 126, ry: 60, depthScale: 1.0 },
+    // Row 5 (Y ~ 1146 - Center)
+    { col: 1, row: 5, x: 547, y: 1146, rx: 126, ry: 60, variant: 'lime', depthScale: 1.0 },
 
-    // Row 6 (Y ≈ 1346)
-    { col: 0, row: 6, x: 301, y: 1344, rx: 126, ry: 60, depthScale: 1.0 },
-    { col: 2, row: 6, x: 809, y: 1348, rx: 126, ry: 60, depthScale: 1.0 },
+    // Row 6 (Y ~ 1346)
+    { col: 0, row: 6, x: 301, y: 1344, rx: 126, ry: 60, variant: 'pink', depthScale: 1.0 },
+    { col: 2, row: 6, x: 809, y: 1348, rx: 126, ry: 60, variant: 'lime', depthScale: 1.0 },
 
-    // Row 7 (Y ≈ 1564 - Center)
-    { col: 1, row: 7, x: 554, y: 1564, rx: 126, ry: 60, depthScale: 1.0 },
+    // Row 7 (Y ~ 1564 - Center)
+    { col: 1, row: 7, x: 554, y: 1564, rx: 126, ry: 60, variant: 'pink', depthScale: 1.0 },
 
-    // Row 8 (Y ≈ 1750)
-    { col: 0, row: 8, x: 273, y: 1744, rx: 126, ry: 60, depthScale: 1.0 },
-    { col: 2, row: 8, x: 804, y: 1754, rx: 126, ry: 60, depthScale: 1.0 }
+    // Row 8 (Y ~ 1750)
+    { col: 0, row: 8, x: 273, y: 1744, rx: 126, ry: 60, variant: 'lime', depthScale: 1.0 },
+    { col: 2, row: 8, x: 804, y: 1754, rx: 126, ry: 60, variant: 'pink', depthScale: 1.0 }
 ];
 
 export class ParallaxManager {
     constructor(config) {
         this.config = config;
         this.bgImg = null;
+        this.holeLimeImg = null;
+        this.holePinkImg = null;
+        this.holeImg = null;
 
-        // Procedural infinite scrolling parameters
-        this.scrollSpeed = config.SCROLL_SPEED || 60; // Base downward conveyor speed in px/s
+        // Procedural infinite scrolling parameters (scales up to 5.0x -> ~550 px/s in late Phase 2)
+        this.scrollSpeed = config.SCROLL_SPEED || 110;
         this.speedMultiplier = 1.0;
         this.onTileRecycled = null;
 
@@ -65,17 +68,35 @@ export class ParallaxManager {
         this.loadAssets();
     }
 
+    setAssets(bgImg, holeLimeImg = null, holePinkImg = null) {
+        if (bgImg) this.bgImg = bgImg;
+        if (holeLimeImg) {
+            this.holeLimeImg = holeLimeImg;
+            this.holeImg = holeLimeImg;
+        }
+        if (holePinkImg) this.holePinkImg = holePinkImg;
+        this.calculateBounds();
+    }
+
     loadAssets() {
-        const img = new Image();
-        img.src = 'assets/normalized/poster_bg_1080.png';
-        img.onload = () => {
-            this.bgImg = img;
-            this.calculateBounds();
+        const load = (src, assign) => {
+            const img = new Image();
+            img.src = src;
+            img.onload = () => assign(img);
         };
+        load('assets/normalized/bg_field_1080.png', (img) => {
+            if (!this.bgImg) { this.bgImg = img; this.calculateBounds(); }
+        });
+        load('assets/normalized/hole_lime.png', (img) => {
+            if (!this.holeLimeImg) { this.holeLimeImg = img; this.holeImg = img; }
+        });
+        load('assets/normalized/hole_pink.png', (img) => {
+            if (!this.holePinkImg) { this.holePinkImg = img; }
+        });
     }
 
     setSpeedMultiplier(factor) {
-        this.speedMultiplier = Math.max(1.0, factor);
+        this.speedMultiplier = Math.max(1.0, Math.min(6.0, factor));
     }
 
     resetTiles() {
@@ -201,7 +222,7 @@ export class ParallaxManager {
             ctx.restore();
         }
 
-        // 2. Draw seamlessly scrolling playfield tiles (Infinite Scroll!)
+        // 2. Draw seamlessly scrolling hole-free playfield tiles (Infinite Scroll!)
         if (this.bgImg && this.bgImg.complete && this.bgImg.naturalWidth > 0 && rh > 0) {
             for (let i = 0; i < this.tiles.length; i++) {
                 const ty = this.tiles[i].y;
@@ -210,13 +231,26 @@ export class ParallaxManager {
                 }
             }
         } else {
-            // Warm poster orange gradient fallback
             const grad = ctx.createLinearGradient(0, 0, 0, h);
             grad.addColorStop(0, '#ee7116');
             grad.addColorStop(0.5, '#e56408');
             grad.addColorStop(1, '#cb4700');
             ctx.fillStyle = grad;
             ctx.fillRect(ox, 0, rw, h);
+        }
+
+        // 2b. Composite standalone transparent hole PNGs on top of playfield tiles (Layer 1)
+        const scale = b.scale || 1.0;
+        for (let i = 0; i < this.tiles.length; i++) {
+            const ty = this.tiles[i].y;
+            if (ty + rh <= -160 || ty >= h + 160) continue;
+            for (let j = 0; j < NATIVE_HOLES.length; j++) {
+                const nh = NATIVE_HOLES[j];
+                const cx = ox + (nh.x * scale);
+                const cy = ty + (nh.y * scale);
+                if (cy < -160 || cy > h + 160) continue;
+                this.drawStandaloneHoleSprite(ctx, cx, cy, nh.rx * scale, nh.ry * scale, nh.variant, scale);
+            }
         }
 
         // 3. Arcade bezel neon accent lines for widescreen
@@ -294,21 +328,44 @@ export class ParallaxManager {
         }
     }
 
+    getHoleSprite(variant) {
+        if (variant === 'pink') return this.holePinkImg || this.holeImg;
+        return this.holeLimeImg || this.holeImg;
+    }
+
+    drawStandaloneHoleSprite(ctx, cx, cy, rx, ry, variant) {
+        const holeSprite = this.getHoleSprite(variant);
+        if (holeSprite && holeSprite.complete && holeSprite.naturalWidth > 0) {
+            const aspect = holeSprite.naturalHeight / holeSprite.naturalWidth;
+            const w = rx * 3.162;
+            const h = w * aspect;
+            ctx.drawImage(holeSprite, cx - w * 0.5, cy - h * 0.5, w, h);
+        } else {
+            // Vector fallback if standalone PNG is not loaded
+            ctx.fillStyle = variant === 'pink' ? '#ff99ee' : '#bbcc00';
+            ctx.beginPath();
+            ctx.ellipse(cx, cy + ry * 0.06, rx * 1.46, ry * 2.02, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#000000';
+            ctx.beginPath();
+            ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
     /**
      * Layer 3 (Front Colored Rim Overlay):
-     * Redraws only the front half of the colored outer rim (excluding the black pit across the center,
-     * and smoothly opening the left/right paw pockets as pawBlend reaches 1 so paws rest cleanly ON TOP
-     * of the front rim while the torso belly remains tucked strictly BEHIND it).
+     * Redraws only the front half of the standalone hole asset (excluding the black pit
+     * across the center, and opening left/right paw pockets as pawBlend -> 1).
      */
     drawHoleFrontRim(ctx, hole, pawBlend = 0) {
-        if (!this.bgImg || !this.bgImg.complete || this.bgImg.naturalWidth === 0) return;
         const b = this.bounds;
-        const rw = b.renderTileW || this.config.VIEWPORT_WIDTH;
-        const rh = b.renderTileH || this.config.VIEWPORT_HEIGHT;
-        const ox = b.offsetX || 0;
+        const scale = b.scale || 1.0;
+        const h = this.config.VIEWPORT_HEIGHT || 1920;
         const ty = this.getTileOffsetY(hole.tileIndex);
+        const rh = b.renderTileH || h;
 
-        if (ty + rh <= -40 || ty >= (this.config.VIEWPORT_HEIGHT || 1920) + 40) return;
+        if (ty + rh <= -160 || ty >= h + 160) return;
 
         const cx = hole.screenX;
         const cy = hole.screenY;
@@ -329,7 +386,7 @@ export class ParallaxManager {
         ctx.closePath();
 
         ctx.clip('evenodd');
-        ctx.drawImage(this.bgImg, ox, Math.floor(ty), rw, Math.ceil(rh) + 1);
+        this.drawStandaloneHoleSprite(ctx, cx, cy, rx, ry, hole.variant, scale);
         this.drawAmbientVignette(ctx);
         ctx.restore();
     }

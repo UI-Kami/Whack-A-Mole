@@ -1,5 +1,5 @@
-// src/GameManager.js - Central Game Orchestrator, 90-Second Timeline, Bomb Sequence & UI
-import { CONFIG } from './Config.js';
+// src/GameManager.js - Central Game Orchestrator, Two-Phase 90s Timeline, Bomb Sequence & UI
+import { CONFIG, computePacingCurve } from './Config.js';
 import { AudioManager } from './AudioManager.js';
 import { CameraShake } from './CameraShake.js';
 import { VFXManager } from './VFXManager.js';
@@ -36,11 +36,11 @@ export class GameManager {
         this.isLose = false;
         this.isCoolingDown = false;
         this.cooldownTimer = 0;
-        this.cooldownAutoTime = this.config.COOLDOWN_AUTO_DURATION || 2.2;
+        this.cooldownAutoTime = this.config.COOLDOWN_AUTO_DURATION || 3.0;
         this.lastReflectionIndex = -1;
         this.factIndex = 0;
 
-        // Assets Container
+        // Assets Container (Cleanly separated playfield background + standalone hole assets)
         this.assets = {
             yellowCharacter: null,
             redCharacter: null,
@@ -67,7 +67,9 @@ export class GameManager {
             heartClean: null,
             heartCrack1: null,
             heartCrack2: null,
-            bgImg: null
+            bgImg: null,
+            holeLimeImg: null,
+            holePinkImg: null
         };
 
         // Subsystems
@@ -85,6 +87,8 @@ export class GameManager {
         this.slowMoDuration = 0;
         this.pendingCoolDown = false;
         this.pendingCoolDownTimer = 0;
+        this.pendingEndType = null;
+        this.pendingEndTimer = 0;
 
         this.init();
     }
@@ -96,8 +100,8 @@ export class GameManager {
 
         await this.loadSprites();
 
-        if (this.assets.bgImg) {
-            this.parallaxManager.bgImg = this.assets.bgImg;
+        if (this.parallaxManager) {
+            this.parallaxManager.setAssets(this.assets.bgImg, this.assets.holeLimeImg, this.assets.holePinkImg);
         }
         this.vfxManager.setAssets(this.assets);
 
@@ -164,7 +168,9 @@ export class GameManager {
             this.assets.heartCrack1 = await loadImg(ASSETS_DATA.heartCrack1);
             this.assets.heartCrack2 = await loadImg(ASSETS_DATA.heartCrack2);
 
-            this.assets.bgImg       = await loadImg(ASSETS_DATA.bg);
+            this.assets.bgImg       = await loadImg(ASSETS_DATA.playfieldBg || ASSETS_DATA.bg);
+            this.assets.holeLimeImg = await loadImg(ASSETS_DATA.holeLime || ASSETS_DATA.holeRing);
+            this.assets.holePinkImg = await loadImg(ASSETS_DATA.holePink || ASSETS_DATA.holeRing);
         } else {
             // Direct file fallbacks
             this.assets.yellow_peek    = await loadImg('assets/normalized/lime_peek.png');
@@ -193,12 +199,13 @@ export class GameManager {
             this.assets.heartCrack1 = await loadImg('assets/normalized/heart_cracked_light.png');
             this.assets.heartCrack2 = await loadImg('assets/normalized/heart_cracked_heavy.png');
 
-            this.assets.bgImg       = await loadImg('assets/normalized/poster_bg_1080.png');
+            this.assets.bgImg       = await loadImg('assets/normalized/bg_field_1080.png');
+            this.assets.holeLimeImg = await loadImg('assets/normalized/hole_lime.png');
+            this.assets.holePinkImg = await loadImg('assets/normalized/hole_pink.png');
         }
 
-        if (this.parallaxManager && this.assets.bgImg) {
-            this.parallaxManager.bgImg = this.assets.bgImg;
-            this.parallaxManager.calculateBounds();
+        if (this.parallaxManager) {
+            this.parallaxManager.setAssets(this.assets.bgImg, this.assets.holeLimeImg, this.assets.holePinkImg);
             if (this.moleSpawner) {
                 this.moleSpawner.updateHolePositions();
             }
@@ -254,7 +261,7 @@ export class GameManager {
     }
 
     processHit(x, y, isTouch, attackType) {
-        if (!this.moleSpawner || this.isCoolingDown || this.slowMoTimer > 0) return;
+        if (!this.moleSpawner || this.isCoolingDown || this.slowMoTimer > 0 || this.pendingEndType || this.isGameOver) return;
         const result = this.moleSpawner.checkHit(x, y, this.config.HAND_HIT_RADIUS, attackType);
 
         if (result && result.success) {
@@ -282,7 +289,6 @@ export class GameManager {
         } else {
             this.audioManager.playPunchHit();
         }
-        this.cameraShake.addTrauma(0.28, 0, 1);
         this.vfxManager.spawnHitVFX(result.x, result.y, result.hitType);
 
         // Update UI
@@ -292,35 +298,49 @@ export class GameManager {
             progress: Math.min(1.0, this.normalHits / this.targetHits)
         });
 
-        // Check Win Condition (30 normal hits before 0:00)
-        if (this.normalHits >= this.targetHits && !this.isGameOver) {
-            this.triggerWinSequence();
+        // Check Win Condition (30 normal hits before 0:00 -> brief 0.28s beat before opening end modal)
+        if (this.normalHits >= this.targetHits && !this.isGameOver && !this.pendingEndType) {
+            this.pendingCoolDown = false;
+            this.pendingCoolDownTimer = 0;
+            this.pendingEndType = 'win';
+            this.pendingEndTimer = 0.28;
         }
+    }
+
+    /**
+     * Persistent rotation index helper backed by localStorage (cycles 0 -> len-1 -> 0 across hits/sessions)
+     */
+    getNextRotationIndex(storageKey, length) {
+        if (!length || length <= 0) return 0;
+        let idx = 0;
+        try {
+            const raw = parseInt(localStorage.getItem(storageKey) || '0', 10);
+            idx = Number.isFinite(raw) ? ((raw % length) + length) % length : 0;
+            localStorage.setItem(storageKey, String((idx + 1) % length));
+        } catch (e) {
+            idx = (this.factIndex++) % length;
+        }
+        return idx;
     }
 
     handleBombHit(result) {
         this.bombHits++;
 
-        // 1. Cinematic Slow-Motion Bomb Explosion (Dramatic 1.2s at 22% timeScale)
-        this.startSlowMotion(1.2, 0.22);
+        // 1. Cinematic Slow-Motion Bomb Explosion (1.0s at 25% timeScale)
+        this.startSlowMotion(0.95, 0.25);
 
-        // 2. Red Screen Flash, Dual Blasts, Shockwaves & 4-6 Insult Speech Bubbles
+        // 2. Local Hole Explosion Sprites/Sparks & Red Flash Overlay (no full-screen shake!)
         this.vfxManager.spawnBombExplosionSequence(result.x, result.y);
 
-        // 3. Crack Heart Health Icon
-        this.heartCrackLevel = Math.min(3, this.heartCrackLevel + 1);
+        // 3. Advance Heart Crack State (full -> half -> empty); NO -1s timer deduction on hit!
+        this.heartCrackLevel = Math.min(2, this.heartCrackLevel + 1);
 
-        // 4. Immediately Deduct -1 Second from Main Timer
-        this.gameTimeRemaining = Math.max(0, this.gameTimeRemaining - this.config.BOMB_TIME_PENALTY);
-        this.showTimerPenaltyFeedback('-1s');
-
-        // 5. Increase Game Speed & Advance Speed Bar
+        // 4. Increase Speed Progression
         this.speedFactor += 0.14;
         this.moleSpawner.setSpeedFactor(this.speedFactor);
         this.speedPercent = Math.min(100, Math.round(((this.speedFactor - 1.0) / 1.5) * 100));
 
-        // Camera Shake & Explosive Audio
-        this.cameraShake.addTrauma(1.4, 0, 1);
+        // Explosive Audio & Haptic Feedback (Background & Container remain completely stationary)
         this.audioManager.playRedExplosion();
         if (navigator.vibrate) {
             try { navigator.vibrate([80, 40, 80]); } catch (e) {}
@@ -334,76 +354,79 @@ export class GameManager {
             timeRemaining: this.gameTimeRemaining
         });
 
-        // 6. On every 2nd bomb hit: Schedule Cool-Down to trigger AFTER slow-mo explosion finishes!
-        if (this.bombHits % this.config.COOLDOWN_CADENCE === 0) {
+        // 5. Schedule 3.0s Cool-Down Modal cleanly after bomb burst (-3s deducted when cooldown ends)
+        if (this.bombHits % (this.config.COOLDOWN_CADENCE || 1) === 0) {
             this.pendingCoolDown = true;
-            this.pendingCoolDownTimer = 1.15; // Displays cool-down right as slow-mo concludes
+            this.pendingCoolDownTimer = 0.72;
         }
     }
 
+    get cooldownActive() {
+        return this.isCoolingDown;
+    }
+
+    set cooldownActive(value) {
+        this.isCoolingDown = !!value;
+    }
+
     triggerCoolDown() {
-        this.isCoolingDown = true;
-        this.cooldownTimer = this.cooldownAutoTime;
+        this.cooldownActive = true;
+        this.cooldownTimer = this.config.COOLDOWN_AUTO_DURATION || 3.0;
 
-        // Pick Reflection line without repeating back-to-back
-        const reflections = this.config.REFLECTIONS;
-        let nextRefIndex = Math.floor(Math.random() * reflections.length);
-        if (nextRefIndex === this.lastReflectionIndex) {
-            nextRefIndex = (nextRefIndex + 1) % reflections.length;
-        }
-        this.lastReflectionIndex = nextRefIndex;
-        const reflectionLine = reflections[nextRefIndex];
+        // 1 Rotating English Reflection & Fact per bomb hit (persists across sessions via localStorage)
+        const reflections = this.config.REFLECTIONS || [];
+        const facts = this.config.FACTS || [];
+        const idx = this.getNextRotationIndex('mazaaq_cooldown_idx', reflections.length);
+        const reflectionLine = reflections[idx] || '';
+        const factLine = facts.length ? facts[idx % facts.length] : '';
 
-        // Pick Fact line (cycle sequentially)
-        const facts = this.config.FACTS;
-        const factLine = facts[this.factIndex % facts.length];
-        this.factIndex++;
-
-        // Calm chime audio
         this.audioManager.playCoolDownStart();
 
         this.dispatchUIEvent('cooldownshow', {
             reflection: reflectionLine,
-            fact: factLine
+            fact: factLine,
+            duration: this.cooldownTimer,
+            rotationIndex: idx
         });
     }
 
-    // Skip cool-down early by tapping "Continue" (costs only -1s instead of -3s)
-    skipCoolDownEarly() {
-        if (!this.isCoolingDown) return;
-        this.isCoolingDown = false;
-
-        // Deduct only -1s
-        this.gameTimeRemaining = Math.max(0, this.gameTimeRemaining - this.config.COOLDOWN_PENALTY_SKIP);
-        this.showTimerPenaltyFeedback('-1s');
-
-        // Restore health after cooling down
-        this.heartCrackLevel = 0;
-        this.dispatchUIEvent('bombhit', {
-            heartCrackLevel: 0,
-            speedPercent: this.speedPercent
-        });
-
-        this.dispatchUIEvent('cooldownhide', {});
-    }
-
-    // Complete full cool-down auto-continue (costs -3s)
+    // Complete 3.0s auto-dismiss cooldown -> deduct -3s, update HUD, pulse -3s, trigger Lose if <= 0, else resume
     finishFullCoolDown() {
         if (!this.isCoolingDown) return;
-        this.isCoolingDown = false;
+        this.cooldownActive = false;
+        this.cooldownTimer = 0;
 
-        // Deduct -3s
-        this.gameTimeRemaining = Math.max(0, this.gameTimeRemaining - this.config.COOLDOWN_PENALTY_FULL);
-        this.showTimerPenaltyFeedback('-3s');
+        const penalty = this.config.COOLDOWN_PENALTY_FULL || 3.0;
+        this.gameTimeRemaining = Math.max(0, this.gameTimeRemaining - penalty);
 
-        // Restore health after cooling down
-        this.heartCrackLevel = 0;
+        // Immediately sync #hud-timer-val and pulse -3s badge
+        this.dispatchUIEvent('timertick', {
+            timeRemaining: this.gameTimeRemaining,
+            elapsed: Math.max(0, this.totalDuration - this.gameTimeRemaining),
+            speedPercent: this.speedPercent,
+            speedFactor: this.speedFactor
+        });
+        this.showTimerPenaltyFeedback(`-${Math.round(penalty)}s`);
+
+        // Reset heart to full once health bar reached empty; preserve gradual drop otherwise
+        if (this.heartCrackLevel >= 2) {
+            this.heartCrackLevel = 0;
+        }
         this.dispatchUIEvent('bombhit', {
-            heartCrackLevel: 0,
-            speedPercent: this.speedPercent
+            heartCrackLevel: this.heartCrackLevel,
+            speedPercent: this.speedPercent,
+            timeRemaining: this.gameTimeRemaining
         });
 
         this.dispatchUIEvent('cooldownhide', {});
+
+        // If -3s brought the clock to 0:00, immediately trigger the 3-stage Lose sequence
+        if (this.gameTimeRemaining <= 0) {
+            this.gameTimeRemaining = 0;
+            this.pendingCoolDown = false;
+            this.pendingCoolDownTimer = 0;
+            this.triggerLoseSequence();
+        }
     }
 
     showTimerPenaltyFeedback(text) {
@@ -441,6 +464,8 @@ export class GameManager {
         this.slowMoDuration = 0;
         this.pendingCoolDown = false;
         this.pendingCoolDownTimer = 0;
+        this.pendingEndType = null;
+        this.pendingEndTimer = 0;
 
         if (this.moleSpawner) {
             this.moleSpawner.reset();
@@ -459,32 +484,61 @@ export class GameManager {
     gameLoop(now) {
         if (!this.isRunning) return;
 
-        const dt = Math.min(Math.max(0, (now - this.lastTime) / 1000), 0.05);
+        // Real-time unpaused delta for 3.0s cooldown auto-dismiss, rawDt capped for active gameplay,
+        // and clamped animation dt <= 0.05s for smooth sprite interpolation.
+        const wallDt = Math.max(0, (now - this.lastTime) / 1000);
+        const rawDt = Math.min(wallDt, 0.5);
+        const dt = Math.min(rawDt, 0.05);
         this.lastTime = now;
 
         if (this.isStarted && !this.isPaused && !this.isGameOver) {
-            // Main Countdown Timer (KEEPS RUNNING CONTINUOUSLY during every cool-down!)
-            this.gameTimeRemaining -= dt;
+            if (this.pendingEndType) {
+                // Brief 0.28s intentional beat so final hit VFX & 0:00 clock register before end modal opens
+                this.parallaxManager.update(dt);
+                this.moleSpawner.update(dt, Math.max(0, this.totalDuration - this.gameTimeRemaining));
+                this.hammer.update(dt);
+                this.vfxManager.update(dt);
 
-            // Continuous timeline progress across 90 seconds (0.0 to 1.0)
-            const elapsed = Math.max(0, this.totalDuration - this.gameTimeRemaining);
-            const timeProgress = Math.min(1.0, elapsed / this.totalDuration);
+                this.pendingEndTimer -= rawDt;
+                if (this.pendingEndTimer <= 0) {
+                    const endType = this.pendingEndType;
+                    this.pendingEndType = null;
+                    this.pendingEndTimer = 0;
+                    if (endType === 'win') this.triggerWinSequence();
+                    else if (endType === 'lose') this.triggerLoseSequence();
+                }
 
-            // Gradual Continuous Speed Ramp:
-            // Base speed smoothly increases from 1.0 up to 1.95 over 90 seconds
-            const timelineSpeed = 1.0 + (timeProgress * 0.95);
-            // Each bomb hit increases speed by +0.12
-            const bombSpeed = 1.0 + (this.bombHits * 0.12);
-            // Total combined speed factor
-            this.speedFactor = timelineSpeed * bombSpeed;
-            // Smoothly update speed bar (1.0 = 0%, 2.5 = 100%)
-            this.speedPercent = Math.min(100, Math.max(0, Math.round(((this.speedFactor - 1.0) / 1.5) * 100)));
+                this.dispatchUIEvent('timertick', {
+                    timeRemaining: Math.max(0, this.gameTimeRemaining),
+                    elapsed: Math.max(0, this.totalDuration - this.gameTimeRemaining),
+                    speedPercent: this.speedPercent,
+                    speedFactor: this.speedFactor
+                });
+                this.render();
+                requestAnimationFrame((t) => this.gameLoop(t));
+                return;
+            }
+
+            // Pause ONLY the main 1:30 countdown clock while bomb cooldown is pending or open;
+            // playfield scrolling, mole animations/spawns, and red sink continue running live behind cooldown!
+            if (!this.isCoolingDown && !this.pendingCoolDown) {
+                this.gameTimeRemaining -= rawDt;
+            }
+
+            const totalDur = this.totalDuration || 90.0;
+            const elapsed = Math.min(90.0, Math.max(0.0, totalDur - Math.max(0, this.gameTimeRemaining)));
+            const curve = computePacingCurve(elapsed);
+
+            // Unified two-phase speed & scroll curve (Phase 1: 1.0x -> 1.60x, Phase 2: 1.60x -> 5.00x)
+            this.speedFactor = curve.scrollMultiplier;
+            this.speedPercent = Math.min(100, Math.max(0, Math.round(((curve.scrollMultiplier - 1.0) / 4.0) * 100)));
 
             if (this.moleSpawner) {
                 this.moleSpawner.setSpeedFactor(this.speedFactor);
+                this.moleSpawner.setPacingCurve(curve);
             }
             if (this.parallaxManager) {
-                this.parallaxManager.setSpeedMultiplier(this.speedFactor);
+                this.parallaxManager.setSpeedMultiplier(curve.scrollMultiplier);
             }
 
             // Update Cinematic Slow-Motion
@@ -495,53 +549,66 @@ export class GameManager {
                     this.slowMoTimer = 0;
                     this.timeScale = 1.0;
                 } else {
-                    // Smoothly ease back up from 0.22 to 1.0 during the last 0.35s
-                    const remainingRatio = this.slowMoTimer / (this.slowMoDuration || 1.2);
+                    const remainingRatio = this.slowMoTimer / (this.slowMoDuration || 1.0);
                     if (remainingRatio < 0.30) {
                         const t = (0.30 - remainingRatio) / 0.30;
-                        this.timeScale = 0.22 + t * 0.78;
+                        this.timeScale = 0.25 + t * 0.75;
                     }
                 }
                 simDt = dt * this.timeScale;
             }
 
-            // Pending cool-down transition (lets slow-mo explosion & insults finish first!)
+            // Pending cool-down transition after initial explosion burst
             if (this.pendingCoolDown) {
-                this.pendingCoolDownTimer -= dt;
+                this.pendingCoolDownTimer -= wallDt;
                 if (this.pendingCoolDownTimer <= 0) {
                     this.pendingCoolDown = false;
                     this.triggerCoolDown();
                 }
             }
 
-            // Cool-down countdown timer
+            // Independent real-time 3.0s countdown for #cooldown-modal auto-close while main clock is paused
             if (this.isCoolingDown) {
-                this.cooldownTimer -= dt;
+                this.cooldownTimer -= wallDt;
                 if (this.cooldownTimer <= 0) {
                     this.finishFullCoolDown();
                 }
             }
 
-            // Check Lose Condition (Time reached 0:00)
-            if (this.gameTimeRemaining <= 0) {
-                this.gameTimeRemaining = 0;
-                this.triggerLoseSequence();
-            }
-
-            // Update Canvas Subsystems only when Cooldown Modal is NOT active so exploding red
-            // characters resume their post-explosion poppingIn retreat smoothly upon Continue!
-            if (!this.isCoolingDown) {
+            // Keep playfield background scrolling, mole popping, and red-character sinking alive during cooldown!
+            if (!this.isGameOver) {
                 this.parallaxManager.update(simDt);
                 this.moleSpawner.update(simDt, elapsed);
                 this.hammer.update(simDt);
                 this.vfxManager.update(simDt);
-                this.cameraShake.update(simDt);
             }
 
-            // Update Live Timer and Speed UI continuously
+            // Check Lose Condition (Time reached 0:00 -> launch 3-stage XP crash sequence immediately)
+            if (!this.isGameOver && !this.pendingEndType && this.gameTimeRemaining <= 0) {
+                this.gameTimeRemaining = 0;
+                const wasCoolingDown = this.isCoolingDown;
+                this.isCoolingDown = false;
+                this.cooldownTimer = 0;
+                this.pendingCoolDown = false;
+                this.pendingCoolDownTimer = 0;
+                if (wasCoolingDown) {
+                    this.dispatchUIEvent('cooldownhide', {});
+                }
+                this.dispatchUIEvent('timertick', {
+                    timeRemaining: 0,
+                    elapsed: totalDur,
+                    speedPercent: this.speedPercent,
+                    speedFactor: this.speedFactor
+                });
+                this.triggerLoseSequence();
+                this.render();
+                requestAnimationFrame((t) => this.gameLoop(t));
+                return;
+            }
+
             this.dispatchUIEvent('timertick', {
                 timeRemaining: Math.max(0, this.gameTimeRemaining),
-                elapsed: elapsed,
+                elapsed: Math.max(0, this.totalDuration - this.gameTimeRemaining),
                 speedPercent: this.speedPercent,
                 speedFactor: this.speedFactor
             });
@@ -555,13 +622,11 @@ export class GameManager {
         const ctx = this.ctx;
         ctx.clearRect(0, 0, this.config.VIEWPORT_WIDTH, this.config.VIEWPORT_HEIGHT);
 
-        ctx.save();
-        this.cameraShake.apply(ctx);
-
-        // Layer 1: Hole Shadow, Back Rim & Black Interior (complete ground holes base)
+        // Stationary canvas render (zero camera shake translation so edges never expose white border)
+        // Layer 1: Playfield background + standalone transparent hole sprites
         this.parallaxManager.drawGroundPlane(ctx);
 
-        // Layer 2 & Layer 3: Character clipped to inner opening + Front colored rim overlay
+        // Layer 2 & Layer 3: Split-rim clipped character sprites + front colored rim overlays
         if (this.moleSpawner.drawActiveHoles) {
             this.moleSpawner.drawActiveHoles(ctx);
         } else {
@@ -570,22 +635,27 @@ export class GameManager {
             }
         }
 
-        // 3. VFX (Particles, Insult Bubbles, Screen Flash)
+        // Layer 4: Local hole VFX (explosion bursts/sparks & flash)
         this.vfxManager.draw(ctx);
 
-        // 4. Punch & Slap Attack Hands (Rendered above playfield)
+        // Layer 5: Punch & Slap Attack Hands
         this.hammer.draw(ctx);
-
-        ctx.restore();
     }
 
     triggerWinSequence() {
         if (this.isGameOver) return;
         this.isGameOver = true;
         this.isWin = true;
+        this.isCoolingDown = false;
+        this.pendingCoolDown = false;
+        this.pendingEndType = null;
+        this.pendingEndTimer = 0;
 
         const timeTaken = this.totalDuration - this.gameTimeRemaining;
         const bestRun = this.recordPersonalBest(timeTaken, this.bombHits);
+        const messages = this.config.WIN_MESSAGES || [];
+        const idx = this.getNextRotationIndex('mazaaq_end_idx', messages.length);
+        const message = messages[idx] || "Think about it. Choose your words well.";
 
         this.audioManager.playVictoryFanfare();
 
@@ -593,7 +663,9 @@ export class GameManager {
             timeTaken: timeTaken,
             bombHits: this.bombHits,
             normalHits: this.normalHits,
-            bestRun: bestRun
+            bestRun: bestRun,
+            message: message,
+            rotationIndex: idx
         });
     }
 
@@ -601,12 +673,22 @@ export class GameManager {
         if (this.isGameOver) return;
         this.isGameOver = true;
         this.isLose = true;
+        this.isCoolingDown = false;
+        this.pendingCoolDown = false;
+        this.pendingEndType = null;
+        this.pendingEndTimer = 0;
+
+        const messages = this.config.LOSE_MESSAGES || [];
+        const idx = this.getNextRotationIndex('mazaaq_end_idx', messages.length);
+        const message = messages[idx] || "Pause first, then laugh. Careless words leave lasting marks.";
 
         this.audioManager.playDefeatFanfare();
 
         this.dispatchUIEvent('gamelose', {
             normalHits: this.normalHits,
-            bombHits: this.bombHits
+            bombHits: this.bombHits,
+            message: message,
+            rotationIndex: idx
         });
     }
 
@@ -666,6 +748,8 @@ export class GameManager {
         this.slowMoDuration = 0;
         this.pendingCoolDown = false;
         this.pendingCoolDownTimer = 0;
+        this.pendingEndType = null;
+        this.pendingEndTimer = 0;
 
         // 1. Reset background conveyor completely back to top start
         if (this.parallaxManager) {

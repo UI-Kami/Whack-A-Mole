@@ -37,7 +37,7 @@ $headerHtml = @'
     <meta name="description" content="Mazaaq Tha - Interactive Whack-A-Mole reflection on jokes, bullying, and spoken words.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;700&family=Noto+Sans+Arabic:wght@400;700&family=Outfit:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
 '@
 
@@ -136,7 +136,7 @@ $middleHtml = @'
             </div>
         </div>
 
-        <!-- Cool-Down Overlay: Fullscreen Blur + Prominent Error Window Asset + Large Single-Language Text -->
+        <!-- Cool-Down Overlay: Larger Error Window + English-Only Text + 3.0s Auto-Dismiss (No Continue/OK button) -->
         <div id="cooldown-modal" class="modal-overlay" role="dialog" aria-modal="true">
             <div class="cooldown-error-wrap">
                 <img id="cooldown-window-bg" class="cooldown-error-bg" src="" alt="System Error" />
@@ -149,14 +149,22 @@ $middleHtml = @'
                         <p id="cooldown-fact" class="cooldown-fact-text"></p>
                         <div class="cooldown-actions-row">
                             <span class="cooldown-penalty-notice">-3s Penalty</span>
-                            <button id="btn-continue" class="btn-continue">Continue (-1s)</button>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Lose Sequence Overlay (Time's Up inside Error Screen Asset) -->
+        <!-- Retro XP 3-Stage Crash Sequence Overlay (Stage 1: Loading... -> Stage 2: EROR! Cascade) -->
+        <div id="lose-crash-overlay" class="modal-overlay" aria-hidden="true">
+            <div id="lose-loading-box" class="lose-loading-box">
+                <img id="lose-loading-img" class="lose-loading-img" src="" alt="Loading..." />
+                <div id="lose-loading-track" class="lose-loading-track" aria-hidden="true"></div>
+            </div>
+            <div id="lose-cascade-layer" class="lose-cascade-layer"></div>
+        </div>
+
+        <!-- Lose Sequence Overlay (1 Rotating English Quote per Completed Game + Restart) -->
         <div id="lose-modal" class="modal-overlay" role="dialog" aria-modal="true">
             <div class="sequence-transparent-wrap">
                 <div class="lose-error-frame">
@@ -168,16 +176,13 @@ $middleHtml = @'
                         </div>
                     </div>
                 </div>
-                <button id="btn-lose-next" class="btn-pixel-nav" style="display:none;" title="Next">
-                    <img id="btn-lose-next-img" class="btn-pixel-nav-img" src="" alt="Next" />
-                </button>
-                <button id="btn-lose-restart" class="btn-pixel-nav" style="display:none;" title="Play Again">
+                <button id="btn-lose-restart" class="btn-pixel-nav" style="display:inline-block;" title="Play Again">
                     <img id="btn-lose-restart-img" class="btn-pixel-nav-img" src="" alt="Play Again" />
                 </button>
             </div>
         </div>
 
-        <!-- Win Sequence Overlay (Mystery Box + Single-Language Dialogue + High Score Asset) -->
+        <!-- Win Sequence Overlay (Mystery Box + 1 Rotating English Quote + High Score + Restart) -->
         <div id="win-modal" class="modal-overlay" role="dialog" aria-modal="true">
             <div class="sequence-transparent-wrap">
                 <img id="win-hero-img" class="win-hero-transparent" src="" alt="Mystery Box" />
@@ -192,7 +197,7 @@ $middleHtml = @'
                     <div class="pb-window-stats">
                         <div>
                             <div id="pb-time-val" class="pb-stat-val">0:00</div>
-                            <div class="pb-stat-lbl">Fastest Time</div>
+                            <div class="pb-stat-lbl">Your Time</div>
                         </div>
                         <div>
                             <div id="pb-bombs-val" class="pb-stat-val">0</div>
@@ -200,10 +205,7 @@ $middleHtml = @'
                         </div>
                     </div>
                 </div>
-                <button id="btn-win-next" class="btn-pixel-nav" style="display:none;" title="Next">
-                    <img id="btn-win-next-img" class="btn-pixel-nav-img" src="" alt="Next" />
-                </button>
-                <button id="btn-win-restart" class="btn-pixel-nav" style="display:none;" title="Play Again">
+                <button id="btn-win-restart" class="btn-pixel-nav" style="display:inline-block;" title="Play Again">
                     <img id="btn-win-restart-img" class="btn-pixel-nav-img" src="" alt="Play Again" />
                 </button>
             </div>
@@ -257,16 +259,20 @@ $uiWiring = @'
     const cooldownWindowBg = document.getElementById('cooldown-window-bg');
     const cooldownRefEl = document.getElementById('cooldown-reflection');
     const cooldownFactEl = document.getElementById('cooldown-fact');
-    const btnContinue = document.getElementById('btn-continue');
 
     const pauseModal = document.getElementById('pause-modal');
     const btnResume = document.getElementById('btn-resume');
+
+    const loseCrashOverlay = document.getElementById('lose-crash-overlay');
+    const loseLoadingBox = document.getElementById('lose-loading-box');
+    const loseLoadingImg = document.getElementById('lose-loading-img');
+    const loseLoadingTrack = document.getElementById('lose-loading-track');
+    const loseCascadeLayer = document.getElementById('lose-cascade-layer');
 
     const loseModal = document.getElementById('lose-modal');
     const loseWindowImg = document.getElementById('lose-window-img');
     const loseTitle = document.getElementById('lose-title');
     const loseTextEl = document.getElementById('lose-text');
-    const btnLoseNext = document.getElementById('btn-lose-next');
     const btnLoseRestart = document.getElementById('btn-lose-restart');
 
     const winModal = document.getElementById('win-modal');
@@ -276,17 +282,14 @@ $uiWiring = @'
     const winPbBox = document.getElementById('win-pb-box');
     const pbTimeVal = document.getElementById('pb-time-val');
     const pbBombsVal = document.getElementById('pb-bombs-val');
-    const btnWinNext = document.getElementById('btn-win-next');
     const btnWinRestart = document.getElementById('btn-win-restart');
 
     const hudHeartImg = document.getElementById('hud-heart-img');
     const btnPauseImg = document.getElementById('btn-pause-img');
     const btnSoundImg = document.getElementById('btn-sound-img');
     const btnStartImg = document.getElementById('btn-start-img');
-    const btnLoseNextImg = document.getElementById('btn-lose-next-img');
     const btnLoseRestartImg = document.getElementById('btn-lose-restart-img');
     const winWindowImg = document.getElementById('win-window-img');
-    const btnWinNextImg = document.getElementById('btn-win-next-img');
     const btnWinRestartImg = document.getElementById('btn-win-restart-img');
     const btnResumeImg = document.getElementById('btn-resume-img');
 
@@ -298,12 +301,11 @@ $uiWiring = @'
         if (btnStartImg) btnStartImg.src = ASSETS_DATA.btnGreenStart;
         if (cooldownWindowBg) cooldownWindowBg.src = ASSETS_DATA.windowErrorCooldown || ASSETS_DATA.windowErrorPink;
         if (loseWindowImg) loseWindowImg.src = ASSETS_DATA.windowErrorCooldown || ASSETS_DATA.windowErrorPink;
+        if (loseLoadingImg && ASSETS_DATA.barLoading) loseLoadingImg.src = ASSETS_DATA.barLoading;
         if (menuHeroImg && ASSETS_DATA.homeScreen) menuHeroImg.src = ASSETS_DATA.homeScreen;
         if (mysteryIcon && ASSETS_DATA.mysteryClosed) mysteryIcon.src = ASSETS_DATA.mysteryClosed;
-        if (btnLoseNextImg) btnLoseNextImg.src = ASSETS_DATA.btnGreenNext;
         if (btnLoseRestartImg) btnLoseRestartImg.src = ASSETS_DATA.btnGreenStart;
         if (winWindowImg) winWindowImg.src = ASSETS_DATA.windowHighScore;
-        if (btnWinNextImg) btnWinNextImg.src = ASSETS_DATA.btnGreenNext;
         if (btnWinRestartImg) btnWinRestartImg.src = ASSETS_DATA.btnGreenStart;
         if (btnResumeImg) btnResumeImg.src = ASSETS_DATA.btnGreenStart;
     }
@@ -316,29 +318,76 @@ $uiWiring = @'
         return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
     }
 
-    // Single-Language Text Renderer (Strictly NO duplicate bilingual text on same element!)
-    // Applies .font-ur + RTL for Urdu entries, and .font-en + LTR for English entries.
-    function setSingleLanguageText(elem, entry) {
+    // Clean English-only text helper using --font-en
+    function setEnglishText(elem, entry) {
         if (!elem) return;
-        if (!entry) {
-            elem.textContent = '';
+        const text = (typeof entry === 'string') ? entry : (entry && entry.text ? entry.text : '');
+        elem.textContent = text;
+        elem.classList.add('font-en');
+        elem.setAttribute('dir', 'ltr');
+    }
+
+    // Modal Open / Close Helpers: separate display:flex -> reflow -> rAF(.show) so opacity/blur fade smoothly
+    const modalCloseTimers = new WeakMap();
+    const modalOpenRafs = new WeakMap();
+
+    function openModal(modal, beforeShow) {
+        if (!modal) return;
+        const prevTimer = modalCloseTimers.get(modal);
+        if (prevTimer) {
+            clearTimeout(prevTimer);
+            modalCloseTimers.delete(modal);
+        }
+        const prevRaf = modalOpenRafs.get(modal);
+        if (prevRaf) {
+            cancelAnimationFrame(prevRaf);
+            modalOpenRafs.delete(modal);
+        }
+
+        modal.classList.remove('show');
+        modal.style.display = 'flex';
+        modal.classList.add('is-open');
+        if (typeof beforeShow === 'function') {
+            beforeShow();
+        }
+
+        // Force layout reflow before adding .show on next frame so transitions never snap
+        void modal.offsetWidth;
+
+        const rafId = requestAnimationFrame(() => {
+            modalOpenRafs.delete(modal);
+            modal.classList.add('show');
+        });
+        modalOpenRafs.set(modal, rafId);
+    }
+
+    function closeModal(modal, immediate = false) {
+        if (!modal) return;
+        const prevRaf = modalOpenRafs.get(modal);
+        if (prevRaf) {
+            cancelAnimationFrame(prevRaf);
+            modalOpenRafs.delete(modal);
+        }
+        const prevTimer = modalCloseTimers.get(modal);
+        if (prevTimer) {
+            clearTimeout(prevTimer);
+            modalCloseTimers.delete(modal);
+        }
+
+        modal.classList.remove('show');
+        if (immediate) {
+            modal.classList.remove('is-open');
+            modal.style.display = 'none';
             return;
         }
-        const text = (typeof entry === 'string') ? entry : (entry.text || '');
-        const isUrdu = (typeof entry === 'object' && entry.lang)
-            ? (entry.lang === 'ur')
-            : /[\u0600-\u06FF]/.test(text);
-
-        elem.textContent = text;
-        if (isUrdu) {
-            elem.classList.add('font-ur');
-            elem.classList.remove('font-en');
-            elem.setAttribute('dir', 'rtl');
-        } else {
-            elem.classList.add('font-en');
-            elem.classList.remove('font-ur');
-            elem.setAttribute('dir', 'ltr');
-        }
+        const timerId = setTimeout(() => {
+            modalCloseTimers.delete(modal);
+            if (!modal.classList.contains('show')) {
+                modal.classList.remove('is-open');
+                modal.style.display = 'none';
+            }
+        }, 420);
+        modalCloseTimers.set(modal, timerId);
     }
 
     // Update Menu Personal Best Display
@@ -360,7 +409,7 @@ $uiWiring = @'
     // Menu Start Button
     if (btnStartGame) {
         btnStartGame.addEventListener('click', () => {
-            if (menuModal) menuModal.classList.remove('show');
+            closeModal(menuModal, true);
             game.startGame();
         });
     }
@@ -407,41 +456,50 @@ $uiWiring = @'
         }
     });
 
-    // Auto-fit Cool-Down text inside Error window interior bounds
+    // Auto-fit Cool-Down English text comfortably inside enlarged Error window bounds
     function autoFitCooldownText() {
         const inner = cooldownModal ? cooldownModal.querySelector('.cooldown-error-inner') : null;
         if (!inner || !cooldownRefEl || !cooldownFactEl) return;
+
+        cooldownRefEl.style.fontSize = '';
+        cooldownFactEl.style.fontSize = '';
+        if (inner.clientHeight <= 0) return;
+
         let refSize = parseFloat(window.getComputedStyle(cooldownRefEl).fontSize);
         let factSize = parseFloat(window.getComputedStyle(cooldownFactEl).fontSize);
-        while (inner.scrollHeight > inner.clientHeight && (refSize > 13 || factSize > 13)) {
-            if (refSize > 13) {
-                refSize = Math.max(13, refSize - 1);
+
+        while (refSize > 12 || factSize > 12) {
+            const refRect = cooldownRefEl.getBoundingClientRect();
+            const factRect = cooldownFactEl.getBoundingClientRect();
+            const verticalGap = factRect.top - refRect.bottom;
+            if (inner.scrollHeight <= inner.clientHeight && verticalGap >= 10) {
+                break;
+            }
+            if (refSize > 12) {
+                refSize = Math.max(12, refSize - 1);
                 cooldownRefEl.style.fontSize = `${refSize}px`;
             }
-            if (factSize > 13) {
-                factSize = Math.max(13, factSize - 1);
+            if (factSize > 12) {
+                factSize = Math.max(12, factSize - 1);
                 cooldownFactEl.style.fontSize = `${factSize}px`;
             }
         }
     }
 
-    // Cool-Down Pop-Up
+    // Cool-Down Pop-Up (1 Rotating English Quote & Matching Fact per bomb hit; 3.0s auto-dismiss)
     window.addEventListener('cooldownshow', (e) => {
         const { reflection, fact } = e.detail;
-        if (cooldownRefEl) cooldownRefEl.style.fontSize = '';
-        if (cooldownFactEl) cooldownFactEl.style.fontSize = '';
-        setSingleLanguageText(cooldownRefEl, reflection);
-        setSingleLanguageText(cooldownFactEl, fact);
-        cooldownModal.classList.add('show');
-        autoFitCooldownText();
+        openModal(cooldownModal, () => {
+            if (cooldownRefEl) cooldownRefEl.style.fontSize = '';
+            if (cooldownFactEl) cooldownFactEl.style.fontSize = '';
+            setEnglishText(cooldownRefEl, reflection);
+            setEnglishText(cooldownFactEl, fact);
+            autoFitCooldownText();
+        });
     });
 
     window.addEventListener('cooldownhide', () => {
-        cooldownModal.classList.remove('show');
-    });
-
-    btnContinue.addEventListener('click', () => {
-        game.skipCoolDownEarly();
+        closeModal(cooldownModal, false);
     });
 
     // Pause Controls
@@ -456,8 +514,8 @@ $uiWiring = @'
     window.addEventListener('pausechange', (e) => {
         const { isPaused } = e.detail;
         if (pauseModal) {
-            if (isPaused) pauseModal.classList.add('show');
-            else pauseModal.classList.remove('show');
+            if (isPaused) openModal(pauseModal);
+            else closeModal(pauseModal, true);
         }
     });
 
@@ -472,100 +530,164 @@ $uiWiring = @'
         });
     }
 
-    // Lose Sequence Flow
-    let loseStep = 0;
+    // 3-Stage Retro Lose Crash Sequence Controller (Loading... -> EROR! Cascade -> #lose-modal)
+    const LOSE_LOADING_SEGMENTS = 16;
+    let loseCrashTimers = [];
 
-    function advanceLoseSequence() {
-        loseStep++;
-        const lines = CONFIG.LOSE_DIALOGUE_LINES;
+    function initLoadingTrackSegments() {
+        if (!loseLoadingTrack || loseLoadingTrack.children.length > 0) return;
+        for (let i = 0; i < LOSE_LOADING_SEGMENTS; i++) {
+            const seg = document.createElement('div');
+            seg.className = 'loading-seg';
+            loseLoadingTrack.appendChild(seg);
+        }
+    }
+    initLoadingTrackSegments();
 
-        if (loseStep < lines.length) {
-            setSingleLanguageText(loseTextEl, lines[loseStep]);
-            btnLoseNext.style.display = 'inline-block';
-            btnLoseRestart.style.display = 'none';
-        } else if (loseStep === lines.length) {
-            setSingleLanguageText(loseTextEl, CONFIG.FINAL_LOSE_INSULT);
-            btnLoseNext.style.display = 'inline-block';
-            btnLoseRestart.style.display = 'none';
-        } else if (loseStep === lines.length + 1) {
-            setSingleLanguageText(loseTextEl, CONFIG.FINAL_LOSE_REFLECTION);
-            btnLoseNext.style.display = 'inline-block';
-            btnLoseRestart.style.display = 'none';
-        } else {
-            loseTitle.textContent = CONFIG.LOSE_LAST_HEADING;
-            setSingleLanguageText(loseTextEl, CONFIG.LOSE_LAST_LINE);
-            btnLoseNext.style.display = 'none';
-            btnLoseRestart.style.display = 'inline-block';
+    function setLoadingProgressSegments(filledCount) {
+        if (!loseLoadingTrack) return;
+        const segs = loseLoadingTrack.children;
+        for (let i = 0; i < segs.length; i++) {
+            segs[i].classList.toggle('filled', i < filledCount);
         }
     }
 
-    window.addEventListener('gamelose', () => {
-        loseStep = 0;
-        loseTitle.textContent = "TIME'S UP";
-        setSingleLanguageText(loseTextEl, CONFIG.LOSE_DIALOGUE_LINES[0]);
-        btnLoseNext.style.display = 'inline-block';
-        btnLoseRestart.style.display = 'none';
-        loseModal.classList.add('show');
+    function clearLoseCrashSequence() {
+        for (let i = 0; i < loseCrashTimers.length; i++) {
+            clearTimeout(loseCrashTimers[i]);
+        }
+        loseCrashTimers = [];
+        if (loseLoadingBox) loseLoadingBox.style.display = 'none';
+        setLoadingProgressSegments(0);
+        if (loseCascadeLayer) loseCascadeLayer.innerHTML = '';
+        closeModal(loseCrashOverlay, true);
+    }
+
+    function buildErorCascadePoints(count) {
+        const pts = [];
+        let x = 6;
+        let y = 7;
+        let vx = 4.9;
+        let vy = 5.4;
+        for (let i = 0; i < count; i++) {
+            pts.push({ x, y });
+            x += vx;
+            y += vy;
+            if (x > 58) { x = 58; vx = -(4.4 + ((i * 7) % 15) * 0.12); }
+            else if (x < 2) { x = 2; vx = 4.5 + ((i * 5) % 14) * 0.12; }
+            if (y > 76) { y = 76; vy = -(5.1 + ((i * 11) % 13) * 0.15); }
+            else if (y < 4) { y = 4; vy = 5.0 + ((i * 9) % 13) * 0.15; }
+            // Periodic small diagonal jitter jump mid-drag so stamps blanket the full 9:16 canvas
+            if (i === 11 || i === 22) {
+                vx = -vx;
+                y = Math.max(4, Math.min(76, (y + 16) % 72));
+            }
+        }
+        return pts;
+    }
+
+    // Lose End Sequence: Stage 1 Loading (~0.9s) -> Stage 2 EROR! Cascade (~1.1s) -> Stage 3 #lose-modal
+    window.addEventListener('gamelose', (e) => {
+        const msg = (e && e.detail && e.detail.message) ? e.detail.message : CONFIG.LOSE_MESSAGES[0];
+        clearLoseCrashSequence();
+        closeModal(cooldownModal, true);
+        closeModal(pauseModal, true);
+
+        // Stage 1: Animated magenta-header "Loading..." bar (0% -> 75% with 120ms stutter -> 100% over ~0.9s)
+        openModal(loseCrashOverlay, () => {
+            initLoadingTrackSegments();
+            setLoadingProgressSegments(0);
+            if (loseCascadeLayer) loseCascadeLayer.innerHTML = '';
+            if (loseLoadingBox) loseLoadingBox.style.display = 'block';
+        });
+
+        for (let s = 1; s <= 12; s++) {
+            const delayMs = s * 48; // 48ms..576ms -> hits 75% (12/16)
+            loseCrashTimers.push(setTimeout(() => setLoadingProgressSegments(s), delayMs));
+        }
+        // ~120ms retro stutter at 75% (576ms -> 700ms), then snap rapidly to 100% (16/16) by ~860ms
+        for (let s = 13; s <= LOSE_LOADING_SEGMENTS; s++) {
+            const delayMs = 700 + (s - 12) * 38; // 738ms..852ms
+            loseCrashTimers.push(setTimeout(() => setLoadingProgressSegments(s), delayMs));
+        }
+
+        // Stage 2: Launch XP-style cascading "EROR!" windows (~32 windows @ 32ms intervals = ~1.05s)
+        const stage2Start = 900;
+        const totalStamps = 32;
+        const stampStepMs = 32;
+        const cascadePts = buildErorCascadePoints(totalStamps);
+        const erorSrc = (typeof ASSETS_DATA !== 'undefined')
+            ? (ASSETS_DATA.singleErrorWindow || ASSETS_DATA.windowErrorCascade)
+            : '';
+
+        loseCrashTimers.push(setTimeout(() => {
+            if (loseLoadingBox) loseLoadingBox.style.display = 'none';
+            for (let i = 0; i < totalStamps; i++) {
+                loseCrashTimers.push(setTimeout(() => {
+                    if (!loseCascadeLayer || !erorSrc) return;
+                    const stamp = document.createElement('img');
+                    stamp.src = erorSrc;
+                    stamp.alt = 'EROR!';
+                    stamp.className = 'lose-cascade-stamp';
+                    stamp.style.left = `${cascadePts[i].x.toFixed(1)}%`;
+                    stamp.style.top = `${cascadePts[i].y.toFixed(1)}%`;
+                    stamp.style.zIndex = String(10 + i);
+                    loseCascadeLayer.appendChild(stamp);
+                }, i * stampStepMs));
+            }
+        }, stage2Start));
+
+        // Stage 3: Settle the Pink Error Lose box (#lose-modal) smoothly over the EROR! cascade
+        const stage3Start = stage2Start + totalStamps * stampStepMs + 60; // ~1984ms
+        loseCrashTimers.push(setTimeout(() => {
+            openModal(loseModal, () => {
+                loseTitle.textContent = "TIME'S UP";
+                setEnglishText(loseTextEl, msg);
+                if (btnLoseRestart) btnLoseRestart.style.display = 'inline-block';
+            });
+        }, stage3Start));
     });
 
-    btnLoseNext.addEventListener('click', () => {
-        advanceLoseSequence();
-    });
+    if (btnLoseRestart) {
+        btnLoseRestart.addEventListener('click', () => {
+            clearLoseCrashSequence();
+            closeModal(loseModal, true);
+            game.restartGame();
+        });
+    }
 
-    btnLoseRestart.addEventListener('click', () => {
-        loseModal.classList.remove('show');
-        game.restartGame();
-    });
+    // Win End Screen (Opened Mystery Box + 1 Rotating English Message + Retro HIGH SCORE Window + Play Again)
+    window.addEventListener('gamewin', (e) => {
+        const { timeTaken, bombHits, bestRun, message } = e.detail || {};
+        clearLoseCrashSequence();
+        closeModal(cooldownModal, true);
+        closeModal(pauseModal, true);
+        openModal(winModal, () => {
+            if (winHeroImg && typeof ASSETS_DATA !== 'undefined') {
+                winHeroImg.src = ASSETS_DATA.mysteryOpen || ASSETS_DATA.mysteryClosed;
+            }
+            winTitle.textContent = "MYSTERY BOX OPENED!";
+            setEnglishText(winTextEl, message || CONFIG.WIN_MESSAGES[0]);
 
-    // Win Sequence Flow
-    let winStep = 0;
-
-    function advanceWinSequence(bestRun) {
-        winStep++;
-        const lines = CONFIG.WIN_BOX_LINES;
-
-        if (winStep < lines.length) {
-            setSingleLanguageText(winTextEl, lines[winStep]);
-            btnWinNext.style.display = 'inline-block';
-            btnWinRestart.style.display = 'none';
-            winPbBox.style.display = 'none';
-        } else {
-            winTitle.textContent = "REFLECT";
-            setSingleLanguageText(winTextEl, CONFIG.WIN_LAST_LINE);
-
-            if (bestRun && bestRun.isNewRecord) {
-                pbTimeVal.textContent = formatTime(bestRun.timeTaken);
-                pbBombsVal.textContent = bestRun.bombHits;
+            if (winPbBox) {
+                const displayTime = (typeof timeTaken === 'number') ? timeTaken : (bestRun ? bestRun.timeTaken : 0);
+                const displayBombs = (typeof bombHits === 'number') ? bombHits : (bestRun ? bestRun.bombHits : 0);
+                pbTimeVal.textContent = formatTime(displayTime);
+                pbBombsVal.textContent = displayBombs;
                 winPbBox.style.display = 'block';
-            } else {
-                winPbBox.style.display = 'none';
             }
 
-            btnWinNext.style.display = 'none';
-            btnWinRestart.style.display = 'inline-block';
-        }
+            if (btnWinRestart) btnWinRestart.style.display = 'inline-block';
+        });
+    });
+
+    if (btnWinRestart) {
+        btnWinRestart.addEventListener('click', () => {
+            clearLoseCrashSequence();
+            closeModal(winModal, true);
+            game.restartGame();
+        });
     }
-
-    window.addEventListener('gamewin', (e) => {
-        winStep = 0;
-        const { bestRun } = e.detail;
-        if (winHeroImg && typeof ASSETS_DATA !== 'undefined') {
-            winHeroImg.src = ASSETS_DATA.mysteryOpen;
-        }
-        winTitle.textContent = "MYSTERY BOX OPENED!";
-        setSingleLanguageText(winTextEl, CONFIG.WIN_BOX_LINES[0]);
-        btnWinNext.style.display = 'inline-block';
-        btnWinRestart.style.display = 'none';
-        winPbBox.style.display = 'none';
-        winModal.classList.add('show');
-
-        btnWinNext.onclick = () => advanceWinSequence(bestRun);
-    });
-
-    btnWinRestart.addEventListener('click', () => {
-        winModal.classList.remove('show');
-        game.restartGame();
-    });
 
     window.addEventListener('gamerestart', (e) => {
         const { targetHits } = e.detail;
@@ -577,11 +699,12 @@ $uiWiring = @'
         if (hudTimerVal) hudTimerVal.textContent = '1:30';
         if (timerPenaltyBadge) timerPenaltyBadge.classList.remove('pulse');
 
-        if (menuModal) menuModal.classList.remove('show');
-        cooldownModal.classList.remove('show');
-        loseModal.classList.remove('show');
-        winModal.classList.remove('show');
-        pauseModal.classList.remove('show');
+        clearLoseCrashSequence();
+        closeModal(menuModal, true);
+        closeModal(cooldownModal, true);
+        closeModal(loseModal, true);
+        closeModal(winModal, true);
+        closeModal(pauseModal, true);
 
         updateMenuPB();
     });
