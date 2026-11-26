@@ -34,19 +34,19 @@ export class MoleController {
         this.onDetonate = null;
     }
 
-    spawn(isBomb = false, idleDuration = 1.15, speedOrTimings = 1.0) {
+    spawn(isBomb = false, idleDuration = 0.68, speedOrTimings = 1.0) {
         let popDur, holdDur, duckDur, redRetreatDur;
         if (speedOrTimings && typeof speedOrTimings === 'object') {
-            popDur = speedOrTimings.popDuration ?? (this.config.MOLE_POP_DURATION || 0.42);
+            popDur = speedOrTimings.popDuration ?? (this.config.MOLE_POP_DURATION || 0.22);
             holdDur = speedOrTimings.holdDuration ?? idleDuration;
-            duckDur = speedOrTimings.duckDuration ?? (this.config.MOLE_DUCK_DURATION || 0.36);
-            redRetreatDur = Math.max(0.24, speedOrTimings.redRetreatDuration ?? duckDur);
+            duckDur = speedOrTimings.duckDuration ?? (this.config.MOLE_DUCK_DURATION || 0.20);
+            redRetreatDur = Math.max(0.20, speedOrTimings.redRetreatDuration ?? duckDur);
         } else {
             const animSpeed = Math.max(1.0, speedOrTimings || 1.0);
-            popDur = (this.config.MOLE_POP_DURATION || 0.42) / animSpeed;
+            popDur = (this.config.MOLE_POP_DURATION || 0.22) / animSpeed;
             holdDur = idleDuration;
-            duckDur = (this.config.MOLE_DUCK_DURATION || 0.36) / animSpeed;
-            redRetreatDur = Math.max(0.24, this.config.MOLE_RED_RETREAT_TIME || 0.38);
+            duckDur = (this.config.MOLE_DUCK_DURATION || 0.20) / animSpeed;
+            redRetreatDur = Math.max(0.20, this.config.MOLE_RED_RETREAT_TIME || 0.20);
         }
 
         this.isBomb = isBomb;
@@ -123,7 +123,7 @@ export class MoleController {
         this.isHit = true;
         this.triggered = true;
         this.state = MOLE_STATE.HIT;
-        this.phaseTotal = Math.max(0.13, Math.min(this.config.MOLE_HIT_RETREAT_TIME || 0.34, this.duckDuration || 0.34));
+        this.phaseTotal = Math.max(0.07, Math.min(this.config.MOLE_HIT_RETREAT_TIME || 0.20, this.duckDuration || 0.20));
         this.timer = this.phaseTotal;
         this.scaleX = 1.18;
         this.scaleY = 0.78;
@@ -192,11 +192,11 @@ export class MoleController {
                 this.riseProgress = 1.0;
 
                 if (this.detonationTimer <= 0) {
-                    // Chain cleanly into poppingIn (DUCKING) using downward red_sink frame behind front rim (min 0.24s)
+                    // Chain cleanly into poppingIn (DUCKING) using downward red_sink frame behind front rim (min 0.20s)
                     const cb = this.onDetonate;
                     this.onDetonate = null;
                     this.state = MOLE_STATE.DUCKING;
-                    this.phaseTotal = Math.max(0.24, this.redRetreatDuration || (this.config.MOLE_RED_RETREAT_TIME || 0.38));
+                    this.phaseTotal = Math.max(0.20, this.redRetreatDuration || (this.config.MOLE_RED_RETREAT_TIME || 0.20));
                     this.timer = this.phaseTotal;
                     this.scaleX = 1.0;
                     this.scaleY = 1.0;

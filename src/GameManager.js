@@ -23,11 +23,12 @@ export class GameManager {
         this.isPaused = false;
 
         // Gameplay Metrics
-        this.normalHits = 0;          // Progress toward 30 normal hits
-        this.targetHits = this.config.TARGET_NORMAL_HITS || 30;
-        this.bombHits = 0;            // Neutral bomb contact count
-        this.heartCrackLevel = 0;     // 0 = clean, 1 = cracked 1, 2 = cracked 2, 3 = heavily cracked
-        this.speedFactor = 1.0;
+        this.normalHits = 0;          // Progress toward 50 normal hits (WIN_HITS)
+        this.targetHits = this.config.TARGET_NORMAL_HITS || 50;
+        this.bombHits = 0;            // Total bomb hits during round
+        this.bombHitsInCycle = 0;     // 0 = full, 1 = half heart, 2 = empty -> cooldown -> reset 0
+        this.heartCrackLevel = 0;     // Mirrors bombHitsInCycle: 0 = full, 1 = half, 2 = empty
+        this.speedFactor = 1.9;
         this.speedPercent = 0;        // 0 to 100% for Speed bar
 
         // End Game & Cool-Down States
@@ -298,7 +299,7 @@ export class GameManager {
             progress: Math.min(1.0, this.normalHits / this.targetHits)
         });
 
-        // Check Win Condition (30 normal hits before 0:00 -> brief 0.28s beat before opening end modal)
+        // Check Win Condition (50 normal hits before 0:00 -> brief 0.28s beat before opening end modal)
         if (this.normalHits >= this.targetHits && !this.isGameOver && !this.pendingEndType) {
             this.pendingCoolDown = false;
             this.pendingCoolDownTimer = 0;
@@ -326,38 +327,51 @@ export class GameManager {
     handleBombHit(result) {
         this.bombHits++;
 
-        // 1. Cinematic Slow-Motion Bomb Explosion (1.0s at 25% timeScale)
-        this.startSlowMotion(0.95, 0.25);
-
-        // 2. Local Hole Explosion Sprites/Sparks & Red Flash Overlay (no full-screen shake!)
+        // Local Hole Explosion Sprites/Sparks, Audio & Red Hurt Flash (no full-screen shake!)
         this.vfxManager.spawnBombExplosionSequence(result.x, result.y);
-
-        // 3. Advance Heart Crack State (full -> half -> empty); NO -1s timer deduction on hit!
-        this.heartCrackLevel = Math.min(2, this.heartCrackLevel + 1);
-
-        // 4. Increase Speed Progression
-        this.speedFactor += 0.14;
-        this.moleSpawner.setSpeedFactor(this.speedFactor);
-        this.speedPercent = Math.min(100, Math.round(((this.speedFactor - 1.0) / 1.5) * 100));
-
-        // Explosive Audio & Haptic Feedback (Background & Container remain completely stationary)
         this.audioManager.playRedExplosion();
         if (navigator.vibrate) {
             try { navigator.vibrate([80, 40, 80]); } catch (e) {}
         }
 
-        // Dispatch HUD update
+        const safeCutoff = (this.totalDuration || 90.0) - (this.config.SAFE_PHASE_DURATION ?? 12.0); // > 78s = first 12s safe phase
+        const isSafePhase = this.gameTimeRemaining > safeCutoff;
+
+        // Safe Phase (first 12s, timeRemaining > 78): warning explosion & red retreat only!
+        // Heart stays full (bombHitsInCycle = 0), no cooldown modal, and no time penalty.
+        if (isSafePhase) {
+            this.dispatchUIEvent('bombhit', {
+                bombHits: this.bombHits,
+                bombHitsInCycle: this.bombHitsInCycle,
+                heartCrackLevel: this.heartCrackLevel,
+                safePhase: true,
+                suppressFlash: false,
+                timeRemaining: this.gameTimeRemaining
+            });
+            return;
+        }
+
+        // Active Phase (timeRemaining <= 78): 2-Hit Heart Cycle (Full -> Half -> Empty -> Cooldown)
+        this.bombHitsInCycle = Math.min(2, this.bombHitsInCycle + 1);
+        this.heartCrackLevel = this.bombHitsInCycle;
+
         this.dispatchUIEvent('bombhit', {
             bombHits: this.bombHits,
+            bombHitsInCycle: this.bombHitsInCycle,
             heartCrackLevel: this.heartCrackLevel,
-            speedPercent: this.speedPercent,
+            safePhase: false,
+            suppressFlash: false,
             timeRemaining: this.gameTimeRemaining
         });
 
-        // 5. Schedule 3.0s Cool-Down Modal cleanly after bomb burst (-3s deducted when cooldown ends)
-        if (this.bombHits % (this.config.COOLDOWN_CADENCE || 1) === 0) {
-            this.pendingCoolDown = true;
-            this.pendingCoolDownTimer = 0.72;
+        // On 2nd bomb hit in cycle (heart drops to 0), immediately open 3.0s Cool-Down Modal
+        // while keeping red retreat, scrolling, and background moles running live!
+        if (this.bombHitsInCycle >= 2) {
+            this.pendingCoolDown = false;
+            this.pendingCoolDownTimer = 0;
+            this.slowMoTimer = 0;
+            this.timeScale = 1.0;
+            this.triggerCoolDown();
         }
     }
 
@@ -373,7 +387,7 @@ export class GameManager {
         this.cooldownActive = true;
         this.cooldownTimer = this.config.COOLDOWN_AUTO_DURATION || 3.0;
 
-        // 1 Rotating English Reflection & Fact per bomb hit (persists across sessions via localStorage)
+        // 1 Rotating English Reflection & Fact per cooldown (persists across sessions via localStorage)
         const reflections = this.config.REFLECTIONS || [];
         const facts = this.config.FACTS || [];
         const idx = this.getNextRotationIndex('mazaaq_cooldown_idx', reflections.length);
@@ -390,7 +404,8 @@ export class GameManager {
         });
     }
 
-    // Complete 3.0s auto-dismiss cooldown -> deduct -3s, update HUD, pulse -3s, trigger Lose if <= 0, else resume
+    // Complete 3.0s cooldown -> deduct -3s, restore heart to Full Health (bombHitsInCycle = 0),
+    // trigger Lose if <= 0:00, else resume timer and gameplay
     finishFullCoolDown() {
         if (!this.isCoolingDown) return;
         this.cooldownActive = false;
@@ -408,13 +423,14 @@ export class GameManager {
         });
         this.showTimerPenaltyFeedback(`-${Math.round(penalty)}s`);
 
-        // Reset heart to full once health bar reached empty; preserve gradual drop otherwise
-        if (this.heartCrackLevel >= 2) {
-            this.heartCrackLevel = 0;
-        }
+        // Reset 2-hit cycle & restore #hud-heart-img back to Full Health (without red hurt flash)
+        this.bombHitsInCycle = 0;
+        this.heartCrackLevel = 0;
         this.dispatchUIEvent('bombhit', {
-            heartCrackLevel: this.heartCrackLevel,
-            speedPercent: this.speedPercent,
+            bombHits: this.bombHits,
+            bombHitsInCycle: 0,
+            heartCrackLevel: 0,
+            suppressFlash: true,
             timeRemaining: this.gameTimeRemaining
         });
 
@@ -454,8 +470,9 @@ export class GameManager {
         this.lastTime = performance.now();
         this.normalHits = 0;
         this.bombHits = 0;
+        this.bombHitsInCycle = 0;
         this.heartCrackLevel = 0;
-        this.speedFactor = 1.0;
+        this.speedFactor = 1.9;
         this.speedPercent = 0;
 
         // Reset slow-motion state
@@ -495,7 +512,7 @@ export class GameManager {
             if (this.pendingEndType) {
                 // Brief 0.28s intentional beat so final hit VFX & 0:00 clock register before end modal opens
                 this.parallaxManager.update(dt);
-                this.moleSpawner.update(dt, Math.max(0, this.totalDuration - this.gameTimeRemaining));
+                this.moleSpawner.update(dt, Math.max(0, this.totalDuration - this.gameTimeRemaining), this.normalHits);
                 this.hammer.update(dt);
                 this.vfxManager.update(dt);
 
@@ -527,14 +544,15 @@ export class GameManager {
 
             const totalDur = this.totalDuration || 90.0;
             const elapsed = Math.min(90.0, Math.max(0.0, totalDur - Math.max(0, this.gameTimeRemaining)));
-            const curve = computePacingCurve(elapsed);
+            const curve = computePacingCurve(elapsed, this.normalHits);
 
-            // Unified two-phase speed & scroll curve (Phase 1: 1.0x -> 1.60x, Phase 2: 1.60x -> 5.00x)
+            // Continuous Piano Tiles intensity scroll & pacing curve (1.9x -> 3.8x -> 6.5x)
             this.speedFactor = curve.scrollMultiplier;
-            this.speedPercent = Math.min(100, Math.max(0, Math.round(((curve.scrollMultiplier - 1.0) / 4.0) * 100)));
+            this.speedPercent = Math.min(100, Math.max(0, Math.round(curve.intensity * 100)));
 
             if (this.moleSpawner) {
                 this.moleSpawner.setSpeedFactor(this.speedFactor);
+                this.moleSpawner.setNormalHits(this.normalHits);
                 this.moleSpawner.setPacingCurve(curve);
             }
             if (this.parallaxManager) {
@@ -578,7 +596,7 @@ export class GameManager {
             // Keep playfield background scrolling, mole popping, and red-character sinking alive during cooldown!
             if (!this.isGameOver) {
                 this.parallaxManager.update(simDt);
-                this.moleSpawner.update(simDt, elapsed);
+                this.moleSpawner.update(simDt, elapsed, this.normalHits);
                 this.hammer.update(simDt);
                 this.vfxManager.update(simDt);
             }
@@ -739,8 +757,9 @@ export class GameManager {
         this.lastTime = performance.now();
         this.normalHits = 0;
         this.bombHits = 0;
+        this.bombHitsInCycle = 0;
         this.heartCrackLevel = 0;
-        this.speedFactor = 1.0;
+        this.speedFactor = 1.9;
         this.speedPercent = 0;
 
         this.timeScale = 1.0;

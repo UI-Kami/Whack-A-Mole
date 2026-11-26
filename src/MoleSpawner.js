@@ -1,5 +1,5 @@
-// src/MoleSpawner.js - Two-Phase Timeline Spawner & Disguised Bomb Scheduler
-import { computePacingCurve } from './Config.js';
+// src/MoleSpawner.js - Continuous Piano Tiles Spawner & Disguised Bomb Scheduler
+import { WIN_HITS, computePacingCurve } from './Config.js';
 import { MoleController, MOLE_STATE } from './MoleController.js';
 import { NATIVE_HOLES } from './ParallaxManager.js';
 
@@ -92,15 +92,16 @@ export class MoleSpawner {
         this.parallaxManager = parallaxManager;
 
         this.holes = [];
-        this.spawnTimer = 0.5;
+        this.spawnTimer = 0.14;
         this.elapsedTimeline = 0; // seconds elapsed on 90s clock
+        this.normalHits = 0;
 
         this.warmupBombSpawned = false;
         this.warmupBomb2Spawned = false;
         this.lastBombHoleId = -1;
         this.totalBombsSpawned = 0;
-        this.speedFactor = 1.0;
-        this.pacingCurve = computePacingCurve(0);
+        this.speedFactor = 1.9;
+        this.pacingCurve = computePacingCurve(0, 0);
 
         if (this.parallaxManager) {
             this.parallaxManager.onTileRecycled = (tileIdx) => this.onTileRecycled(tileIdx);
@@ -162,14 +163,15 @@ export class MoleSpawner {
     }
 
     reset() {
-        this.spawnTimer = 0.45;
+        this.spawnTimer = 0.14;
         this.elapsedTimeline = 0;
+        this.normalHits = 0;
         this.warmupBombSpawned = false;
         this.warmupBomb2Spawned = false;
         this.lastBombHoleId = -1;
         this.totalBombsSpawned = 0;
-        this.speedFactor = 1.0;
-        this.pacingCurve = computePacingCurve(0);
+        this.speedFactor = 1.9;
+        this.pacingCurve = computePacingCurve(0, 0);
 
         for (let i = 0; i < this.holes.length; i++) {
             this.holes[i].lastSpawnWasBomb = false;
@@ -182,13 +184,18 @@ export class MoleSpawner {
         this.speedFactor = Math.max(1.0, factor);
     }
 
+    setNormalHits(hits) {
+        this.normalHits = Math.max(0, hits || 0);
+    }
+
     setPacingCurve(curve) {
         this.pacingCurve = curve;
     }
 
-    update(dt, elapsedTimeline) {
+    update(dt, elapsedTimeline, normalHits = this.normalHits) {
         this.elapsedTimeline = elapsedTimeline;
-        this.pacingCurve = computePacingCurve(elapsedTimeline);
+        this.normalHits = Math.max(0, normalHits || 0);
+        this.pacingCurve = computePacingCurve(elapsedTimeline, this.normalHits);
         this.updateHolePositions();
 
         // Update all active moles
@@ -196,7 +203,7 @@ export class MoleSpawner {
             this.holes[i].mole.update(dt);
         }
 
-        // Spawning logic driven cleanly by two-phase pacing curve
+        // Spawning logic driven cleanly by continuous Piano Tiles curve
         this.spawnTimer -= dt;
         if (this.spawnTimer <= 0) {
             this.attemptSpawn();
@@ -205,12 +212,13 @@ export class MoleSpawner {
 
     attemptSpawn() {
         const time = this.elapsedTimeline;
-        const totalDuration = this.config.TOTAL_DURATION || 90.0;
-        const timeProgress = Math.min(1.0, Math.max(0.0, time / totalDuration));
-        const curve = this.pacingCurve || computePacingCurve(time);
+        const cachedCurve = this.pacingCurve;
+        const curve = (cachedCurve && Math.abs(((cachedCurve.timeP || 0) * 90.0) - time) < 0.05 && Math.round((cachedCurve.hitP || 0) * WIN_HITS) === Math.min(WIN_HITS, this.normalHits))
+            ? cachedCurve
+            : computePacingCurve(time, this.normalHits);
 
-        // Two-Phase active target ceiling (2 early -> 3 through Phase 2) & exact curve spawn interval
-        const maxSimultaneous = (time < 22.0) ? 2 : 3;
+        // Continuous active target ceiling (3 -> 4 -> 5) & exact curve spawn interval
+        const maxSimultaneous = curve.maxSimultaneous ?? ((curve.intensity < 0.28) ? 3 : ((curve.intensity < 0.62) ? 4 : 5));
         this.spawnTimer = curve.spawnInterval * (0.92 + Math.random() * 0.16);
 
         // Count active board state before picking target type/hole
@@ -223,24 +231,21 @@ export class MoleSpawner {
 
         const activeBombs = activeMoles.filter(h => h.mole.isBomb).length;
         const activeNormals = activeMoles.length - activeBombs;
-        const maxSimultaneousBombs = (time < 45.0) ? 1 : 2;
+        const maxSimultaneousBombs = curve.maxActiveBombs ?? ((time < 45.0) ? 2 : 3);
 
-        // Smooth bomb probability: 35% at start -> 55% toward 90s (after initial 1.5s warm pop)
-        const baseBombStart = this.config.BOMB_PROB_START ?? 0.35;
-        const baseBombMax = this.config.BOMB_PROB_MAX ?? 0.55;
-        const currentBombProb = baseBombStart + (baseBombMax - baseBombStart) * timeProgress;
-        let shouldSpawnBomb = (time >= 1.5) && (Math.random() < currentBombProb);
+        // Bombs spawn from t=0: 18% -> 35% in Phase 1 (max 2), jumping to 50% -> 62% in Phase 2 (max 3)
+        const currentBombProb = curve.bombProb ?? ((time <= 45.0) ? 0.18 : 0.50);
+        let shouldSpawnBomb = Math.random() < currentBombProb;
 
         // Anti-flood & normal target prioritization guards:
-        // 1. Cap simultaneous active bombs (max 1 in first 45s, max 2 in final 45s)
+        // 1. Cap simultaneous active bombs (max 2 in first 45s, max 3 in final 45s)
         if (activeBombs >= maxSimultaneousBombs) {
             shouldSpawnBomb = false;
         }
-        // 2. When 2+ moles are up together, ensure at least 1 normal target exists;
-        //    when 3+ moles are up together, prioritize at least 2 normal targets.
+        // 2. Ensure at least 1-2 normal green hittable targets remain on screen alongside bombs
         if (activeMoles.length >= 1 && activeNormals < 1) {
             shouldSpawnBomb = false;
-        } else if (activeMoles.length >= 2 && activeNormals < 2) {
+        } else if (maxSimultaneous >= 4 && activeMoles.length >= 2 && activeNormals < 2) {
             shouldSpawnBomb = false;
         }
 

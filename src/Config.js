@@ -1,38 +1,50 @@
-// src/Config.js - Central Configuration, Two-Phase Pacing Curve & Text Pools
-export function computePacingCurve(elapsedSec = 0) {
+// src/Config.js - Central Configuration, Continuous Piano Tiles Pacing Curve & Text Pools
+export const WIN_HITS = 50;
+
+export function computePacingCurve(elapsedSec = 0, hits = 0) {
     const elapsed = Math.min(90.0, Math.max(0.0, elapsedSec));
+    const safeHits = Math.max(0, hits || 0);
     const lerp = (a, b, t) => a + (b - a) * t;
+    const lerpCurve = (start, mid, end, t) => (
+        t <= 0.5 ? lerp(start, mid, t * 2.0) : lerp(mid, end, (t - 0.5) * 2.0)
+    );
 
-    // Phase 1 (0s..45s | 1:30..0:45): Gradual gentle build-up
-    if (elapsed <= 45.0) {
-        const p1 = elapsed / 45.0;
-        const duck = lerp(0.36, 0.28, p1);
-        return {
-            phase: 1,
-            phaseProgress: p1,
-            scrollMultiplier: lerp(1.0, 1.60, p1),
-            popDuration: lerp(0.42, 0.32, p1),
-            holdDuration: lerp(1.15, 0.85, p1),
-            duckDuration: duck,
-            redRetreatDuration: Math.max(0.24, duck),
-            spawnInterval: lerp(1.10, 0.80, p1)
-        };
-    }
+    // Continuous "Piano Tiles" intensity factor combining elapsed time (78%) + hit momentum (22%)
+    const timeP = Math.min(1.0, Math.max(0.0, elapsed / 90.0));
+    const hitP = Math.min(1.0, Math.max(0.0, safeHits / WIN_HITS));
+    const intensity = Math.min(1.0, 0.78 * timeP + 0.22 * hitP);
 
-    // Phase 2 (45s..90s | 0:45..0:00): Rapid escalating ease-in scroll & mole speed
-    const p2 = (elapsed - 45.0) / 45.0;
-    const accel = 0.35 * p2 + 0.65 * Math.pow(p2, 1.75);
-    const duck = lerp(0.28, 0.13, accel);
+    // High-tempo continuous curves across 0.0 (1:30 start) -> 0.5 (mid-round) -> 1.0 (0:00 climax)
+    const scrollMultiplier   = lerpCurve(1.90, 3.80, 6.50, intensity);
+    const popDuration        = lerpCurve(0.22, 0.14, 0.07, intensity);
+    const holdDuration       = lerpCurve(0.68, 0.42, 0.18, intensity);
+    const duckDuration       = lerpCurve(0.20, 0.13, 0.07, intensity);
+    const spawnInterval      = lerpCurve(0.62, 0.38, 0.20, intensity);
+    const redRetreatDuration = Math.max(0.20, duckDuration);
+    const maxSimultaneous    = (intensity < 0.28) ? 3 : ((intensity < 0.62) ? 4 : 5);
+
+    // Bomb spawn schedule: 18% -> 35% (cap 2) in first 45s, 50% -> 62% (cap 3) in final 45s
+    const isFirstHalf = elapsed <= 45.0;
+    const p1 = isFirstHalf ? (elapsed / 45.0) : 1.0;
+    const p2 = isFirstHalf ? 0.0 : ((elapsed - 45.0) / 45.0);
+    const bombProb = isFirstHalf ? lerp(0.18, 0.35, p1) : lerp(0.50, 0.62, p2);
+    const maxActiveBombs = isFirstHalf ? 2 : 3;
+
     return {
-        phase: 2,
-        phaseProgress: p2,
-        accel: accel,
-        scrollMultiplier: lerp(1.60, 5.00, accel),
-        popDuration: lerp(0.32, 0.14, accel),
-        holdDuration: lerp(0.85, 0.32, accel),
-        duckDuration: duck,
-        redRetreatDuration: Math.max(0.24, duck),
-        spawnInterval: lerp(0.80, 0.38, accel)
+        phase: isFirstHalf ? 1 : 2,
+        phaseProgress: isFirstHalf ? p1 : p2,
+        timeP,
+        hitP,
+        intensity,
+        scrollMultiplier,
+        popDuration,
+        holdDuration,
+        duckDuration,
+        redRetreatDuration,
+        spawnInterval,
+        bombProb,
+        maxActiveBombs,
+        maxSimultaneous
     };
 }
 
@@ -56,9 +68,9 @@ export const CONFIG = {
     HOLE_BASE_RADIUS_Y: 65,
 
     // 90-Second Timeline & Scroll Base Speed Settings
-    TOTAL_DURATION: 90.0,     // 1:30 in seconds
-    TARGET_NORMAL_HITS: 30,   // 30 normal hits required to open Mystery Box
-    SCROLL_SPEED: 110,        // Base downward px/s (scales 1.0x -> 1.6x Phase 1, 1.6x -> 5.0x Phase 2)
+    TOTAL_DURATION: 90.0,         // 1:30 in seconds
+    TARGET_NORMAL_HITS: WIN_HITS, // 50 normal hits required to open Mystery Box
+    SCROLL_SPEED: 110,            // Base downward px/s (1.9x -> 3.8x -> 6.5x continuous curve)
 
     // Timeline Phases (Seconds elapsed from start 0:00 to 1:30)
     PHASE_WARMUP_END: 20.0,
@@ -66,35 +78,37 @@ export const CONFIG = {
     PHASE_PRESSURE_END: 80.0,
     PHASE_FINAL_END: 90.0,
 
-    // Spawning Rates by Phase (Balanced for achievable 30 hits in 90s)
-    SPAWN_INTERVAL_WARMUP: 0.95,
-    SPAWN_INTERVAL_MIDDLE: 0.72,
-    SPAWN_INTERVAL_PRESSURE: 0.56,
-    SPAWN_INTERVAL_FINAL: 0.45,
+    // Spawning Rates along Continuous Curve
+    SPAWN_INTERVAL_WARMUP: 0.62,
+    SPAWN_INTERVAL_MIDDLE: 0.38,
+    SPAWN_INTERVAL_PRESSURE: 0.26,
+    SPAWN_INTERVAL_FINAL: 0.20,
 
-    // Disguised Bomb Probabilities (Higher frequency so hidden bombs challenge player often)
-    BOMB_PROB_START: 0.35,
-    BOMB_PROB_MAX: 0.55,
-    BOMB_PROB_WARMUP: 0.35,
-    BOMB_PROB_MIDDLE: 0.43,
+    // Disguised Bomb Probabilities (18% -> 35% Phase 1, 50% -> 62% Phase 2)
+    SAFE_PHASE_DURATION: 12.0,
+    BOMB_PROB_SAFE: 0.18,
+    BOMB_PROB_START: 0.18,
+    BOMB_PROB_MAX: 0.62,
+    BOMB_PROB_WARMUP: 0.18,
+    BOMB_PROB_MIDDLE: 0.35,
     BOMB_PROB_PRESSURE: 0.50,
-    BOMB_PROB_FINAL: 0.55,
+    BOMB_PROB_FINAL: 0.62,
 
     // Mole 3-Phase Smooth Eased Animation Timings (Clamped dt <= 0.05s)
-    MOLE_PEEK_TIME: 0.42,         // Phase 1: Pop-out rise duration (cubic ease-out, ~0.38-0.45s)
-    MOLE_POP_DURATION: 0.42,      // Unified Pop-out duration
-    MOLE_IDLE_WARMUP: 1.28,       // Phase 2: Hold duration (~0.95-1.30s)
-    MOLE_IDLE_MIDDLE: 1.18,
-    MOLE_IDLE_PRESSURE: 1.06,
-    MOLE_IDLE_FINAL: 0.96,
-    MOLE_DUCK_DURATION: 0.36,     // Phase 3: Pop-in retreat duration (cubic ease-in, ~0.32-0.40s)
-    MOLE_HIT_RETREAT_TIME: 0.34,  // Phase 3: Hit squash retreat (~0.32-0.40s)
-    MOLE_RED_EXPLODE_TIME: 0.40,  // Bomb exploding duration before smooth popping-in (~0.35-0.45s)
-    MOLE_RED_RETREAT_TIME: 0.38,  // Bomb popping-in retreat duration after explosion (~0.35-0.40s)
+    MOLE_PEEK_TIME: 0.22,         // Brisk initial pop-out
+    MOLE_POP_DURATION: 0.22,      // Unified initial pop-out duration
+    MOLE_IDLE_WARMUP: 0.68,       // Initial hold
+    MOLE_IDLE_MIDDLE: 0.42,
+    MOLE_IDLE_PRESSURE: 0.28,
+    MOLE_IDLE_FINAL: 0.18,
+    MOLE_DUCK_DURATION: 0.20,     // Brisk initial pop-in retreat
+    MOLE_HIT_RETREAT_TIME: 0.20,
+    MOLE_RED_EXPLODE_TIME: 0.40,
+    MOLE_RED_RETREAT_TIME: 0.20,
 
-    // Bomb Penalties & Cool-Down Rules (-3s only on cooldown exit; zero -1s immediate hit deduction)
+    // Bomb Penalties & 2-Hit Heart Cool-Down Rules (-3s only after 2-hit heart empties post-safe phase)
     BOMB_TIME_PENALTY: 0.0,           // No immediate -1s deduction on bomb hit
-    COOLDOWN_CADENCE: 1,              // Open Cool-Down modal for 3.0s on bomb hit
+    COOLDOWN_CADENCE: 2,              // Open Cool-Down modal on 2nd active-phase bomb hit (Full -> Half -> Empty)
     COOLDOWN_AUTO_DURATION: 3.0,      // Auto-dismiss after exactly 3.0 seconds (3000ms)
     COOLDOWN_PENALTY_FULL: 3.0,       // Sole -3 seconds penalty deducted when cooldown completes
     COOLDOWN_PENALTY_SKIP: 3.0,

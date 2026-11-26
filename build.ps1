@@ -75,12 +75,12 @@ $middleHtml = @'
 
             <!-- Mystery Box Progress Bar (Box Icon Transparent Over Playfield) -->
             <div class="hud-sub-bar">
-                <div class="hud-progress-gauge" title="Progress toward Mystery Box (30 Hits)">
+                <div class="hud-progress-gauge" title="Progress toward Mystery Box (50 Hits)">
                     <img id="mystery-icon" class="mystery-box-icon" src="" alt="Box" />
                     <div class="progress-track">
                         <div id="progress-fill" class="progress-fill"></div>
                     </div>
-                    <span id="progress-text" class="progress-text">0 / 30</span>
+                    <span id="progress-text" class="progress-text">0 / 50</span>
                 </div>
             </div>
 
@@ -110,7 +110,7 @@ $middleHtml = @'
                     <div class="menu-rules-box">
                         <div class="menu-rule-item">
                             <span class="rule-icon">&#127919;</span>
-                            <span class="rule-text"><strong>30 Hits</strong> unlock the Mystery Box</span>
+                            <span class="rule-text"><strong>50 Hits</strong> unlock the Mystery Box</span>
                         </div>
                         <div class="menu-rule-item">
                             <span class="rule-icon">&#9201;&#65039;</span>
@@ -428,16 +428,18 @@ $uiWiring = @'
     });
 
     window.addEventListener('bombhit', (e) => {
-        const { heartCrackLevel } = e.detail;
+        const { heartCrackLevel, suppressFlash } = e.detail;
         if (hudHeartWrap) {
-            hudHeartWrap.className = `hud-side-lives crack-${heartCrackLevel}`;
+            hudHeartWrap.className = (heartCrackLevel > 0)
+                ? `hud-side-lives crack-${heartCrackLevel}`
+                : 'hud-side-lives';
         }
         if (hudHeartImg && typeof ASSETS_DATA !== 'undefined') {
             if (heartCrackLevel === 1) hudHeartImg.src = ASSETS_DATA.healthBarHalf || ASSETS_DATA.heartCrack1;
             else if (heartCrackLevel >= 2) hudHeartImg.src = ASSETS_DATA.healthBarEmpty || ASSETS_DATA.heartCrack2;
             else hudHeartImg.src = ASSETS_DATA.healthBarFull || ASSETS_DATA.heartClean;
         }
-        if (hurtOverlay) {
+        if (hurtOverlay && !suppressFlash) {
             hurtOverlay.classList.remove('flash');
             void hurtOverlay.offsetWidth;
             hurtOverlay.classList.add('flash');

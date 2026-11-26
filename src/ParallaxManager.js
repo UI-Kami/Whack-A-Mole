@@ -45,9 +45,9 @@ export class ParallaxManager {
         this.holePinkImg = null;
         this.holeImg = null;
 
-        // Procedural infinite scrolling parameters (scales up to 5.0x -> ~550 px/s in late Phase 2)
+        // Procedural infinite scrolling parameters (scales 1.9x -> 3.8x -> 6.5x along continuous curve)
         this.scrollSpeed = config.SCROLL_SPEED || 110;
-        this.speedMultiplier = 1.0;
+        this.speedMultiplier = 1.9;
         this.onTileRecycled = null;
 
         // Render bounds for 1080 x 1920 Kiosk standard
@@ -96,7 +96,7 @@ export class ParallaxManager {
     }
 
     setSpeedMultiplier(factor) {
-        this.speedMultiplier = Math.max(1.0, Math.min(6.0, factor));
+        this.speedMultiplier = Math.max(1.0, Math.min(8.0, factor));
     }
 
     resetTiles() {
@@ -110,7 +110,7 @@ export class ParallaxManager {
 
     reset() {
         this.resetTiles();
-        this.speedMultiplier = 1.0;
+        this.speedMultiplier = 1.9;
     }
 
     resize(config) {
