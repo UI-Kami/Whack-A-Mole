@@ -107,6 +107,7 @@ export const CONFIG = {
     MOLE_RED_RETREAT_TIME: 0.20,
     MOLE_MISS_WINDUP_TIME: 0.40,  // Clickable wind-up window across Frames 1-3 (0.13 + 0.14 + 0.13; 0.36s-0.40s scaled)
     MOLE_MISS_THROW_TIME: 0.50,   // Full 4-frame throw sequence (0.40s wind-up + 0.10s Frame 4 release)
+    MISS_THROW_PROBABILITY: 0.33, // ~1-in-3 chance per eligible missed character to launch a ball attack
     MISS_BALL_FLIGHT_TIME: 0.14,  // Clean 2D pop-up arc flight to center screen (~0.14s)
     MISS_SPLASH_BURST_MS: 130,    // Frame 7 Screen Impact Burst duration (~0.13s)
     MISS_SPLASH_SPLAT_MS: 600,    // Frame 8 Splatted Ball smooth opacity fade (~0.60s)

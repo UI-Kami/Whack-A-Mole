@@ -100,9 +100,11 @@ export class MoleSpawner {
         this.warmupBomb2Spawned = false;
         this.lastBombHoleId = -1;
         this.totalBombsSpawned = 0;
+        this.lastMissWasBallAttack = false;
         this.speedFactor = 1.9;
         this.pacingCurve = computePacingCurve(0, 0);
         this.onMissThrow = null;
+        this.isScreenSplashActive = null;
 
         if (this.parallaxManager) {
             this.parallaxManager.onTileRecycled = (tileIdx) => this.onTileRecycled(tileIdx);
@@ -128,6 +130,98 @@ export class MoleSpawner {
         this.updateHolePositions();
     }
 
+    getHudBottomVirtualY() {
+        const H = this.config.VIEWPORT_HEIGHT || 1920;
+        try {
+            const hud = typeof document !== 'undefined' ? document.querySelector('.kiosk-hud') : null;
+            const canvas = typeof document !== 'undefined' ? document.getElementById('game-canvas') : null;
+            if (hud && canvas) {
+                const hudRect = hud.getBoundingClientRect();
+                const canvasRect = canvas.getBoundingClientRect();
+                if (canvasRect.height > 0 && hudRect.bottom > canvasRect.top) {
+                    const virtualY = ((hudRect.bottom - canvasRect.top) / canvasRect.height) * H;
+                    return Math.max(135, Math.min(260, virtualY));
+                }
+            }
+        } catch (e) {}
+        return 155;
+    }
+
+    getPlayfieldSpawnBounds(curve = this.pacingCurve) {
+        const H = this.config.VIEWPORT_HEIGHT || 1920;
+        const scale = (this.parallaxManager && this.parallaxManager.bounds && this.parallaxManager.bounds.scale)
+            ? this.parallaxManager.bounds.scale
+            : 1.0;
+        const sampleHole = this.holes && this.holes[0];
+        const holeRadiusX = sampleHole ? sampleHole.radiusX : (126 * scale);
+        const holeRadiusY = sampleHole ? sampleHole.radiusY : (60 * scale);
+        const holeHeight = holeRadiusY * 2;
+
+        // Clear top HUD (pills, 0/50 bar, heart) plus ~1.1x visible character height so hair/hands never clip
+        const hudBottomY = this.getHudBottomVirtualY();
+        const visibleCharHeightAboveRim = holeRadiusX * 2.58;
+        const minSpawnY = Math.round(hudBottomY + visibleCharHeightAboveRim * 1.1);
+
+        // Keep hole >= 1.15x holeHeight above bottom edge even after scrolling through rise + hold window
+        const baseScroll = (this.parallaxManager && this.parallaxManager.scrollSpeed)
+            ? this.parallaxManager.scrollSpeed
+            : (this.config.SCROLL_SPEED || 110);
+        const scrollMult = (curve && curve.scrollMultiplier)
+            ? curve.scrollMultiplier
+            : (this.parallaxManager ? this.parallaxManager.speedMultiplier : 1.9);
+        const activeWindowSec = (curve && curve.popDuration && curve.holdDuration)
+            ? (curve.popDuration + curve.holdDuration)
+            : 0.90;
+        const scrollTravel = baseScroll * scrollMult * activeWindowSec;
+        const staticBottomY = H - holeHeight * 1.15;
+        const maxSpawnY = Math.round(Math.max(minSpawnY + 120, staticBottomY - scrollTravel));
+
+        return {
+            minSpawnY,
+            maxSpawnY,
+            minThrowY: Math.round(minSpawnY * 0.85),
+            maxThrowY: Math.round(H - holeHeight * 0.45),
+            hudBottomY,
+            holeHeight
+        };
+    }
+
+    isHoleInSpawnBounds(hole, bounds = this.getPlayfieldSpawnBounds(this.pacingCurve)) {
+        return !!(hole && hole.isVisible && hole.screenY >= bounds.minSpawnY && hole.screenY <= bounds.maxSpawnY);
+    }
+
+    isHoleInThrowBounds(hole) {
+        if (!hole || !hole.isVisible) return false;
+        const b = this.getPlayfieldSpawnBounds(this.pacingCurve);
+        return hole.screenY >= b.minThrowY && hole.screenY <= b.maxThrowY;
+    }
+
+    shouldTriggerMissThrow(hole) {
+        // Off-screen throw safety guard: skip throw if hole scrolled near/past bottom or top border
+        if (!this.isHoleInThrowBounds(hole)) {
+            this.lastMissWasBallAttack = false;
+            return false;
+        }
+        // Anti-flood rule 1: never allow two consecutive missed characters to both launch a ball attack
+        if (this.lastMissWasBallAttack) {
+            this.lastMissWasBallAttack = false;
+            return false;
+        }
+        // Anti-flood rule 2: skip if another throw, flying ball projectile, or screen glass splat is active
+        const hasOtherThrow = this.holes.some(h => h !== hole && h.mole.state === MOLE_STATE.THROWING_MISS);
+        const hasFlyingBall = !!(this.vfxManager && this.vfxManager.flyingBalls && this.vfxManager.flyingBalls.length > 0);
+        const hasActiveSplash = !!(this.isScreenSplashActive && this.isScreenSplashActive());
+        if (hasOtherThrow || hasFlyingBall || hasActiveSplash) {
+            this.lastMissWasBallAttack = false;
+            return false;
+        }
+
+        const prob = (this.config.MISS_THROW_PROBABILITY !== undefined) ? this.config.MISS_THROW_PROBABILITY : 0.33;
+        const attack = Math.random() < prob;
+        this.lastMissWasBallAttack = attack;
+        return attack;
+    }
+
     initHoles() {
         this.holes = [];
         const tileCount = 3;
@@ -136,6 +230,8 @@ export class MoleSpawner {
                 const nh = NATIVE_HOLES[i];
                 const hole = new Hole(t, nh.col, nh.row, nh, this.config, this.assets);
                 hole.id = t * NATIVE_HOLES.length + i;
+                hole.mole.shouldStartMissThrow = (missedHole) => this.shouldTriggerMissThrow(missedHole);
+                hole.mole.canReleaseMissBall = (throwingHole) => this.isHoleInThrowBounds(throwingHole);
                 hole.mole.onMissThrow = (missedHole) => {
                     if (this.onMissThrow) this.onMissThrow(missedHole);
                 };
@@ -150,6 +246,7 @@ export class MoleSpawner {
         const scale = this.parallaxManager.bounds.scale;
         const offsetX = this.parallaxManager.bounds.offsetX;
         const H = this.config.VIEWPORT_HEIGHT;
+        const bounds = this.getPlayfieldSpawnBounds(this.pacingCurve);
 
         for (let i = 0; i < this.holes.length; i++) {
             const hole = this.holes[i];
@@ -159,8 +256,9 @@ export class MoleSpawner {
             hole.radiusX = (hole.nativeHole.rx || 126) * scale;
             hole.radiusY = (hole.nativeHole.ry || 60) * scale;
 
-            // Only mark visible if hole is inside visible vertical range
+            // Keep drawing/hittable while visible on screen; restrict new spawns to unobstructed zone
             hole.isVisible = (hole.screenY >= 60 && hole.screenY <= H - 40);
+            hole.isSpawnSafe = hole.isVisible && (hole.screenY >= bounds.minSpawnY && hole.screenY <= bounds.maxSpawnY);
         }
     }
 
@@ -172,6 +270,7 @@ export class MoleSpawner {
         this.warmupBomb2Spawned = false;
         this.lastBombHoleId = -1;
         this.totalBombsSpawned = 0;
+        this.lastMissWasBallAttack = false;
         this.speedFactor = 1.9;
         this.pacingCurve = computePacingCurve(0, 0);
 
@@ -224,11 +323,13 @@ export class MoleSpawner {
         this.spawnTimer = curve.spawnInterval * (0.92 + Math.random() * 0.16);
 
         // Count active board state before picking target type/hole
+        const bounds = this.getPlayfieldSpawnBounds(curve);
         const visibleHoles = this.holes.filter(h => h.isVisible);
         const activeMoles = visibleHoles.filter(h => h.mole.state !== MOLE_STATE.HIDDEN);
         if (activeMoles.length >= maxSimultaneous) return;
 
-        const availableHoles = visibleHoles.filter(h => h.mole.state === MOLE_STATE.HIDDEN);
+        // Restrict new spawns strictly to fully unobstructed holes within [minSpawnY, maxSpawnY]
+        const availableHoles = visibleHoles.filter(h => h.mole.state === MOLE_STATE.HIDDEN && this.isHoleInSpawnBounds(h, bounds));
         if (availableHoles.length === 0) return;
 
         const activeBombs = activeMoles.filter(h => h.mole.isBomb).length;

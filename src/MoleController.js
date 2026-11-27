@@ -40,6 +40,8 @@ export class MoleController {
         this.missTotalDuration = 0.50;
         this.missSplashFired = false;
         this.throwFrameIndex = 1;
+        this.shouldStartMissThrow = null;
+        this.canReleaseMissBall = null;
         this.onMissThrow = null;
 
         // Bomb detonation timer
@@ -251,9 +253,11 @@ export class MoleController {
                 this.riseProgress = 1.0;
 
                 if (this.timer <= 0) {
-                    // Normal green character missed -> enter clickable 4-frame front-facing 2D throw sequence!
+                    // Normal green character missed -> chance-based (~1 in 3) front-facing 2D throw if inside throw bounds!
                     // Keep hitbox active through wind-up Frames 1-3; lock ONLY once Frame 4 releases the ball.
-                    if (!this.isBomb && !this.isHit && !this.triggered && !this.missed && this.assets && (this.assets.missThrow1 || this.assets.splashFrame2)) {
+                    const eligibleForThrow = !this.isBomb && !this.isHit && !this.triggered && !this.missed &&
+                        this.assets && (this.assets.missThrow1 || this.assets.splashFrame2);
+                    if (eligibleForThrow && (!this.shouldStartMissThrow || this.shouldStartMissThrow(this.hole))) {
                         this.missed = false;
                         this.triggered = false;
                         this.ballLaunched = false;
@@ -302,6 +306,20 @@ export class MoleController {
                 } else if (this.missElapsed < t3) {
                     this.throwFrameIndex = 3;
                 } else {
+                    // Off-screen release safety guard: abort without launching ball if hole scrolled off playfield
+                    if (!this.missSplashFired && this.canReleaseMissBall && !this.canReleaseMissBall(this.hole)) {
+                        this.ballLaunched = false;
+                        this.missSplashFired = false;
+                        this.missed = true;
+                        this.triggered = true;
+                        this.state = MOLE_STATE.DUCKING;
+                        this.phaseTotal = Math.max(0.12, this.duckDuration || (this.config.MOLE_DUCK_DURATION || 0.20));
+                        this.timer = this.phaseTotal;
+                        this.scaleX = 1.0;
+                        this.scaleY = 1.0;
+                        this.riseProgress = 1.0;
+                        break;
+                    }
                     // Frame 4 releases the ball and locks target against late taps
                     this.throwFrameIndex = 4;
                     this.ballLaunched = true;

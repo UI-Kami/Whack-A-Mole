@@ -112,6 +112,10 @@ export class GameManager {
 
         this.moleSpawner = new MoleSpawner(this.config, this.assets, this.audioManager, this.vfxManager, this.parallaxManager);
         this.moleSpawner.onMissThrow = (hole) => this.handleMissSplash(hole);
+        this.moleSpawner.isScreenSplashActive = () => {
+            const layer = document.getElementById('screen-splash-layer');
+            return !!(layer && layer.children.length > 0);
+        };
         this.hammer = new HammerController(this.config, this.assets, this.audioManager, this.cameraShake, this.vfxManager);
 
         this.inputManager = new InputManager(
@@ -350,6 +354,10 @@ export class GameManager {
 
     handleMissSplash(hole) {
         if (this.isGameOver || this.pendingEndType || !this.isStarted) return;
+        // Final off-screen safety guard: never launch a ghost projectile if hole scrolled off playfield
+        if (this.moleSpawner && this.moleSpawner.isHoleInThrowBounds && hole && !this.moleSpawner.isHoleInThrowBounds(hole)) {
+            return;
+        }
         // Release cleanly from character's front throwing hand position over hole rim
         const startX = hole ? (hole.screenX - hole.radiusX * 0.56) : (this.config.VIEWPORT_WIDTH * 0.5);
         const startY = hole ? (hole.screenY - hole.radiusY * 0.45) : (this.config.VIEWPORT_HEIGHT * 0.45);
