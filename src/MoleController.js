@@ -1,4 +1,4 @@
-// src/MoleController.js - 3-Phase Hole Emergence, Rim-Aligned Hands & Disguised Bombs
+// src/MoleController.js - 3-Phase Hole Emergence, Rim-Aligned Hands, Disguised Bombs & Miss Ball-Throw
 export const MOLE_STATE = {
     HIDDEN: 'HIDDEN',
     PEEKING: 'PEEKING',
@@ -6,6 +6,7 @@ export const MOLE_STATE = {
     IDLE: 'IDLE',
     HIT: 'HIT',
     TRANSFORMING_RED: 'TRANSFORMING_RED',
+    THROWING_MISS: 'throwingMiss',
     DUCKING: 'DUCKING'
 };
 
@@ -26,8 +27,20 @@ export class MoleController {
         this.scaleY = 1;
         this.idleBobTimer = 0;
         this.isHit = false;
+        this.hit = false;
         this.triggered = false;
         this.transformedRed = false;
+        this.exploding = false;
+        this.missed = false;
+        this.ballLaunched = false;
+
+        // Front-facing 4-Frame 2D Miss Ball-Throw Animation State (0.13s + 0.14s + 0.13s wind-up + 0.10s release)
+        this.missElapsed = 0;
+        this.missTempoScale = 1.0;
+        this.missTotalDuration = 0.50;
+        this.missSplashFired = false;
+        this.throwFrameIndex = 1;
+        this.onMissThrow = null;
 
         // Bomb detonation timer
         this.detonationTimer = 0;
@@ -35,12 +48,13 @@ export class MoleController {
     }
 
     spawn(isBomb = false, idleDuration = 0.68, speedOrTimings = 1.0) {
-        let popDur, holdDur, duckDur, redRetreatDur;
+        let popDur, holdDur, duckDur, redRetreatDur, missTempoScale = 1.0;
         if (speedOrTimings && typeof speedOrTimings === 'object') {
             popDur = speedOrTimings.popDuration ?? (this.config.MOLE_POP_DURATION || 0.22);
             holdDur = speedOrTimings.holdDuration ?? idleDuration;
             duckDur = speedOrTimings.duckDuration ?? (this.config.MOLE_DUCK_DURATION || 0.20);
             redRetreatDur = Math.max(0.20, speedOrTimings.redRetreatDuration ?? duckDur);
+            missTempoScale = speedOrTimings.missTempoScale ?? 1.0;
         } else {
             const animSpeed = Math.max(1.0, speedOrTimings || 1.0);
             popDur = (this.config.MOLE_POP_DURATION || 0.22) / animSpeed;
@@ -58,8 +72,17 @@ export class MoleController {
         this.timer = popDur;
         this.riseProgress = 0;
         this.isHit = false;
+        this.hit = false;
         this.triggered = false;
         this.transformedRed = false;
+        this.exploding = false;
+        this.missed = false;
+        this.ballLaunched = false;
+        this.missElapsed = 0;
+        this.missTempoScale = Math.max(0.90, Math.min(1.0, missTempoScale));
+        this.missTotalDuration = (this.config.MOLE_MISS_THROW_TIME || 0.50) * this.missTempoScale;
+        this.missSplashFired = false;
+        this.throwFrameIndex = 1;
         this.scaleX = 0.94;
         this.scaleY = 1.06;
         this.idleBobTimer = Math.random() * Math.PI * 2;
@@ -73,8 +96,15 @@ export class MoleController {
         this.state = MOLE_STATE.HIDDEN;
         this.riseProgress = 0;
         this.isHit = false;
+        this.hit = false;
         this.triggered = false;
         this.transformedRed = false;
+        this.exploding = false;
+        this.missed = false;
+        this.ballLaunched = false;
+        this.missElapsed = 0;
+        this.missSplashFired = false;
+        this.throwFrameIndex = 1;
         this.detonationTimer = 0;
     }
 
@@ -82,8 +112,15 @@ export class MoleController {
         this.state = MOLE_STATE.HIDDEN;
         this.riseProgress = 0;
         this.isHit = false;
+        this.hit = false;
         this.triggered = false;
         this.transformedRed = false;
+        this.exploding = false;
+        this.missed = false;
+        this.ballLaunched = false;
+        this.missElapsed = 0;
+        this.missSplashFired = false;
+        this.throwFrameIndex = 1;
         this.isBomb = false;
         this.detonationTimer = 0;
         this.timer = 0;
@@ -92,19 +129,49 @@ export class MoleController {
         this.idleBobTimer = 0;
     }
 
+    canBeHit() {
+        if (
+            this.state === MOLE_STATE.HIDDEN ||
+            this.isHit ||
+            this.hit ||
+            this.triggered ||
+            this.missed ||
+            this.ballLaunched ||
+            this.state === MOLE_STATE.TRANSFORMING_RED ||
+            this.state === MOLE_STATE.HIT
+        ) {
+            return false;
+        }
+        if (this.state === MOLE_STATE.THROWING_MISS) {
+            // Keep hitbox clickable during wind-up Frames 1-3 until Frame 4 releases the ball
+            return !this.ballLaunched && this.throwFrameIndex < 4;
+        }
+        if (this.state === MOLE_STATE.DUCKING && this.transformedRed) {
+            return false;
+        }
+        return true;
+    }
+
     onHit(hitType = 'punch') {
-        if (this.state === MOLE_STATE.HIDDEN || this.isHit || this.triggered || this.state === MOLE_STATE.TRANSFORMING_RED) {
+        if (!this.canBeHit()) {
             return null;
         }
 
-        // Hidden Bomb hit: lock trigger, transform sprite set from green -> red,
-        // play exploding animation (~0.40s), then smoothly pop back in as red_sink.
+        const wasMidThrow = (this.state === MOLE_STATE.THROWING_MISS);
+
+        // Hidden Bomb hit (including mid-throw): cancel any throw, lock trigger, transform green -> red,
+        // hold furious red exploding state >= 0.42s so canvas draws red BEFORE cooldown, then sink as red_sink.
         if (this.isBomb) {
             this.isHit = true;
+            this.hit = true;
             this.triggered = true;
+            this.ballLaunched = false;
+            this.missed = false;
+            this.missSplashFired = false;
             this.transformedRed = true;
+            this.exploding = true;
             this.state = MOLE_STATE.TRANSFORMING_RED;
-            this.detonationTimer = this.config.MOLE_RED_EXPLODE_TIME || 0.40;
+            this.detonationTimer = Math.max(0.42, this.config.MOLE_RED_EXPLODE_TIME || 0.42);
             this.riseProgress = 1.0;
             this.scaleX = 1.20;
             this.scaleY = 0.86;
@@ -112,6 +179,7 @@ export class MoleController {
             return {
                 success: true,
                 isBomb: true,
+                interruptedThrow: wasMidThrow,
                 hitType: hitType,
                 x: this.hole.screenX,
                 y: this.hole.screenY,
@@ -119,9 +187,13 @@ export class MoleController {
             };
         }
 
-        // Normal green hit -> lock trigger, squash & cubic ease-in retreat as green
+        // Normal green hit (including mid-throw Frames 1-3): abort throw & retreat immediately behind front rim
         this.isHit = true;
+        this.hit = true;
         this.triggered = true;
+        this.ballLaunched = false;
+        this.missed = false;
+        this.missSplashFired = false;
         this.state = MOLE_STATE.HIT;
         this.phaseTotal = Math.max(0.07, Math.min(this.config.MOLE_HIT_RETREAT_TIME || 0.20, this.duckDuration || 0.20));
         this.timer = this.phaseTotal;
@@ -131,6 +203,7 @@ export class MoleController {
         return {
             success: true,
             isBomb: false,
+            interruptedThrow: wasMidThrow,
             hitType: hitType,
             x: this.hole.screenX,
             y: this.hole.screenY,
@@ -178,9 +251,76 @@ export class MoleController {
                 this.riseProgress = 1.0;
 
                 if (this.timer <= 0) {
+                    // Normal green character missed -> enter clickable 4-frame front-facing 2D throw sequence!
+                    // Keep hitbox active through wind-up Frames 1-3; lock ONLY once Frame 4 releases the ball.
+                    if (!this.isBomb && !this.isHit && !this.triggered && !this.missed && this.assets && (this.assets.missThrow1 || this.assets.splashFrame2)) {
+                        this.missed = false;
+                        this.triggered = false;
+                        this.ballLaunched = false;
+                        this.hit = false;
+                        this.isHit = false;
+                        this.state = MOLE_STATE.THROWING_MISS;
+                        this.missElapsed = 0;
+                        this.missTotalDuration = (this.config.MOLE_MISS_THROW_TIME || 0.50) * Math.max(0.90, Math.min(1.0, this.missTempoScale || 1.0));
+                        this.missSplashFired = false;
+                        this.throwFrameIndex = 1;
+                        this.riseProgress = 1.0;
+                        this.scaleX = 1.0;
+                        this.scaleY = 1.0;
+                    } else {
+                        this.state = MOLE_STATE.DUCKING;
+                        this.phaseTotal = this.duckDuration || (this.config.MOLE_DUCK_DURATION || 0.20);
+                        this.timer = this.phaseTotal;
+                    }
+                }
+                break;
+            }
+
+            case MOLE_STATE.THROWING_MISS: {
+                // Cohesive 4-Frame Front-Facing 2D Throw Sequence (zero 3D zoom/scale distortion):
+                // Clickable wind-up (~0.36s-0.40s scaled across Frames 1-3):
+                //   Frame 1 (~0.13s): Front Surprised (!)
+                //   Frame 2 (~0.14s): Front Angry & Holding Pink/Red Ball
+                //   Frame 3 (~0.13s): Front Wind-Up behind shoulder
+                // Locked release:
+                //   Frame 4 (~0.10s): Front Forward Throw Follow-Through & launch 2D ball arc
+                this.missElapsed += clampedDt;
+                const sc = Math.max(0.90, Math.min(1.0, this.missTempoScale || 1.0));
+                const t1 = 0.13 * sc;
+                const t2 = t1 + 0.14 * sc;
+                const t3 = t2 + 0.13 * sc;
+                const tTotal = t3 + 0.10 * sc;
+
+                this.riseProgress = 1.0;
+                this.scaleX = 1.0;
+                this.scaleY = 1.0;
+
+                if (this.missElapsed < t1) {
+                    this.throwFrameIndex = 1;
+                } else if (this.missElapsed < t2) {
+                    this.throwFrameIndex = 2;
+                } else if (this.missElapsed < t3) {
+                    this.throwFrameIndex = 3;
+                } else {
+                    // Frame 4 releases the ball and locks target against late taps
+                    this.throwFrameIndex = 4;
+                    this.ballLaunched = true;
+                    this.missed = true;
+                    this.triggered = true;
+                    if (!this.missSplashFired) {
+                        this.missSplashFired = true;
+                        if (this.onMissThrow) this.onMissThrow(this.hole);
+                    }
+                }
+
+                if (this.missElapsed >= tTotal) {
+                    // Retreat smoothly downward into the hole behind front colored rim (poppingIn)
                     this.state = MOLE_STATE.DUCKING;
-                    this.phaseTotal = this.duckDuration || (this.config.MOLE_DUCK_DURATION || 0.36);
+                    this.phaseTotal = Math.max(0.12, this.duckDuration || (this.config.MOLE_DUCK_DURATION || 0.20));
                     this.timer = this.phaseTotal;
+                    this.scaleX = 1.0;
+                    this.scaleY = 1.0;
+                    this.riseProgress = 1.0;
                 }
                 break;
             }
@@ -195,6 +335,7 @@ export class MoleController {
                     // Chain cleanly into poppingIn (DUCKING) using downward red_sink frame behind front rim (min 0.20s)
                     const cb = this.onDetonate;
                     this.onDetonate = null;
+                    this.exploding = false;
                     this.state = MOLE_STATE.DUCKING;
                     this.phaseTotal = Math.max(0.20, this.redRetreatDuration || (this.config.MOLE_RED_RETREAT_TIME || 0.20));
                     this.timer = this.phaseTotal;
@@ -219,8 +360,12 @@ export class MoleController {
                     this.state = MOLE_STATE.HIDDEN;
                     this.riseProgress = 0;
                     this.isHit = false;
+                    this.hit = false;
                     this.triggered = false;
                     this.transformedRed = false;
+                    this.missed = false;
+                    this.ballLaunched = false;
+                    this.throwFrameIndex = 1;
                 }
                 break;
             }
@@ -241,8 +386,15 @@ export class MoleController {
                     this.state = MOLE_STATE.HIDDEN;
                     this.riseProgress = 0;
                     this.isHit = false;
+                    this.hit = false;
                     this.triggered = false;
                     this.transformedRed = false;
+                    this.exploding = false;
+                    this.missed = false;
+                    this.ballLaunched = false;
+                    this.missElapsed = 0;
+                    this.missSplashFired = false;
+                    this.throwFrameIndex = 1;
                 }
                 break;
             }
@@ -251,7 +403,7 @@ export class MoleController {
 
     getSpriteFrame() {
         // Post-Hit Exploding / Retreat Red State (ONLY when a hidden bomb has been struck!)
-        if (this.transformedRed) {
+        if (this.transformedRed || this.exploding) {
             if (this.state === MOLE_STATE.TRANSFORMING_RED) {
                 return this.assets.red_push || this.assets.red_idle || this.assets.red;
             }
@@ -259,6 +411,12 @@ export class MoleController {
                 return this.assets.red_sink || this.assets.red_peek;
             }
             return this.assets.red_push || this.assets.red_idle;
+        }
+
+        // Missed Normal Character Front-Facing 2D Ball-Throw State (Frames 1 -> 2 -> 3 -> 4)
+        if (this.state === MOLE_STATE.THROWING_MISS) {
+            const key = `missThrow${this.throwFrameIndex || 1}`;
+            return this.assets[key] || this.assets.missThrow1 || this.assets.yellow_idle;
         }
 
         // ALL Initial Emergence (poppingOut), Hold (IDLE), and Unhit Retreat (DUCKING)
@@ -339,7 +497,7 @@ export class MoleController {
             ctx.fill();
         }
 
-        // Draw crisp sprite anchored at bottom center (hands aligned at anchorY = frontLipY)
+        // Draw crisp sprite anchored at bottom center (hands/paws aligned on front rim)
         ctx.drawImage(sprite, -charW * 0.5, -charH, charW, charH);
 
         ctx.restore();

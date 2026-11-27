@@ -515,7 +515,34 @@ export class VFXManager {
         this.glitchTimer = 0;
         this.glitchDuration = 0.35;
 
+        this.flyingBalls = [];
+
         this.emojiDetail = new EmojiDetail(config);
+    }
+
+    spawnMissBallProjectile(startX, startY, onImpact = null) {
+        const vw = this.config.VIEWPORT_WIDTH || 1080;
+        const vh = this.config.VIEWPORT_HEIGHT || 1920;
+        const duration = this.config.MISS_BALL_FLIGHT_TIME || 0.14;
+        this.flyingBalls.push({
+            active: true,
+            startX,
+            startY,
+            targetX: vw * 0.5,
+            targetY: vh * 0.48,
+            x: startX,
+            y: startY,
+            elapsed: 0,
+            duration,
+            startScale: 0.92,
+            endScale: 1.08,
+            scale: 0.92,
+            baseSize: 118,
+            rotation: (Math.random() - 0.5) * 0.18,
+            rotSpeed: (Math.random() < 0.5 ? 1 : -1) * 3.0,
+            onImpact,
+            impactFired: false
+        });
     }
 
     triggerScreenGlitch(duration = 0.35) {
@@ -553,6 +580,7 @@ export class VFXManager {
         this.screenFlash.alpha = 0;
         this.screenFlash.timer = 0;
         this.glitchTimer = 0;
+        this.flyingBalls.length = 0;
         if (this.emojiDetail) {
             this.emojiDetail.active = false;
         }
@@ -657,6 +685,60 @@ export class VFXManager {
         if (this.glitchTimer > 0) {
             this.glitchTimer -= dt;
         }
+
+        // Update crisp 2D pop-up arc projectiles (hand -> center playfield over ~0.14s, zero 3D distortion)
+        for (let i = this.flyingBalls.length - 1; i >= 0; i--) {
+            const b = this.flyingBalls[i];
+            b.elapsed += dt;
+            const u = Math.max(0, Math.min(1.0, b.elapsed / Math.max(0.02, b.duration)));
+            const easeOut = 1.0 - Math.pow(1.0 - u, 2.2);
+            b.scale = b.startScale + (b.endScale - b.startScale) * easeOut;
+            b.x = b.startX + (b.targetX - b.startX) * easeOut;
+            b.y = b.startY + (b.targetY - b.startY) * easeOut - Math.sin(u * Math.PI) * 145;
+            b.rotation += b.rotSpeed * dt;
+
+            if (u >= 1.0) {
+                b.scale = b.endScale;
+                b.active = false;
+                this.flyingBalls.splice(i, 1);
+                if (b.onImpact && !b.impactFired) {
+                    b.impactFired = true;
+                    b.onImpact(b.targetX, b.targetY);
+                }
+            }
+        }
+    }
+
+    drawFlyingBalls(ctx) {
+        if (!this.flyingBalls.length) return;
+        const ballSprite = this.assets && (this.assets.missBall || this.assets.splashBall || this.assets.splashSplat);
+
+        for (let i = 0; i < this.flyingBalls.length; i++) {
+            const b = this.flyingBalls[i];
+            const dia = b.baseSize * b.scale;
+            const radius = dia * 0.5;
+
+            ctx.save();
+            ctx.translate(b.x, b.y);
+            ctx.shadowColor = 'rgba(20, 20, 22, 0.24)';
+            ctx.shadowBlur = 10;
+            ctx.shadowOffsetX = 4;
+            ctx.shadowOffsetY = 6;
+
+            ctx.rotate(b.rotation);
+            if (ballSprite && ballSprite.complete && ballSprite.naturalWidth > 0) {
+                ctx.drawImage(ballSprite, -radius, -radius, dia, dia);
+            } else {
+                ctx.fillStyle = '#e86b72';
+                ctx.strokeStyle = '#faf7f2';
+                ctx.lineWidth = 6;
+                ctx.beginPath();
+                ctx.arc(0, 0, radius * 0.92, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
     }
 
     drawScreenGlitch(ctx) {
@@ -704,5 +786,8 @@ export class VFXManager {
             ctx.fillRect(0, 0, this.config.VIEWPORT_WIDTH, this.config.VIEWPORT_HEIGHT);
             ctx.restore();
         }
+
+        // Draw 3D perspective projectiles foreground on canvas
+        this.drawFlyingBalls(ctx);
     }
 }

@@ -102,6 +102,7 @@ export class MoleSpawner {
         this.totalBombsSpawned = 0;
         this.speedFactor = 1.9;
         this.pacingCurve = computePacingCurve(0, 0);
+        this.onMissThrow = null;
 
         if (this.parallaxManager) {
             this.parallaxManager.onTileRecycled = (tileIdx) => this.onTileRecycled(tileIdx);
@@ -116,9 +117,7 @@ export class MoleSpawner {
             if (h.tileIndex === tileIdx) {
                 h.lastSpawnWasBomb = false;
                 if (h.mole.state !== MOLE_STATE.HIDDEN) {
-                    h.mole.state = MOLE_STATE.HIDDEN;
-                    h.mole.riseProgress = 0;
-                    h.mole.isHit = false;
+                    h.mole.reset();
                 }
             }
         }
@@ -137,6 +136,9 @@ export class MoleSpawner {
                 const nh = NATIVE_HOLES[i];
                 const hole = new Hole(t, nh.col, nh.row, nh, this.config, this.assets);
                 hole.id = t * NATIVE_HOLES.length + i;
+                hole.mole.onMissThrow = (missedHole) => {
+                    if (this.onMissThrow) this.onMissThrow(missedHole);
+                };
                 this.holes.push(hole);
             }
         }
@@ -262,11 +264,14 @@ export class MoleSpawner {
 
         const chosenHole = candidateHoles[Math.floor(Math.random() * candidateHoles.length)];
         const jitterHold = curve.holdDuration * (0.95 + Math.random() * 0.10);
+        // Keep wind-up Frames 1-3 within ~0.34s-0.38s (0.34s-0.42s) throughout the entire round
+        const missTempoScale = Math.max(0.90, Math.min(1.0, 1.0 - 0.10 * (curve.intensity || 0)));
         const timings = {
             popDuration: curve.popDuration,
             holdDuration: jitterHold,
             duckDuration: curve.duckDuration,
-            redRetreatDuration: curve.redRetreatDuration
+            redRetreatDuration: curve.redRetreatDuration,
+            missTempoScale
         };
 
         chosenHole.mole.spawn(shouldSpawnBomb, jitterHold, timings);
@@ -286,7 +291,8 @@ export class MoleSpawner {
                         popDuration: curve.popDuration,
                         holdDuration: partnerHold,
                         duckDuration: curve.duckDuration,
-                        redRetreatDuration: curve.redRetreatDuration
+                        redRetreatDuration: curve.redRetreatDuration,
+                        missTempoScale
                     });
                     partnerHole.lastSpawnWasBomb = false;
                 }
@@ -311,7 +317,7 @@ export class MoleSpawner {
     }
 
     checkHit(hitX, hitY, hitRadius, hitType = 'punch') {
-        const visibleHoles = this.holes.filter(h => h.isVisible && h.mole.state !== MOLE_STATE.HIDDEN);
+        const visibleHoles = this.holes.filter(h => h.isVisible && (h.mole.canBeHit ? h.mole.canBeHit() : (h.mole.state !== MOLE_STATE.HIDDEN && !h.mole.missed)));
         if (visibleHoles.length === 0) return null;
 
         let bestHole = null;

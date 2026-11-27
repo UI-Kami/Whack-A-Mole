@@ -1124,3 +1124,207 @@ html, body {
     object-fit: contain;
     filter: drop-shadow(4px 4px 0px var(--text-dark));
 }
+
+/* =====================================================================
+   STAGE 1 STARTUP: ANIMATED PIXEL-GLITCH LOADING SCREEN (#loading-screen)
+   ===================================================================== */
+.startup-screen {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    background: #ffffff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    transition: opacity 0.34s ease-out;
+}
+
+#loading-screen {
+    z-index: 620;
+    opacity: 1;
+}
+
+#loading-screen.fade-out {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.loading-glitch-layer {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0;
+    will-change: transform, opacity;
+}
+
+.loading-content {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    height: 100%;
+    padding: 13% 8% 12%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    text-align: center;
+    box-sizing: border-box;
+    pointer-events: none;
+}
+
+.loading-logo-img {
+    width: 58%;
+    max-width: 520px;
+    height: auto;
+    object-fit: contain;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    filter: drop-shadow(0 8px 18px rgba(20, 20, 22, 0.08));
+    animation: loadingLogoBob 2.2s ease-in-out infinite alternate;
+}
+
+@keyframes loadingLogoBob {
+    0% { transform: translateY(0) scale(1); }
+    100% { transform: translateY(-6px) scale(1.015); }
+}
+
+.loading-progress-zone {
+    width: 84%;
+    max-width: 680px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 4%;
+}
+
+.loading-title {
+    font-family: var(--font-en);
+    font-size: clamp(20px, 2.8vw, 32px);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: #ee7116;
+    line-height: 1.1;
+}
+
+.loading-bar-track {
+    width: 100%;
+    height: clamp(26px, 3.6vw, 42px);
+    background: #ffffff;
+    border: 3px solid #ee7116;
+    padding: 4px;
+    display: grid;
+    grid-template-columns: repeat(18, 1fr);
+    gap: 3px;
+    box-sizing: border-box;
+}
+
+.loading-bar-seg {
+    width: 100%;
+    height: 100%;
+    background: #d4de5c;
+    border-radius: 1px;
+    opacity: 0;
+    transform: scaleY(0.84);
+    transition: opacity 0.05s linear, transform 0.08s ease-out;
+}
+
+.loading-bar-seg.filled {
+    opacity: 1;
+    transform: scaleY(1);
+}
+
+.loading-tagline {
+    margin-top: 4px;
+    color: #ee7116;
+    font-family: var(--font-en);
+    line-height: 1.35;
+}
+
+.loading-tagline-head {
+    font-size: clamp(12px, 1.65vw, 20px);
+    font-weight: 800;
+    letter-spacing: 0.01em;
+}
+
+.loading-tagline-sub {
+    font-size: clamp(11px, 1.45vw, 18px);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+
+/* =====================================================================
+   GAMEPLAY SCREEN-SPLASH OVERLAY ON MISS (#screen-splash-layer)
+   ===================================================================== */
+.screen-splash-layer {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 60;
+    pointer-events: none;
+    overflow: hidden;
+}
+
+.screen-splash-instance {
+    position: absolute;
+    width: 48%;
+    max-width: 520px;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    will-change: transform, opacity;
+}
+
+.screen-splash-img {
+    width: 100%;
+    height: auto;
+    display: block;
+    object-fit: contain;
+    image-rendering: auto;
+    pointer-events: none;
+}
+
+.screen-splash-img.burst {
+    filter: drop-shadow(0 8px 22px rgba(239, 68, 68, 0.28));
+    animation: screenSplashBurst 0.13s cubic-bezier(0.22, 1.35, 0.36, 1) forwards;
+}
+
+.screen-splash-img.splat {
+    filter: drop-shadow(0 10px 24px rgba(20, 20, 22, 0.22));
+    animation: screenSplashSplat 0.60s ease-out forwards;
+}
+
+@keyframes screenSplashBurst {
+    0% {
+        opacity: 0.92;
+        transform: scale(0.75);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1.15);
+    }
+}
+
+@keyframes screenSplashSplat {
+    0% {
+        opacity: 0.92;
+        transform: scale(1.04) translateY(0px);
+    }
+    24% {
+        opacity: 0.92;
+        transform: scale(1.00) translateY(3px);
+    }
+    100% {
+        opacity: 0;
+        transform: scale(0.95) translateY(16px);
+    }
+}

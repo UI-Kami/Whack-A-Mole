@@ -7,6 +7,7 @@ $assetsJson = [System.IO.File]::ReadAllText((Resolve-Path "assets\normalized\ass
 
 $modules = @(
     "Config.js",
+    "MissThrowSprites.js",
     "AudioManager.js",
     "CameraShake.js",
     "ObjectPool.js",
@@ -96,8 +97,28 @@ $middleHtml = @'
         <!-- Main Game Canvas (9:16 Portrait) -->
         <canvas id="game-canvas"></canvas>
 
+        <!-- Gameplay Miss Screen-Splash Impact Layer (Above Canvas, Below Top HUD) -->
+        <div id="screen-splash-layer" class="screen-splash-layer" aria-hidden="true"></div>
+
+        <!-- Startup Loading Screen (Glitch Background + Logo + Segmented Bar -> Start Menu) -->
+        <div id="loading-screen" class="startup-screen" role="status" aria-label="Loading Mazaaq Tha">
+            <img id="loading-glitch-a" class="loading-glitch-layer" src="" alt="" aria-hidden="true" />
+            <img id="loading-glitch-b" class="loading-glitch-layer" src="" alt="" aria-hidden="true" />
+            <div class="loading-content">
+                <img id="loading-logo-img" class="loading-logo-img" src="" alt="Mazaaq Tha" />
+                <div class="loading-progress-zone">
+                    <div class="loading-title font-en">Loading...</div>
+                    <div id="loading-bar-track" class="loading-bar-track" aria-hidden="true"></div>
+                    <div class="loading-tagline font-en">
+                        <div class="loading-tagline-head font-en">SIDE EFFECTS MAY INCLUDE:</div>
+                        <div class="loading-tagline-sub font-en">laughing along when you shouldn't.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Home / Menu Screen Modal (Single-Language Title, Compact Typography) -->
-        <div id="menu-modal" class="modal-overlay show" role="dialog" aria-modal="true">
+        <div id="menu-modal" class="modal-overlay" role="dialog" aria-modal="true">
             <div class="menu-card">
                 <div class="menu-hero-wrap">
                     <img id="menu-hero-img" class="menu-hero-img" src="" alt="Mazaaq Tha" />
@@ -248,6 +269,13 @@ $uiWiring = @'
     const mysteryIcon = document.getElementById('mystery-icon');
     const hurtOverlay = document.getElementById('hurt-overlay');
 
+    const loadingScreen = document.getElementById('loading-screen');
+    const loadingGlitchA = document.getElementById('loading-glitch-a');
+    const loadingGlitchB = document.getElementById('loading-glitch-b');
+    const loadingLogoImg = document.getElementById('loading-logo-img');
+    const loadingBarTrack = document.getElementById('loading-bar-track');
+    const screenSplashLayer = document.getElementById('screen-splash-layer');
+
     const menuModal = document.getElementById('menu-modal');
     const menuHeroImg = document.getElementById('menu-hero-img');
     const btnStartGame = document.getElementById('btn-start-game');
@@ -295,6 +323,9 @@ $uiWiring = @'
 
     // Populate authentic UI button & window assets from ASSETS_DATA
     if (typeof ASSETS_DATA !== 'undefined') {
+        if (loadingGlitchA && ASSETS_DATA.splashGlitchA) loadingGlitchA.src = ASSETS_DATA.splashGlitchA;
+        if (loadingGlitchB && ASSETS_DATA.splashGlitchB) loadingGlitchB.src = ASSETS_DATA.splashGlitchB;
+        if (loadingLogoImg && (ASSETS_DATA.splashLogo || ASSETS_DATA.splash01)) loadingLogoImg.src = ASSETS_DATA.splashLogo || ASSETS_DATA.splash01;
         if (hudHeartImg) hudHeartImg.src = ASSETS_DATA.healthBarFull || ASSETS_DATA.heartClean;
         if (btnPauseImg) btnPauseImg.src = ASSETS_DATA.btnGreenPause;
         if (btnSoundImg) btnSoundImg.src = ASSETS_DATA.btnCirclePlay;
@@ -406,13 +437,188 @@ $uiWiring = @'
     }
     updateMenuPB();
 
-    // Menu Start Button
+    // Startup Sequence: Glitch Loading (~2.0s) -> Open Start Menu (#menu-modal) directly
+    const STARTUP_LOADING_SEGMENTS = 18;
+    const STARTUP_GLITCH_STEP_MS = 145; // 130ms-160ms alternating pixel-grid flips
+    const STARTUP_LOADING_DURATION_MS = 2000;
+    let startupActive = true;
+    let startupGlitchTimer = null;
+    let startupRafId = null;
+    const startupTimers = [];
+
+    function clearStartupTimers() {
+        if (startupGlitchTimer) {
+            clearInterval(startupGlitchTimer);
+            startupGlitchTimer = null;
+        }
+        if (startupRafId) {
+            cancelAnimationFrame(startupRafId);
+            startupRafId = null;
+        }
+        while (startupTimers.length > 0) {
+            clearTimeout(startupTimers.pop());
+        }
+    }
+
+    function initStartupLoadingSegments() {
+        if (!loadingBarTrack) return;
+        loadingBarTrack.innerHTML = '';
+        for (let i = 0; i < STARTUP_LOADING_SEGMENTS; i++) {
+            const seg = document.createElement('div');
+            seg.className = 'loading-bar-seg';
+            loadingBarTrack.appendChild(seg);
+        }
+    }
+
+    function setStartupLoadingProgress(fraction) {
+        if (!loadingBarTrack) return;
+        const clamped = Math.max(0, Math.min(1, fraction));
+        const filledCount = Math.round(clamped * STARTUP_LOADING_SEGMENTS);
+        const segs = loadingBarTrack.children;
+        for (let i = 0; i < segs.length; i++) {
+            segs[i].classList.toggle('filled', i < filledCount);
+        }
+    }
+
+    function finishStartupSequence(suppressMenu = false) {
+        if (!startupActive) return;
+        startupActive = false;
+        clearStartupTimers();
+
+        if (loadingScreen) {
+            loadingScreen.classList.remove('fade-out');
+            loadingScreen.style.display = 'none';
+        }
+        if (!suppressMenu) {
+            openModal(menuModal);
+        }
+    }
+
+    function startLoadingScreenSequence() {
+        initStartupLoadingSegments();
+        setStartupLoadingProgress(0);
+
+        if (loadingGlitchA && loadingGlitchB) {
+            let glitchTick = 0;
+            const applyGlitchStep = (tick) => {
+                const mode = tick % 4;
+                if (mode === 0) {
+                    loadingGlitchA.style.opacity = '1';
+                    loadingGlitchA.style.transform = 'scale(1, 1)';
+                    loadingGlitchB.style.opacity = '0';
+                } else if (mode === 1) {
+                    loadingGlitchA.style.opacity = '0';
+                    loadingGlitchB.style.opacity = '1';
+                    loadingGlitchB.style.transform = 'scale(-1, 1)';
+                } else if (mode === 2) {
+                    loadingGlitchA.style.opacity = '1';
+                    loadingGlitchA.style.transform = 'scale(1, -1)';
+                    loadingGlitchB.style.opacity = '0';
+                } else {
+                    loadingGlitchA.style.opacity = '0';
+                    loadingGlitchB.style.opacity = '1';
+                    loadingGlitchB.style.transform = 'scale(-1, -1)';
+                }
+            };
+            applyGlitchStep(0);
+            startupGlitchTimer = setInterval(() => {
+                if (!startupActive) return;
+                glitchTick++;
+                applyGlitchStep(glitchTick);
+            }, STARTUP_GLITCH_STEP_MS);
+        }
+
+        const startTs = performance.now();
+        const tickLoading = (now) => {
+            if (!startupActive) return;
+            const frac = Math.min(1, (now - startTs) / STARTUP_LOADING_DURATION_MS);
+            setStartupLoadingProgress(frac);
+            if (frac < 1) {
+                startupRafId = requestAnimationFrame(tickLoading);
+            } else {
+                startupRafId = null;
+                if (startupGlitchTimer) {
+                    clearInterval(startupGlitchTimer);
+                    startupGlitchTimer = null;
+                }
+                // Transition directly from loading screen into #menu-modal
+                openModal(menuModal);
+                if (loadingScreen) loadingScreen.classList.add('fade-out');
+                startupTimers.push(setTimeout(() => finishStartupSequence(true), 340));
+            }
+        };
+        startupRafId = requestAnimationFrame(tickLoading);
+    }
+
+    // Menu Start Button (also cleanly dismisses loading screen if triggered directly)
     if (btnStartGame) {
         btnStartGame.addEventListener('click', () => {
+            finishStartupSequence(true);
             closeModal(menuModal, true);
             game.startGame();
         });
     }
+
+    startLoadingScreenSequence();
+
+    // Gameplay Miss Screen-Splash Impact Pool (Frames 7 -> 8 over #game-canvas, supporting concurrent overlaps)
+    const activeSplashTimers = new Set();
+
+    function clearScreenSplashes() {
+        activeSplashTimers.forEach(t => clearTimeout(t));
+        activeSplashTimers.clear();
+        if (screenSplashLayer) screenSplashLayer.innerHTML = '';
+    }
+
+    function spawnScreenSplash(detail = {}) {
+        if (!screenSplashLayer || typeof ASSETS_DATA === 'undefined') return;
+        const f7 = ASSETS_DATA.splashBurst || ASSETS_DATA.splashFrame7;
+        const f8 = ASSETS_DATA.splashSplat || ASSETS_DATA.splashFrame8;
+        if (!f7 || !f8) return;
+
+        // Place splash at viewport center impact coordinates (with subtle scatter only on rapid multi-misses)
+        const activeCount = screenSplashLayer.children.length;
+        const baseX = (typeof detail.x === 'number') ? (detail.x / (CONFIG.VIEWPORT_WIDTH || 1080)) * 100 : 50;
+        const baseY = (typeof detail.y === 'number') ? (detail.y / (CONFIG.VIEWPORT_HEIGHT || 1920)) * 100 : 48;
+        const jitterX = (activeCount === 0) ? 0 : (Math.random() * 18 - 9);
+        const jitterY = (activeCount === 0) ? 0 : (Math.random() * 14 - 7);
+        const posX = Math.max(32, Math.min(68, baseX + jitterX));
+        const posY = Math.max(36, Math.min(62, baseY + jitterY));
+
+        const wrap = document.createElement('div');
+        wrap.className = 'screen-splash-instance';
+        wrap.style.left = `${posX.toFixed(1)}%`;
+        wrap.style.top = `${posY.toFixed(1)}%`;
+
+        const img = document.createElement('img');
+        img.className = 'screen-splash-img burst';
+        img.src = f7;
+        img.alt = '';
+        wrap.appendChild(img);
+        screenSplashLayer.appendChild(wrap);
+
+        const burstMs = (CONFIG && CONFIG.MISS_SPLASH_BURST_MS) || 130;
+        const splatMs = (CONFIG && CONFIG.MISS_SPLASH_SPLAT_MS) || 600;
+
+        const tSwap = setTimeout(() => {
+            activeSplashTimers.delete(tSwap);
+            if (!wrap.isConnected) return;
+            img.src = f8;
+            img.className = 'screen-splash-img splat';
+        }, burstMs);
+        activeSplashTimers.add(tSwap);
+
+        const tRemove = setTimeout(() => {
+            activeSplashTimers.delete(tRemove);
+            if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
+        }, burstMs + splatMs + 40);
+        activeSplashTimers.add(tRemove);
+    }
+
+    window.addEventListener('misssplash', (e) => {
+        spawnScreenSplash(e && e.detail ? e.detail : {});
+    });
+    window.addEventListener('gamestart', clearScreenSplashes);
 
     // Timer updates (Speed UI removed per spec)
     window.addEventListener('timertick', (e) => {
@@ -591,6 +797,7 @@ $uiWiring = @'
     // Lose End Sequence: Stage 1 Loading (~0.9s) -> Stage 2 EROR! Cascade (~1.1s) -> Stage 3 #lose-modal
     window.addEventListener('gamelose', (e) => {
         const msg = (e && e.detail && e.detail.message) ? e.detail.message : CONFIG.LOSE_MESSAGES[0];
+        clearScreenSplashes();
         clearLoseCrashSequence();
         closeModal(cooldownModal, true);
         closeModal(pauseModal, true);
@@ -652,7 +859,8 @@ $uiWiring = @'
 
     if (btnLoseRestart) {
         btnLoseRestart.addEventListener('click', () => {
-            clearLoseCrashSequence();
+            clearScreenSplashes();
+        clearLoseCrashSequence();
             closeModal(loseModal, true);
             game.restartGame();
         });
@@ -661,6 +869,7 @@ $uiWiring = @'
     // Win End Screen (Opened Mystery Box + 1 Rotating English Message + Retro HIGH SCORE Window + Play Again)
     window.addEventListener('gamewin', (e) => {
         const { timeTaken, bombHits, bestRun, message } = e.detail || {};
+        clearScreenSplashes();
         clearLoseCrashSequence();
         closeModal(cooldownModal, true);
         closeModal(pauseModal, true);
@@ -685,7 +894,8 @@ $uiWiring = @'
 
     if (btnWinRestart) {
         btnWinRestart.addEventListener('click', () => {
-            clearLoseCrashSequence();
+            clearScreenSplashes();
+        clearLoseCrashSequence();
             closeModal(winModal, true);
             game.restartGame();
         });
@@ -701,6 +911,7 @@ $uiWiring = @'
         if (hudTimerVal) hudTimerVal.textContent = '1:30';
         if (timerPenaltyBadge) timerPenaltyBadge.classList.remove('pulse');
 
+        clearScreenSplashes();
         clearLoseCrashSequence();
         closeModal(menuModal, true);
         closeModal(cooldownModal, true);

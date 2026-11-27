@@ -1,5 +1,6 @@
 // src/GameManager.js - Central Game Orchestrator, Two-Phase 90s Timeline, Bomb Sequence & UI
 import { CONFIG, computePacingCurve } from './Config.js';
+import { buildFrontThrowSpriteAssets } from './MissThrowSprites.js';
 import { AudioManager } from './AudioManager.js';
 import { CameraShake } from './CameraShake.js';
 import { VFXManager } from './VFXManager.js';
@@ -88,6 +89,9 @@ export class GameManager {
         this.slowMoDuration = 0;
         this.pendingCoolDown = false;
         this.pendingCoolDownTimer = 0;
+        this.pendingCoolDownDeadline = 0;
+        this.pendingCoolDownHole = null;
+        this.redFrameRenderedCount = 0;
         this.pendingEndType = null;
         this.pendingEndTimer = 0;
 
@@ -107,6 +111,7 @@ export class GameManager {
         this.vfxManager.setAssets(this.assets);
 
         this.moleSpawner = new MoleSpawner(this.config, this.assets, this.audioManager, this.vfxManager, this.parallaxManager);
+        this.moleSpawner.onMissThrow = (hole) => this.handleMissSplash(hole);
         this.hammer = new HammerController(this.config, this.assets, this.audioManager, this.cameraShake, this.vfxManager);
 
         this.inputManager = new InputManager(
@@ -172,6 +177,13 @@ export class GameManager {
             this.assets.bgImg       = await loadImg(ASSETS_DATA.playfieldBg || ASSETS_DATA.bg);
             this.assets.holeLimeImg = await loadImg(ASSETS_DATA.holeLime || ASSETS_DATA.holeRing);
             this.assets.holePinkImg = await loadImg(ASSETS_DATA.holePink || ASSETS_DATA.holeRing);
+
+            for (let f = 1; f <= 8; f++) {
+                this.assets[`splashFrame${f}`] = ASSETS_DATA[`splashFrame${f}`] ? await loadImg(ASSETS_DATA[`splashFrame${f}`]) : null;
+            }
+            this.assets.splashBurst = ASSETS_DATA.splashBurst ? await loadImg(ASSETS_DATA.splashBurst) : this.assets.splashFrame7;
+            this.assets.splashSplat = ASSETS_DATA.splashSplat ? await loadImg(ASSETS_DATA.splashSplat) : this.assets.splashFrame8;
+            this.assets.splashBall  = ASSETS_DATA.splashBall  ? await loadImg(ASSETS_DATA.splashBall)  : this.assets.splashSplat;
         } else {
             // Direct file fallbacks
             this.assets.yellow_peek    = await loadImg('assets/normalized/lime_peek.png');
@@ -203,6 +215,32 @@ export class GameManager {
             this.assets.bgImg       = await loadImg('assets/normalized/bg_field_1080.png');
             this.assets.holeLimeImg = await loadImg('assets/normalized/hole_lime.png');
             this.assets.holePinkImg = await loadImg('assets/normalized/hole_pink.png');
+
+            for (let f = 1; f <= 8; f++) {
+                this.assets[`splashFrame${f}`] = await loadImg(`assets/normalized/ui/splash_frame_${f}.png`);
+            }
+            this.assets.splashBurst = await loadImg('assets/normalized/ui/splash_burst.png');
+            this.assets.splashSplat = await loadImg('assets/normalized/ui/splash_splat.png');
+            this.assets.splashBall  = await loadImg('assets/normalized/ui/splash_ball.png');
+        }
+
+        // Generate 4 cohesive 2D front-facing throw sprite frames + matching 2D ball onto offscreen canvases at startup
+        if (typeof buildFrontThrowSpriteAssets === 'function') {
+            const generated = buildFrontThrowSpriteAssets();
+            if (generated) {
+                if (typeof ASSETS_DATA !== 'undefined' && ASSETS_DATA) {
+                    ASSETS_DATA.missThrow1 = generated.missThrow1;
+                    ASSETS_DATA.missThrow2 = generated.missThrow2;
+                    ASSETS_DATA.missThrow3 = generated.missThrow3;
+                    ASSETS_DATA.missThrow4 = generated.missThrow4;
+                    ASSETS_DATA.missBall   = generated.missBall;
+                }
+                this.assets.missThrow1 = await loadImg(generated.missThrow1);
+                this.assets.missThrow2 = await loadImg(generated.missThrow2);
+                this.assets.missThrow3 = await loadImg(generated.missThrow3);
+                this.assets.missThrow4 = await loadImg(generated.missThrow4);
+                this.assets.missBall   = await loadImg(generated.missBall);
+            }
         }
 
         if (this.parallaxManager) {
@@ -254,15 +292,16 @@ export class GameManager {
     }
 
     handlePointerDown(x, y, isTouch) {
-        if (!this.hammer || this.isGameOver || this.isPaused || !this.isStarted || this.isCoolingDown || this.slowMoTimer > 0) return;
+        if (!this.hammer || this.isGameOver || this.isPaused || !this.isStarted || this.isCoolingDown || this.pendingCoolDown || this.slowMoTimer > 0) return;
 
-        this.hammer.triggerSwing(x, y, (hitX, hitY, attackType) => {
-            this.processHit(hitX, hitY, isTouch, attackType);
-        }, isTouch);
+        // Play visual slap/punch hand sweep while resolving hit check on the exact tap frame
+        // so attentive players can catch mid-throw characters before Frame 4 releases the ball
+        this.hammer.triggerSwing(x, y, null, isTouch);
+        this.processHit(x, y, isTouch, this.hammer.currentAttack);
     }
 
     processHit(x, y, isTouch, attackType) {
-        if (!this.moleSpawner || this.isCoolingDown || this.slowMoTimer > 0 || this.pendingEndType || this.isGameOver) return;
+        if (!this.moleSpawner || this.isCoolingDown || this.pendingCoolDown || this.slowMoTimer > 0 || this.pendingEndType || this.isGameOver) return null;
         const result = this.moleSpawner.checkHit(x, y, this.config.HAND_HIT_RADIUS, attackType);
 
         if (result && result.success) {
@@ -274,6 +313,7 @@ export class GameManager {
                 this.handleNormalHit(result);
             }
         }
+        return result;
     }
 
     handleNormalHit(result) {
@@ -305,6 +345,29 @@ export class GameManager {
             this.pendingCoolDownTimer = 0;
             this.pendingEndType = 'win';
             this.pendingEndTimer = 0.28;
+        }
+    }
+
+    handleMissSplash(hole) {
+        if (this.isGameOver || this.pendingEndType || !this.isStarted) return;
+        // Release cleanly from character's front throwing hand position over hole rim
+        const startX = hole ? (hole.screenX - hole.radiusX * 0.56) : (this.config.VIEWPORT_WIDTH * 0.5);
+        const startY = hole ? (hole.screenY - hole.radiusY * 0.45) : (this.config.VIEWPORT_HEIGHT * 0.45);
+        if (this.vfxManager && this.vfxManager.spawnMissBallProjectile) {
+            this.vfxManager.spawnMissBallProjectile(startX, startY, (impactX, impactY) => {
+                if (this.isGameOver || this.pendingEndType || !this.isStarted) return;
+                this.dispatchUIEvent('misssplash', {
+                    x: impactX,
+                    y: impactY,
+                    holeId: hole ? hole.id : -1
+                });
+            });
+        } else {
+            this.dispatchUIEvent('misssplash', {
+                x: this.config.VIEWPORT_WIDTH * 0.5,
+                y: this.config.VIEWPORT_HEIGHT * 0.48,
+                holeId: hole ? hole.id : -1
+            });
         }
     }
 
@@ -364,14 +427,28 @@ export class GameManager {
             timeRemaining: this.gameTimeRemaining
         });
 
-        // On 2nd bomb hit in cycle (heart drops to 0), immediately open 3.0s Cool-Down Modal
-        // while keeping red retreat, scrolling, and background moles running live!
+        // On 2nd bomb hit in cycle (heart drops to 0), transform to furious red & paint on canvas FIRST,
+        // then wait 0.32s (0.28s-0.35s) + >=2 painted frames before opening #cooldown-modal!
         if (this.bombHitsInCycle >= 2) {
-            this.pendingCoolDown = false;
-            this.pendingCoolDownTimer = 0;
+            if (result && result.hole && result.hole.mole) {
+                result.hole.mole.triggered = true;
+                result.hole.mole.transformedRed = true;
+                result.hole.mole.exploding = true;
+                if (result.hole.mole.state !== 'TRANSFORMING_RED') {
+                    result.hole.mole.state = 'TRANSFORMING_RED';
+                    result.hole.mole.detonationTimer = Math.max(0.42, this.config.MOLE_RED_EXPLODE_TIME || 0.42);
+                }
+            }
+            const openDelaySec = Math.max(0.28, this.config.COOLDOWN_OPEN_DELAY || 0.32);
+            this.cooldownActive = false;
+            this.pendingCoolDown = true;
+            this.pendingCoolDownTimer = openDelaySec;
+            this.pendingCoolDownDeadline = performance.now() + Math.round(openDelaySec * 1000);
+            this.pendingCoolDownHole = (result && result.hole) ? result.hole : null;
+            this.redFrameRenderedCount = 0;
             this.slowMoTimer = 0;
             this.timeScale = 1.0;
-            this.triggerCoolDown();
+            this.render();
         }
     }
 
@@ -481,6 +558,9 @@ export class GameManager {
         this.slowMoDuration = 0;
         this.pendingCoolDown = false;
         this.pendingCoolDownTimer = 0;
+        this.pendingCoolDownDeadline = 0;
+        this.pendingCoolDownHole = null;
+        this.redFrameRenderedCount = 0;
         this.pendingEndType = null;
         this.pendingEndTimer = 0;
 
@@ -576,11 +656,17 @@ export class GameManager {
                 simDt = dt * this.timeScale;
             }
 
-            // Pending cool-down transition after initial explosion burst
+            // Pending cool-down transition: wait BOTH >= 0.32s wall-clock AND >= 2 rendered red frames so cooldown NEVER opens over green!
             if (this.pendingCoolDown) {
                 this.pendingCoolDownTimer -= wallDt;
-                if (this.pendingCoolDownTimer <= 0) {
+                const deadlineMet = !this.pendingCoolDownDeadline || (performance.now() >= this.pendingCoolDownDeadline);
+                const holeMole = this.pendingCoolDownHole && this.pendingCoolDownHole.mole;
+                const redReady = !holeMole || holeMole.transformedRed || holeMole.exploding || holeMole.state === 'HIDDEN';
+                if (deadlineMet && this.pendingCoolDownTimer <= 0 && this.redFrameRenderedCount >= 2 && redReady) {
                     this.pendingCoolDown = false;
+                    this.pendingCoolDownTimer = 0;
+                    this.pendingCoolDownDeadline = 0;
+                    this.pendingCoolDownHole = null;
                     this.triggerCoolDown();
                 }
             }
@@ -658,6 +744,14 @@ export class GameManager {
 
         // Layer 5: Punch & Slap Attack Hands
         this.hammer.draw(ctx);
+
+        // Count painted frames showing the transformed furious red character before opening #cooldown-modal
+        if (this.pendingCoolDown) {
+            const holeMole = this.pendingCoolDownHole && this.pendingCoolDownHole.mole;
+            if (!holeMole || holeMole.transformedRed || holeMole.exploding || holeMole.state === 'HIDDEN') {
+                this.redFrameRenderedCount++;
+            }
+        }
     }
 
     triggerWinSequence() {
@@ -767,6 +861,9 @@ export class GameManager {
         this.slowMoDuration = 0;
         this.pendingCoolDown = false;
         this.pendingCoolDownTimer = 0;
+        this.pendingCoolDownDeadline = 0;
+        this.pendingCoolDownHole = null;
+        this.redFrameRenderedCount = 0;
         this.pendingEndType = null;
         this.pendingEndTimer = 0;
 

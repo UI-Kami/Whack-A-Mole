@@ -103,12 +103,18 @@ export const CONFIG = {
     MOLE_IDLE_FINAL: 0.18,
     MOLE_DUCK_DURATION: 0.20,     // Brisk initial pop-in retreat
     MOLE_HIT_RETREAT_TIME: 0.20,
-    MOLE_RED_EXPLODE_TIME: 0.40,
+    MOLE_RED_EXPLODE_TIME: 0.42,
     MOLE_RED_RETREAT_TIME: 0.20,
+    MOLE_MISS_WINDUP_TIME: 0.40,  // Clickable wind-up window across Frames 1-3 (0.13 + 0.14 + 0.13; 0.36s-0.40s scaled)
+    MOLE_MISS_THROW_TIME: 0.50,   // Full 4-frame throw sequence (0.40s wind-up + 0.10s Frame 4 release)
+    MISS_BALL_FLIGHT_TIME: 0.14,  // Clean 2D pop-up arc flight to center screen (~0.14s)
+    MISS_SPLASH_BURST_MS: 130,    // Frame 7 Screen Impact Burst duration (~0.13s)
+    MISS_SPLASH_SPLAT_MS: 600,    // Frame 8 Splatted Ball smooth opacity fade (~0.60s)
 
     // Bomb Penalties & 2-Hit Heart Cool-Down Rules (-3s only after 2-hit heart empties post-safe phase)
     BOMB_TIME_PENALTY: 0.0,           // No immediate -1s deduction on bomb hit
     COOLDOWN_CADENCE: 2,              // Open Cool-Down modal on 2nd active-phase bomb hit (Full -> Half -> Empty)
+    COOLDOWN_OPEN_DELAY: 0.32,        // 0.28s-0.35s delay so red character + explosion render BEFORE cooldown opens
     COOLDOWN_AUTO_DURATION: 3.0,      // Auto-dismiss after exactly 3.0 seconds (3000ms)
     COOLDOWN_PENALTY_FULL: 3.0,       // Sole -3 seconds penalty deducted when cooldown completes
     COOLDOWN_PENALTY_SKIP: 3.0,
