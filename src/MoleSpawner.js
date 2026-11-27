@@ -105,6 +105,7 @@ export class MoleSpawner {
         this.pacingCurve = computePacingCurve(0, 0);
         this.onMissThrow = null;
         this.isScreenSplashActive = null;
+        this.isGameplayInputLocked = null;
 
         if (this.parallaxManager) {
             this.parallaxManager.onTileRecycled = (tileIdx) => this.onTileRecycled(tileIdx);
@@ -197,6 +198,10 @@ export class MoleSpawner {
     }
 
     shouldTriggerMissThrow(hole) {
+        // Skip miss attacks while input is locked behind cooldown or round-end overlays
+        if (this.isGameplayInputLocked && this.isGameplayInputLocked()) {
+            return false;
+        }
         // Off-screen throw safety guard: skip throw if hole scrolled near/past bottom or top border
         if (!this.isHoleInThrowBounds(hole)) {
             this.lastMissWasBallAttack = false;

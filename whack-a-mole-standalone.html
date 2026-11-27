@@ -1656,6 +1656,7 @@ const CONFIG = {
     MOLE_MISS_WINDUP_TIME: 0.40,  // Clickable wind-up window across Frames 1-3 (0.13 + 0.14 + 0.13; 0.36s-0.40s scaled)
     MOLE_MISS_THROW_TIME: 0.50,   // Full 4-frame throw sequence (0.40s wind-up + 0.10s Frame 4 release)
     MISS_THROW_PROBABILITY: 0.33, // ~1-in-3 chance per eligible missed character to launch a ball attack
+    MISS_SPLASH_TIME_PENALTY: 1.0,// -1s timer deduction each time a thrown ball splashes the screen
     MISS_BALL_FLIGHT_TIME: 0.14,  // Clean 2D pop-up arc flight to center screen (~0.14s)
     MISS_SPLASH_BURST_MS: 130,    // Frame 7 Screen Impact Burst duration (~0.13s)
     MISS_SPLASH_SPLAT_MS: 600,    // Frame 8 Splatted Ball smooth opacity fade (~0.60s)
@@ -4930,6 +4931,7 @@ class MoleSpawner {
         this.pacingCurve = computePacingCurve(0, 0);
         this.onMissThrow = null;
         this.isScreenSplashActive = null;
+        this.isGameplayInputLocked = null;
 
         if (this.parallaxManager) {
             this.parallaxManager.onTileRecycled = (tileIdx) => this.onTileRecycled(tileIdx);
@@ -5022,6 +5024,10 @@ class MoleSpawner {
     }
 
     shouldTriggerMissThrow(hole) {
+        // Skip miss attacks while input is locked behind cooldown or round-end overlays
+        if (this.isGameplayInputLocked && this.isGameplayInputLocked()) {
+            return false;
+        }
         // Off-screen throw safety guard: skip throw if hole scrolled near/past bottom or top border
         if (!this.isHoleInThrowBounds(hole)) {
             this.lastMissWasBallAttack = false;
@@ -5896,6 +5902,9 @@ class GameManager {
             const layer = document.getElementById('screen-splash-layer');
             return !!(layer && layer.children.length > 0);
         };
+        this.moleSpawner.isGameplayInputLocked = () => !!(
+            this.isCoolingDown || this.pendingCoolDown || this.isGameOver || this.pendingEndType || !this.isStarted
+        );
         this.hammer = new HammerController(this.config, this.assets, this.audioManager, this.cameraShake, this.vfxManager);
 
         this.inputManager = new InputManager(
@@ -6132,8 +6141,39 @@ class GameManager {
         }
     }
 
+    deductTimePenalty(penalty) {
+        if (!penalty || penalty <= 0 || this.isGameOver) return;
+        this.gameTimeRemaining = Math.max(0, this.gameTimeRemaining - penalty);
+
+        // Immediately sync #hud-timer-val and pulse timer penalty badge
+        this.dispatchUIEvent('timertick', {
+            timeRemaining: this.gameTimeRemaining,
+            elapsed: Math.max(0, this.totalDuration - this.gameTimeRemaining),
+            speedPercent: this.speedPercent,
+            speedFactor: this.speedFactor
+        });
+        this.showTimerPenaltyFeedback(`-${Math.round(penalty)}s`);
+    }
+
+    triggerMissSplashImpact(impactX, impactY, hole = null) {
+        if (this.isGameOver || this.pendingEndType || !this.isStarted || this.isCoolingDown || this.pendingCoolDown) return;
+        this.dispatchUIEvent('misssplash', {
+            x: impactX,
+            y: impactY,
+            holeId: hole ? hole.id : -1
+        });
+        const splashPenalty = (this.config.MISS_SPLASH_TIME_PENALTY !== undefined) ? this.config.MISS_SPLASH_TIME_PENALTY : 1.0;
+        this.deductTimePenalty(splashPenalty);
+        if (this.gameTimeRemaining <= 0) {
+            this.gameTimeRemaining = 0;
+            this.pendingCoolDown = false;
+            this.pendingCoolDownTimer = 0;
+            this.triggerLoseSequence();
+        }
+    }
+
     handleMissSplash(hole) {
-        if (this.isGameOver || this.pendingEndType || !this.isStarted) return;
+        if (this.isGameOver || this.pendingEndType || !this.isStarted || this.isCoolingDown || this.pendingCoolDown) return;
         // Final off-screen safety guard: never launch a ghost projectile if hole scrolled off playfield
         if (this.moleSpawner && this.moleSpawner.isHoleInThrowBounds && hole && !this.moleSpawner.isHoleInThrowBounds(hole)) {
             return;
@@ -6143,19 +6183,10 @@ class GameManager {
         const startY = hole ? (hole.screenY - hole.radiusY * 0.45) : (this.config.VIEWPORT_HEIGHT * 0.45);
         if (this.vfxManager && this.vfxManager.spawnMissBallProjectile) {
             this.vfxManager.spawnMissBallProjectile(startX, startY, (impactX, impactY) => {
-                if (this.isGameOver || this.pendingEndType || !this.isStarted) return;
-                this.dispatchUIEvent('misssplash', {
-                    x: impactX,
-                    y: impactY,
-                    holeId: hole ? hole.id : -1
-                });
+                this.triggerMissSplashImpact(impactX, impactY, hole);
             });
         } else {
-            this.dispatchUIEvent('misssplash', {
-                x: this.config.VIEWPORT_WIDTH * 0.5,
-                y: this.config.VIEWPORT_HEIGHT * 0.48,
-                holeId: hole ? hole.id : -1
-            });
+            this.triggerMissSplashImpact(this.config.VIEWPORT_WIDTH * 0.5, this.config.VIEWPORT_HEIGHT * 0.48, hole);
         }
     }
 
@@ -6277,16 +6308,7 @@ class GameManager {
         this.cooldownTimer = 0;
 
         const penalty = this.config.COOLDOWN_PENALTY_FULL || 3.0;
-        this.gameTimeRemaining = Math.max(0, this.gameTimeRemaining - penalty);
-
-        // Immediately sync #hud-timer-val and pulse -3s badge
-        this.dispatchUIEvent('timertick', {
-            timeRemaining: this.gameTimeRemaining,
-            elapsed: Math.max(0, this.totalDuration - this.gameTimeRemaining),
-            speedPercent: this.speedPercent,
-            speedFactor: this.speedFactor
-        });
-        this.showTimerPenaltyFeedback(`-${Math.round(penalty)}s`);
+        this.deductTimePenalty(penalty);
 
         // Reset 2-hit cycle & restore #hud-heart-img back to Full Health (without red hurt flash)
         this.bombHitsInCycle = 0;
