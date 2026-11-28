@@ -40,6 +40,7 @@ export class GameManager {
         this.cooldownTimer = 0;
         this.cooldownAutoTime = this.config.COOLDOWN_AUTO_DURATION || 3.0;
         this.lastReflectionIndex = -1;
+        this.lastLoseClipIndex = -1;
         this.factIndex = 0;
 
         // Assets Container (Cleanly separated playfield background + standalone hole assets)
@@ -497,18 +498,16 @@ export class GameManager {
         this.cooldownActive = true;
         this.cooldownTimer = this.config.COOLDOWN_AUTO_DURATION || 3.0;
 
-        // 1 Rotating English Reflection & Fact per cooldown (persists across sessions via localStorage)
+        // Rotate sequentially across the 5 self-contained English reflection lines (persists via localStorage)
         const reflections = this.config.REFLECTIONS || [];
-        const facts = this.config.FACTS || [];
         const idx = this.getNextRotationIndex('mazaaq_cooldown_idx', reflections.length);
         const reflectionLine = reflections[idx] || '';
-        const factLine = facts.length ? facts[idx % facts.length] : '';
 
         this.audioManager.playCoolDownStart();
 
         this.dispatchUIEvent('cooldownshow', {
             reflection: reflectionLine,
-            fact: factLine,
+            fact: '',
             duration: this.cooldownTimer,
             rotationIndex: idx
         });
@@ -592,6 +591,7 @@ export class GameManager {
             this.moleSpawner.reset();
         }
         if (this.audioManager) {
+            if (this.audioManager.stopClip) this.audioManager.stopClip();
             this.audioManager.resume();
             this.audioManager.playGameStart();
         }
@@ -778,6 +778,32 @@ export class GameManager {
         }
     }
 
+    pickNextLoseClip() {
+        const clips = this.config.LOSE_CLIP_KEYS || ['loseAudio1', 'loseAudio2'];
+        let lastIdx = -1;
+        try {
+            const raw = localStorage.getItem('mazaaq_last_lose_clip_idx');
+            if (raw !== null) lastIdx = parseInt(raw, 10);
+        } catch (e) {
+            lastIdx = (typeof this.lastLoseClipIndex === 'number') ? this.lastLoseClipIndex : -1;
+        }
+        let nextIdx;
+        if (Number.isInteger(lastIdx) && lastIdx >= 0 && lastIdx < clips.length && clips.length > 1) {
+            const candidates = [];
+            for (let i = 0; i < clips.length; i++) {
+                if (i !== lastIdx) candidates.push(i);
+            }
+            nextIdx = candidates[Math.floor(Math.random() * candidates.length)];
+        } else {
+            nextIdx = Math.floor(Math.random() * clips.length);
+        }
+        this.lastLoseClipIndex = nextIdx;
+        try {
+            localStorage.setItem('mazaaq_last_lose_clip_idx', String(nextIdx));
+        } catch (e) {}
+        return { index: nextIdx, key: clips[nextIdx] || 'loseAudio1' };
+    }
+
     triggerWinSequence() {
         if (this.isGameOver) return;
         this.isGameOver = true;
@@ -789,19 +815,20 @@ export class GameManager {
 
         const timeTaken = this.totalDuration - this.gameTimeRemaining;
         const bestRun = this.recordPersonalBest(timeTaken, this.bombHits);
-        const messages = this.config.WIN_MESSAGES || [];
-        const idx = this.getNextRotationIndex('mazaaq_end_idx', messages.length);
-        const message = messages[idx] || "Think about it. Choose your words well.";
+        const message = this.config.FINAL_END_MESSAGE || "Nobody means to hurt anyone. Somebody always gets hurt. That's how a joke works.";
 
-        this.audioManager.playVictoryFanfare();
+        if (this.audioManager) {
+            if (this.audioManager.stopClip) this.audioManager.stopClip();
+            this.audioManager.playVictoryFanfare();
+        }
 
         this.dispatchUIEvent('gamewin', {
             timeTaken: timeTaken,
             bombHits: this.bombHits,
             normalHits: this.normalHits,
             bestRun: bestRun,
-            message: message,
-            rotationIndex: idx
+            isNewRecord: !!(bestRun && bestRun.isNewRecord),
+            message: message
         });
     }
 
@@ -814,38 +841,40 @@ export class GameManager {
         this.pendingEndType = null;
         this.pendingEndTimer = 0;
 
-        const messages = this.config.LOSE_MESSAGES || [];
-        const idx = this.getNextRotationIndex('mazaaq_end_idx', messages.length);
-        const message = messages[idx] || "Pause first, then laugh. Careless words leave lasting marks.";
-
-        this.audioManager.playDefeatFanfare();
+        if (this.audioManager && this.audioManager.stopClip) {
+            this.audioManager.stopClip();
+        }
+        const loseClip = this.pickNextLoseClip();
+        const message = this.config.FINAL_END_MESSAGE || "Nobody means to hurt anyone. Somebody always gets hurt. That's how a joke works.";
 
         this.dispatchUIEvent('gamelose', {
             normalHits: this.normalHits,
             bombHits: this.bombHits,
-            message: message,
-            rotationIndex: idx
+            loseClipKey: loseClip.key,
+            loseClipIndex: loseClip.index,
+            message: message
         });
     }
 
     recordPersonalBest(timeTaken, bombHits) {
+        const roundedTime = Math.round(Math.max(0, timeTaken) * 10) / 10;
         try {
             const raw = localStorage.getItem('mazaaq_tha_best_run');
             let currentBest = raw ? JSON.parse(raw) : null;
 
-            // Ranked by fastest completion time. Fewest bomb hits as tiebreaker.
+            // Ranked by fastest completion time; fewest red bomb hits breaks ties at matching time.
             let isNewBest = false;
             if (!currentBest) {
                 isNewBest = true;
-            } else if (timeTaken < currentBest.timeTaken) {
+            } else if (roundedTime < currentBest.timeTaken) {
                 isNewBest = true;
-            } else if (Math.abs(timeTaken - currentBest.timeTaken) < 0.2 && bombHits < currentBest.bombHits) {
+            } else if (Math.abs(roundedTime - currentBest.timeTaken) < 0.05 && bombHits < currentBest.bombHits) {
                 isNewBest = true;
             }
 
             if (isNewBest) {
                 currentBest = {
-                    timeTaken: Math.round(timeTaken * 10) / 10,
+                    timeTaken: roundedTime,
                     bombHits: bombHits,
                     date: new Date().toLocaleDateString()
                 };
@@ -858,7 +887,7 @@ export class GameManager {
                 isNewRecord: isNewBest
             };
         } catch (e) {
-            return { timeTaken: Math.round(timeTaken), bombHits: bombHits, isNewRecord: false };
+            return { timeTaken: roundedTime, bombHits: bombHits, isNewRecord: false };
         }
     }
 
@@ -917,6 +946,7 @@ export class GameManager {
         }
 
         if (this.audioManager) {
+            if (this.audioManager.stopClip) this.audioManager.stopClip();
             this.audioManager.playGameRestart();
         }
 

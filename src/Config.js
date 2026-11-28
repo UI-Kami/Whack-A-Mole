@@ -137,39 +137,28 @@ export const CONFIG = {
     INSULTS: [],
     EMOJI_REACTION_BUBBLES: [],
 
-    // Cool-Down English-Only Rotating Reflection Lines (1 shown per hit, paired with FACTS[idx])
+    // Cool-Down English-Only Rotating Reflection Lines (5 self-contained reflections, 1 shown per cooldown)
     REFLECTIONS: [
-        "Silence after laughter is an answer too.",
-        "A joke is often remembered long after the laughter fades.",
-        "Words said in jest stay inside someone's heart.",
-        "What you felt is also an answer.",
-        "When humor belittles someone, it becomes a wound.",
-        "Someone else's laugh does not mean it didn't hurt."
+        "The laughter was loud. The person it was about was quiet.",
+        "Silence after a joke isn't agreement. It's an answer.",
+        "If it hurt, it hurt. Someone else laughing doesn't change that.",
+        "3 out of 4 people have been hurt by a joke. Nearly half said nothing.",
+        "A joke that makes someone smaller isn't a joke. It's a wound with a punchline."
     ],
 
-    // Cool-Down English-Only Facts (paired sequentially 1-to-1 with REFLECTIONS)
-    FACTS: [
-        "75% of people have been hurt by a joke.",
-        "46.7% stayed silent in that moment.",
-        "26.7% doubted themselves instead of the joke.",
-        "75% of people have been hurt by a joke.",
-        "46.7% stayed silent in that moment.",
-        "26.7% doubted themselves instead of the joke."
-    ],
+    // Self-contained cooldown reflections hide secondary fact text
+    FACTS: [],
 
-    // End-of-Game Lose Messages (1 English message shown per finished game, persistent rotation)
+    FINAL_END_MESSAGE: "Nobody means to hurt anyone. Somebody always gets hurt. That's how a joke works.",
+    LOSE_CLIP_KEYS: ['loseAudio1', 'loseAudio2', 'doraAudio'],
+    LOSE_SLIDE_FALLBACK_MS: 4000,
+
+    // End-of-Game Lose & Win Standalone Final Reflection Sentence (rendered with no header/title)
     LOSE_MESSAGES: [
-        "Sometimes jokes aren't just jokes \u2014 notice who gets hurt before you laugh.",
-        "Pause first, then laugh. Careless words leave lasting marks.",
-        "When humor punches down, the sting outlasts the punchline.",
-        "Even a quick game of laughs reminds us how heavy words can feel."
+        "Nobody means to hurt anyone. Somebody always gets hurt. That's how a joke works."
     ],
 
-    // End-of-Game Win Messages (1 English message shown per finished game, persistent rotation)
     WIN_MESSAGES: [
-        "The hurt you felt from that joke was real.",
-        "You've probably made someone else feel it too, without realizing.",
-        "Think about it. Choose your words well.",
-        "Is it really a matter of laughter, or of fairness?"
+        "Nobody means to hurt anyone. Somebody always gets hurt. That's how a joke works."
     ]
 };

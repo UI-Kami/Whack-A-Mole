@@ -12,6 +12,14 @@ export class AudioManager {
         this.bgmPlaying = false;
         this.bgmTimer = null;
         this.bgmStep = 0;
+
+        // End-screen embedded audio clip state (Dora win clip & 2 lose clips)
+        this.activeClip = null;
+        this.activeClipKey = null;
+        this.activeClipEndedHandler = null;
+        this.activeClipErrorHandler = null;
+        this.activeClipFallbackHandler = null;
+        this.clipElements = {};
     }
 
     init() {
@@ -76,6 +84,125 @@ export class AudioManager {
         if (this.masterGain && this.ctx) {
             this.masterGain.gain.setTargetAtTime(muted ? 0 : this.config.MASTER_VOLUME, this.ctx.currentTime, 0.05);
         }
+        if (this.activeClip) {
+            this.activeClip.muted = !!muted;
+            if (muted) {
+                const fb = this.activeClipFallbackHandler;
+                this.stopClip();
+                if (fb) fb('muted');
+            }
+        }
+    }
+
+    resolveClipSrc(clipKey) {
+        if (typeof ASSETS_DATA !== 'undefined' && ASSETS_DATA && ASSETS_DATA[clipKey]) {
+            return ASSETS_DATA[clipKey];
+        }
+        const fallbacks = {
+            doraAudio: 'assets/new/1000560290.mp3.mpeg',
+            loseAudio1: 'assets/new/1000560279.mp3.mpeg',
+            loseAudio2: 'assets/new/1000560283.mp3.mpeg'
+        };
+        return fallbacks[clipKey] || '';
+    }
+
+    stopClip() {
+        const clip = this.activeClip;
+        if (clip) {
+            if (this.activeClipEndedHandler) {
+                clip.removeEventListener('ended', this.activeClipEndedHandler);
+            }
+            if (this.activeClipErrorHandler) {
+                clip.removeEventListener('error', this.activeClipErrorHandler);
+            }
+            try { clip.pause(); } catch (e) {}
+            try { clip.currentTime = 0; } catch (e) {}
+        }
+        this.activeClip = null;
+        this.activeClipKey = null;
+        this.activeClipEndedHandler = null;
+        this.activeClipErrorHandler = null;
+        this.activeClipFallbackHandler = null;
+    }
+
+    playClip(clipKey, { onEnded = null, onFallback = null } = {}) {
+        this.stopClip();
+        const src = this.resolveClipSrc(clipKey);
+        if (!src) {
+            if (onFallback) onFallback('missing');
+            return null;
+        }
+        if (this.isMuted) {
+            if (onFallback) onFallback('muted');
+            return null;
+        }
+
+        let audio = this.clipElements[clipKey];
+        if (!audio) {
+            audio = new Audio(src);
+            audio.preload = 'auto';
+            this.clipElements[clipKey] = audio;
+        } else if (audio.src !== src) {
+            audio.src = src;
+        }
+
+        try { audio.currentTime = 0; } catch (e) {}
+        audio.muted = false;
+        audio.volume = Math.min(1.0, Math.max(0.0, this.config.MASTER_VOLUME ?? 0.85));
+
+        let settled = false;
+        const cleanup = () => {
+            if (this.activeClipEndedHandler) audio.removeEventListener('ended', this.activeClipEndedHandler);
+            if (this.activeClipErrorHandler) audio.removeEventListener('error', this.activeClipErrorHandler);
+            if (this.activeClip === audio) {
+                this.activeClip = null;
+                this.activeClipKey = null;
+                this.activeClipEndedHandler = null;
+                this.activeClipErrorHandler = null;
+                this.activeClipFallbackHandler = null;
+            }
+        };
+
+        const handleEnded = () => {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            if (onEnded) onEnded();
+        };
+        const handleError = () => {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            if (onFallback) onFallback('error');
+        };
+
+        this.activeClip = audio;
+        this.activeClipKey = clipKey;
+        this.activeClipEndedHandler = handleEnded;
+        this.activeClipErrorHandler = handleError;
+        this.activeClipFallbackHandler = onFallback;
+        audio.addEventListener('ended', handleEnded);
+        audio.addEventListener('error', handleError);
+
+        try {
+            const p = audio.play();
+            if (p && typeof p.catch === 'function') {
+                p.catch(() => {
+                    if (settled || this.activeClip !== audio) return;
+                    settled = true;
+                    cleanup();
+                    if (onFallback) onFallback('blocked');
+                });
+            }
+        } catch (e) {
+            if (!settled) {
+                settled = true;
+                cleanup();
+                if (onFallback) onFallback('exception');
+            }
+            return null;
+        }
+        return audio;
     }
 
     setMusicMuted(muted) {

@@ -157,7 +157,7 @@ $middleHtml = @'
             </div>
         </div>
 
-        <!-- Cool-Down Overlay: Larger Error Window + English-Only Text + 3.0s Auto-Dismiss (No Continue/OK button) -->
+        <!-- Cool-Down Overlay: Larger Error Window + Single Self-Contained Reflection + 3.0s Auto-Dismiss -->
         <div id="cooldown-modal" class="modal-overlay" role="dialog" aria-modal="true">
             <div class="cooldown-error-wrap">
                 <img id="cooldown-window-bg" class="cooldown-error-bg" src="" alt="System Error" />
@@ -167,7 +167,7 @@ $middleHtml = @'
                         <p id="cooldown-reflection" class="cooldown-reflection-text"></p>
                     </div>
                     <div class="cooldown-bottom-zone">
-                        <p id="cooldown-fact" class="cooldown-fact-text"></p>
+                        <p id="cooldown-fact" class="cooldown-fact-text" style="display:none;"></p>
                         <div class="cooldown-actions-row">
                             <span class="cooldown-penalty-notice">-3s Penalty</span>
                         </div>
@@ -185,30 +185,36 @@ $middleHtml = @'
             <div id="lose-cascade-layer" class="lose-cascade-layer"></div>
         </div>
 
-        <!-- Lose Sequence Overlay (1 Rotating English Quote per Completed Game + Restart) -->
+        <!-- Lose Two-Step Finale Overlay (Slide 1: Mystery Box YOU LOSE + Random Clip -> Slide 2: Standalone Sentence) -->
         <div id="lose-modal" class="modal-overlay" role="dialog" aria-modal="true">
             <div class="sequence-transparent-wrap">
-                <div class="lose-error-frame">
-                    <img id="lose-window-img" class="cooldown-error-bg" src="" alt="Error Window" />
-                    <div class="lose-error-inner">
-                        <h2 id="lose-title" class="sequence-title red">TIME'S UP</h2>
-                        <div class="sequence-line-box">
-                            <p id="lose-text" class="sequence-text-single dark"></p>
+                <img id="lose-hero-img" class="lose-hero-transparent" src="" alt="Mystery Box" />
+                <div id="lose-slide-stage" class="lose-slide-stage">
+                    <div id="lose-slide-1" class="win-glass-box lose-slide1-card lose-slide-card">
+                        <h2 id="lose-slide1-title" class="sequence-title red">YOU LOSE</h2>
+                    </div>
+                    <div id="lose-slide-2" class="lose-error-frame lose-slide-card" style="display:none;">
+                        <img id="lose-window-img" class="cooldown-error-bg" src="" alt="Error Window" />
+                        <div class="lose-error-inner">
+                            <h2 id="lose-title" class="sequence-title red" style="display:none;"></h2>
+                            <div class="sequence-line-box">
+                                <p id="lose-text" class="sequence-text-single dark"></p>
+                            </div>
                         </div>
                     </div>
                 </div>
-                <button id="btn-lose-restart" class="btn-pixel-nav" style="display:inline-block;" title="Play Again">
+                <button id="btn-lose-restart" class="btn-pixel-nav" style="display:none;" title="Play Again">
                     <img id="btn-lose-restart-img" class="btn-pixel-nav-img" src="" alt="Play Again" />
                 </button>
             </div>
         </div>
 
-        <!-- Win Sequence Overlay (Mystery Box + 1 Rotating English Quote + High Score + Restart) -->
+        <!-- Win Sequence Overlay (Mystery Box + Standalone Sentence + High Score on New Record Only + Restart) -->
         <div id="win-modal" class="modal-overlay" role="dialog" aria-modal="true">
             <div class="sequence-transparent-wrap">
                 <img id="win-hero-img" class="win-hero-transparent" src="" alt="Mystery Box" />
                 <div class="win-glass-box">
-                    <h2 id="win-title" class="sequence-title">MYSTERY BOX OPENED!</h2>
+                    <h2 id="win-title" class="sequence-title" style="display:none;"></h2>
                     <div class="sequence-line-box">
                         <p id="win-text" class="sequence-text-single"></p>
                     </div>
@@ -298,6 +304,9 @@ $uiWiring = @'
     const loseCascadeLayer = document.getElementById('lose-cascade-layer');
 
     const loseModal = document.getElementById('lose-modal');
+    const loseHeroImg = document.getElementById('lose-hero-img');
+    const loseSlide1 = document.getElementById('lose-slide-1');
+    const loseSlide2 = document.getElementById('lose-slide-2');
     const loseWindowImg = document.getElementById('lose-window-img');
     const loseTitle = document.getElementById('lose-title');
     const loseTextEl = document.getElementById('lose-text');
@@ -332,6 +341,7 @@ $uiWiring = @'
         if (btnStartImg) btnStartImg.src = ASSETS_DATA.btnGreenStart;
         if (cooldownWindowBg) cooldownWindowBg.src = ASSETS_DATA.windowErrorCooldown || ASSETS_DATA.windowErrorPink;
         if (loseWindowImg) loseWindowImg.src = ASSETS_DATA.windowErrorCooldown || ASSETS_DATA.windowErrorPink;
+        if (loseHeroImg) loseHeroImg.src = ASSETS_DATA.mysteryClosed || ASSETS_DATA.mysteryOpen;
         if (loseLoadingImg && ASSETS_DATA.barLoading) loseLoadingImg.src = ASSETS_DATA.barLoading;
         if (menuHeroImg && ASSETS_DATA.homeScreen) menuHeroImg.src = ASSETS_DATA.homeScreen;
         if (mysteryIcon && ASSETS_DATA.mysteryClosed) mysteryIcon.src = ASSETS_DATA.mysteryClosed;
@@ -667,19 +677,23 @@ $uiWiring = @'
     // Auto-fit Cool-Down English text comfortably inside enlarged Error window bounds
     function autoFitCooldownText() {
         const inner = cooldownModal ? cooldownModal.querySelector('.cooldown-error-inner') : null;
-        if (!inner || !cooldownRefEl || !cooldownFactEl) return;
+        if (!inner || !cooldownRefEl) return;
 
         cooldownRefEl.style.fontSize = '';
-        cooldownFactEl.style.fontSize = '';
+        if (cooldownFactEl) cooldownFactEl.style.fontSize = '';
         if (inner.clientHeight <= 0) return;
 
-        let refSize = parseFloat(window.getComputedStyle(cooldownRefEl).fontSize);
-        let factSize = parseFloat(window.getComputedStyle(cooldownFactEl).fontSize);
+        const hasVisibleFact = !!(cooldownFactEl && getComputedStyle(cooldownFactEl).display !== 'none' && cooldownFactEl.textContent.trim());
+        const penaltyEl = cooldownModal.querySelector('.cooldown-penalty-notice');
+        const bottomEl = hasVisibleFact ? cooldownFactEl : penaltyEl;
 
-        while (refSize > 12 || factSize > 12) {
+        let refSize = parseFloat(window.getComputedStyle(cooldownRefEl).fontSize);
+        let factSize = hasVisibleFact ? parseFloat(window.getComputedStyle(cooldownFactEl).fontSize) : 12;
+
+        while (refSize > 12 || (hasVisibleFact && factSize > 12)) {
             const refRect = cooldownRefEl.getBoundingClientRect();
-            const factRect = cooldownFactEl.getBoundingClientRect();
-            const verticalGap = factRect.top - refRect.bottom;
+            const bottomRect = bottomEl ? bottomEl.getBoundingClientRect() : null;
+            const verticalGap = bottomRect ? (bottomRect.top - refRect.bottom) : 999;
             if (inner.scrollHeight <= inner.clientHeight && verticalGap >= 10) {
                 break;
             }
@@ -687,21 +701,29 @@ $uiWiring = @'
                 refSize = Math.max(12, refSize - 1);
                 cooldownRefEl.style.fontSize = `${refSize}px`;
             }
-            if (factSize > 12) {
+            if (hasVisibleFact && factSize > 12) {
                 factSize = Math.max(12, factSize - 1);
                 cooldownFactEl.style.fontSize = `${factSize}px`;
             }
         }
     }
 
-    // Cool-Down Pop-Up (1 Rotating English Quote & Matching Fact per bomb hit; 3.0s auto-dismiss)
+    // Cool-Down Pop-Up (1 Self-Contained Rotating English Reflection per cooldown; 3.0s auto-dismiss)
     window.addEventListener('cooldownshow', (e) => {
         const { reflection, fact } = e.detail;
         openModal(cooldownModal, () => {
             if (cooldownRefEl) cooldownRefEl.style.fontSize = '';
             if (cooldownFactEl) cooldownFactEl.style.fontSize = '';
             setEnglishText(cooldownRefEl, reflection);
-            setEnglishText(cooldownFactEl, fact);
+            if (cooldownFactEl) {
+                if (fact && String(fact).trim()) {
+                    cooldownFactEl.style.display = 'block';
+                    setEnglishText(cooldownFactEl, fact);
+                } else {
+                    cooldownFactEl.textContent = '';
+                    cooldownFactEl.style.display = 'none';
+                }
+            }
             autoFitCooldownText();
         });
     });
@@ -738,9 +760,10 @@ $uiWiring = @'
         });
     }
 
-    // 3-Stage Retro Lose Crash Sequence Controller (Loading... -> EROR! Cascade -> #lose-modal)
+    // 3-Stage Retro Lose Crash Sequence Controller (Loading... -> EROR! Cascade -> 2-Slide #lose-modal)
     const LOSE_LOADING_SEGMENTS = 16;
     let loseCrashTimers = [];
+    let loseSequenceToken = 0;
 
     function initLoadingTrackSegments() {
         if (!loseLoadingTrack || loseLoadingTrack.children.length > 0) return;
@@ -760,14 +783,34 @@ $uiWiring = @'
         }
     }
 
-    function clearLoseCrashSequence() {
+    function resetLoseSlidesState() {
+        if (loseSlide1) {
+            loseSlide1.classList.remove('slide-out', 'slide-enter');
+            loseSlide1.style.display = 'flex';
+        }
+        if (loseSlide2) {
+            loseSlide2.classList.remove('slide-out', 'slide-enter');
+            loseSlide2.style.display = 'none';
+        }
+        if (btnLoseRestart) {
+            btnLoseRestart.classList.remove('slide-enter');
+            btnLoseRestart.style.display = 'none';
+        }
+    }
+
+    function clearLoseCrashSequence(preserveActiveAudio = false) {
+        loseSequenceToken++;
         for (let i = 0; i < loseCrashTimers.length; i++) {
             clearTimeout(loseCrashTimers[i]);
         }
         loseCrashTimers = [];
+        if (!preserveActiveAudio && game && game.audioManager && game.audioManager.stopClip) {
+            game.audioManager.stopClip();
+        }
         if (loseLoadingBox) loseLoadingBox.style.display = 'none';
         setLoadingProgressSegments(0);
         if (loseCascadeLayer) loseCascadeLayer.innerHTML = '';
+        resetLoseSlidesState();
         closeModal(loseCrashOverlay, true);
     }
 
@@ -794,13 +837,57 @@ $uiWiring = @'
         return pts;
     }
 
-    // Lose End Sequence: Stage 1 Loading (~0.9s) -> Stage 2 EROR! Cascade (~1.1s) -> Stage 3 #lose-modal
+    // Lose End Sequence: Stage 1 Loading -> Stage 2 EROR! Cascade -> #lose-modal Slide 1 ("YOU LOSE" + audio) -> Slide 2 (Standalone Sentence)
     window.addEventListener('gamelose', (e) => {
-        const msg = (e && e.detail && e.detail.message) ? e.detail.message : CONFIG.LOSE_MESSAGES[0];
+        const detail = (e && e.detail) ? e.detail : {};
+        const msg = detail.message || CONFIG.FINAL_END_MESSAGE || "Nobody means to hurt anyone. Somebody always gets hurt. That's how a joke works.";
+        const loseClipKey = detail.loseClipKey || 'loseAudio1';
+
         clearScreenSplashes();
         clearLoseCrashSequence();
         closeModal(cooldownModal, true);
         closeModal(pauseModal, true);
+
+        const myToken = loseSequenceToken;
+        let slide2ScheduledOrStarted = false;
+
+        const transitionToLoseSlide2 = (delayMs = 0) => {
+            if (slide2ScheduledOrStarted || myToken !== loseSequenceToken) return;
+            slide2ScheduledOrStarted = true;
+            const runDissolve = () => {
+                if (myToken !== loseSequenceToken) return;
+                if (loseSlide1) loseSlide1.classList.add('slide-out');
+                loseCrashTimers.push(setTimeout(() => {
+                    if (myToken !== loseSequenceToken) return;
+                    if (loseSlide1) {
+                        loseSlide1.style.display = 'none';
+                        loseSlide1.classList.remove('slide-out');
+                    }
+                    if (loseTitle) {
+                        loseTitle.textContent = '';
+                        loseTitle.style.display = 'none';
+                    }
+                    setEnglishText(loseTextEl, msg);
+                    if (loseSlide2) {
+                        loseSlide2.style.display = 'block';
+                        loseSlide2.classList.remove('slide-enter');
+                        void loseSlide2.offsetWidth;
+                        loseSlide2.classList.add('slide-enter');
+                    }
+                    if (btnLoseRestart) {
+                        btnLoseRestart.style.display = 'inline-block';
+                        btnLoseRestart.classList.remove('slide-enter');
+                        void btnLoseRestart.offsetWidth;
+                        btnLoseRestart.classList.add('slide-enter');
+                    }
+                }, 280));
+            };
+            if (delayMs > 0) {
+                loseCrashTimers.push(setTimeout(runDissolve, delayMs));
+            } else {
+                runDissolve();
+            }
+        };
 
         // Stage 1: Animated magenta-header "Loading..." bar (0% -> 75% with 120ms stutter -> 100% over ~0.9s)
         openModal(loseCrashOverlay, () => {
@@ -846,29 +933,44 @@ $uiWiring = @'
             }
         }, stage2Start));
 
-        // Stage 3: Settle the Pink Error Lose box (#lose-modal) smoothly over the EROR! cascade
+        // Stage 3 -> Slide 1: Mystery Box + "YOU LOSE" + random lose audio clip (no Restart button yet)
         const stage3Start = stage2Start + totalStamps * stampStepMs + 60; // ~1984ms
         loseCrashTimers.push(setTimeout(() => {
+            if (myToken !== loseSequenceToken) return;
             openModal(loseModal, () => {
-                loseTitle.textContent = "TIME'S UP";
-                setEnglishText(loseTextEl, msg);
-                if (btnLoseRestart) btnLoseRestart.style.display = 'inline-block';
+                if (myToken !== loseSequenceToken) return;
+                resetLoseSlidesState();
+                if (loseHeroImg && typeof ASSETS_DATA !== 'undefined') {
+                    loseHeroImg.src = ASSETS_DATA.mysteryClosed || ASSETS_DATA.mysteryOpen;
+                }
+                const fallbackMs = CONFIG.LOSE_SLIDE_FALLBACK_MS || 4000;
+                if (game && game.audioManager && game.audioManager.playClip) {
+                    game.audioManager.playClip(loseClipKey, {
+                        onEnded: () => transitionToLoseSlide2(0),
+                        onFallback: () => transitionToLoseSlide2(fallbackMs)
+                    });
+                } else {
+                    transitionToLoseSlide2(fallbackMs);
+                }
             });
         }, stage3Start));
     });
 
     if (btnLoseRestart) {
         btnLoseRestart.addEventListener('click', () => {
+            if (game && game.audioManager && game.audioManager.stopClip) {
+                game.audioManager.stopClip();
+            }
             clearScreenSplashes();
-        clearLoseCrashSequence();
+            clearLoseCrashSequence();
             closeModal(loseModal, true);
             game.restartGame();
         });
     }
 
-    // Win End Screen (Opened Mystery Box + 1 Rotating English Message + Retro HIGH SCORE Window + Play Again)
+    // Win End Screen (Mystery Box + Standalone Sentence + High Score ONLY on New Record; NO voice/meme clip)
     window.addEventListener('gamewin', (e) => {
-        const { timeTaken, bombHits, bestRun, message } = e.detail || {};
+        const { timeTaken, bombHits, bestRun, isNewRecord, message } = e.detail || {};
         clearScreenSplashes();
         clearLoseCrashSequence();
         closeModal(cooldownModal, true);
@@ -877,15 +979,23 @@ $uiWiring = @'
             if (winHeroImg && typeof ASSETS_DATA !== 'undefined') {
                 winHeroImg.src = ASSETS_DATA.mysteryOpen || ASSETS_DATA.mysteryClosed;
             }
-            winTitle.textContent = "MYSTERY BOX OPENED!";
-            setEnglishText(winTextEl, message || CONFIG.WIN_MESSAGES[0]);
+            if (winTitle) {
+                winTitle.textContent = '';
+                winTitle.style.display = 'none';
+            }
+            setEnglishText(winTextEl, message || CONFIG.FINAL_END_MESSAGE || "Nobody means to hurt anyone. Somebody always gets hurt. That's how a joke works.");
 
             if (winPbBox) {
-                const displayTime = (typeof timeTaken === 'number') ? timeTaken : (bestRun ? bestRun.timeTaken : 0);
-                const displayBombs = (typeof bombHits === 'number') ? bombHits : (bestRun ? bestRun.bombHits : 0);
-                pbTimeVal.textContent = formatTime(displayTime);
-                pbBombsVal.textContent = displayBombs;
-                winPbBox.style.display = 'block';
+                const showNewRecord = (isNewRecord !== undefined) ? !!isNewRecord : !!(bestRun && bestRun.isNewRecord);
+                if (showNewRecord) {
+                    const displayTime = (typeof timeTaken === 'number') ? timeTaken : (bestRun ? bestRun.timeTaken : 0);
+                    const displayBombs = (typeof bombHits === 'number') ? bombHits : (bestRun ? bestRun.bombHits : 0);
+                    pbTimeVal.textContent = formatTime(displayTime);
+                    pbBombsVal.textContent = displayBombs;
+                    winPbBox.style.display = 'block';
+                } else {
+                    winPbBox.style.display = 'none';
+                }
             }
 
             if (btnWinRestart) btnWinRestart.style.display = 'inline-block';
@@ -894,8 +1004,11 @@ $uiWiring = @'
 
     if (btnWinRestart) {
         btnWinRestart.addEventListener('click', () => {
+            if (game && game.audioManager && game.audioManager.stopClip) {
+                game.audioManager.stopClip();
+            }
             clearScreenSplashes();
-        clearLoseCrashSequence();
+            clearLoseCrashSequence();
             closeModal(winModal, true);
             game.restartGame();
         });
