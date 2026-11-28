@@ -1709,21 +1709,21 @@ function computePacingCurve(elapsedSec = 0, hits = 0) {
     const hitP = Math.min(1.0, Math.max(0.0, safeHits / WIN_HITS));
     const intensity = Math.min(1.0, 0.78 * timeP + 0.22 * hitP);
 
-    // High-tempo continuous curves across 0.0 (1:30 start) -> 0.5 (mid-round) -> 1.0 (0:00 climax)
+    // High-tempo continuous curves tuned for ~30% win / ~70% lose challenge across 0.0 -> 0.5 -> 1.0
     const scrollMultiplier   = lerpCurve(1.90, 3.80, 6.50, intensity);
     const popDuration        = lerpCurve(0.22, 0.14, 0.07, intensity);
-    const holdDuration       = lerpCurve(0.68, 0.42, 0.18, intensity);
+    const holdDuration       = lerpCurve(0.60, 0.36, 0.16, intensity);
     const duckDuration       = lerpCurve(0.20, 0.13, 0.07, intensity);
-    const spawnInterval      = lerpCurve(0.62, 0.38, 0.20, intensity);
+    const spawnInterval      = lerpCurve(0.60, 0.36, 0.19, intensity);
     const redRetreatDuration = Math.max(0.20, duckDuration);
     const maxSimultaneous    = (intensity < 0.28) ? 3 : ((intensity < 0.62) ? 4 : 5);
 
-    // Bomb spawn schedule: 18% -> 35% (cap 2) in first 45s, 50% -> 62% (cap 3) in final 45s
-    const isFirstHalf = elapsed <= 45.0;
+    // Bomb spawn schedule: 22% -> 42% (cap 2) in first 45s; 100% 1-in-2 pair guarantee in last 45s
+    const isFirstHalf = elapsed < 45.0;
     const p1 = isFirstHalf ? (elapsed / 45.0) : 1.0;
     const p2 = isFirstHalf ? 0.0 : ((elapsed - 45.0) / 45.0);
-    const bombProb = isFirstHalf ? lerp(0.18, 0.35, p1) : lerp(0.50, 0.62, p2);
-    const maxActiveBombs = isFirstHalf ? 2 : 3;
+    const bombProb = isFirstHalf ? lerp(0.22, 0.42, p1) : 1.0;
+    const maxActiveBombs = isFirstHalf ? 2 : Math.max(3, maxSimultaneous - 1);
 
     return {
         phase: isFirstHalf ? 1 : 2,
@@ -1773,28 +1773,28 @@ const CONFIG = {
     PHASE_FINAL_END: 90.0,
 
     // Spawning Rates along Continuous Curve
-    SPAWN_INTERVAL_WARMUP: 0.62,
-    SPAWN_INTERVAL_MIDDLE: 0.38,
-    SPAWN_INTERVAL_PRESSURE: 0.26,
-    SPAWN_INTERVAL_FINAL: 0.20,
+    SPAWN_INTERVAL_WARMUP: 0.60,
+    SPAWN_INTERVAL_MIDDLE: 0.36,
+    SPAWN_INTERVAL_PRESSURE: 0.25,
+    SPAWN_INTERVAL_FINAL: 0.19,
 
-    // Disguised Bomb Probabilities (18% -> 35% Phase 1, 50% -> 62% Phase 2)
-    SAFE_PHASE_DURATION: 12.0,
-    BOMB_PROB_SAFE: 0.18,
-    BOMB_PROB_START: 0.18,
-    BOMB_PROB_MAX: 0.62,
-    BOMB_PROB_WARMUP: 0.18,
-    BOMB_PROB_MIDDLE: 0.35,
-    BOMB_PROB_PRESSURE: 0.50,
-    BOMB_PROB_FINAL: 0.62,
+    // Disguised Bomb Probabilities (6s safe phase; 22% -> 42% first 45s; 100% 1-in-2 last 45s)
+    SAFE_PHASE_DURATION: 6.0,
+    BOMB_PROB_SAFE: 0.22,
+    BOMB_PROB_START: 0.22,
+    BOMB_PROB_MAX: 1.0,
+    BOMB_PROB_WARMUP: 0.22,
+    BOMB_PROB_MIDDLE: 0.42,
+    BOMB_PROB_PRESSURE: 1.0,
+    BOMB_PROB_FINAL: 1.0,
 
     // Mole 3-Phase Smooth Eased Animation Timings (Clamped dt <= 0.05s)
     MOLE_PEEK_TIME: 0.22,         // Brisk initial pop-out
     MOLE_POP_DURATION: 0.22,      // Unified initial pop-out duration
-    MOLE_IDLE_WARMUP: 0.68,       // Initial hold
-    MOLE_IDLE_MIDDLE: 0.42,
-    MOLE_IDLE_PRESSURE: 0.28,
-    MOLE_IDLE_FINAL: 0.18,
+    MOLE_IDLE_WARMUP: 0.60,       // Initial hold
+    MOLE_IDLE_MIDDLE: 0.36,
+    MOLE_IDLE_PRESSURE: 0.24,
+    MOLE_IDLE_FINAL: 0.16,
     MOLE_DUCK_DURATION: 0.20,     // Brisk initial pop-in retreat
     MOLE_HIT_RETREAT_TIME: 0.20,
     MOLE_RED_EXPLODE_TIME: 0.42,
@@ -5189,6 +5189,8 @@ class MoleSpawner {
         this.warmupBomb2Spawned = false;
         this.lastBombHoleId = -1;
         this.totalBombsSpawned = 0;
+        this.phase2Entered = false;
+        this.phase2NextIsBomb = true;
         this.lastMissWasBallAttack = false;
         this.speedFactor = 1.9;
         this.pacingCurve = computePacingCurve(0, 0);
@@ -5364,6 +5366,8 @@ class MoleSpawner {
         this.warmupBomb2Spawned = false;
         this.lastBombHoleId = -1;
         this.totalBombsSpawned = 0;
+        this.phase2Entered = false;
+        this.phase2NextIsBomb = true;
         this.lastMissWasBallAttack = false;
         this.speedFactor = 1.9;
         this.pacingCurve = computePacingCurve(0, 0);
@@ -5405,6 +5409,38 @@ class MoleSpawner {
         }
     }
 
+    pickHoleForSpawn(availableHoles, isBomb) {
+        if (!isBomb) {
+            return availableHoles[Math.floor(Math.random() * availableHoles.length)];
+        }
+        const nonRepeat = availableHoles.filter(h => !h.lastSpawnWasBomb && h.id !== this.lastBombHoleId);
+        if (nonRepeat.length > 0) {
+            return nonRepeat[Math.floor(Math.random() * nonRepeat.length)];
+        }
+        const notSameHole = availableHoles.filter(h => h.id !== this.lastBombHoleId);
+        if (notSameHole.length > 0) {
+            return notSameHole[Math.floor(Math.random() * notSameHole.length)];
+        }
+        return availableHoles[Math.floor(Math.random() * availableHoles.length)];
+    }
+
+    spawnCharacterInHole(hole, isBomb, curve, missTempoScale, holdMinMult = 0.95) {
+        const holdDur = curve.holdDuration * (holdMinMult + Math.random() * 0.10);
+        hole.mole.spawn(isBomb, holdDur, {
+            popDuration: curve.popDuration,
+            holdDuration: holdDur,
+            duckDuration: curve.duckDuration,
+            redRetreatDuration: curve.redRetreatDuration,
+            missTempoScale
+        });
+        hole.lastSpawnWasBomb = isBomb;
+        if (isBomb) {
+            this.lastBombHoleId = hole.id;
+            this.totalBombsSpawned++;
+        }
+        return hole;
+    }
+
     attemptSpawn() {
         const time = this.elapsedTimeline;
         const cachedCurve = this.pacingCurve;
@@ -5428,69 +5464,70 @@ class MoleSpawner {
 
         const activeBombs = activeMoles.filter(h => h.mole.isBomb).length;
         const activeNormals = activeMoles.length - activeBombs;
-        const maxSimultaneousBombs = curve.maxActiveBombs ?? ((time < 45.0) ? 2 : 3);
+        const isLast45s = time >= 45.0;
+        const maxSimultaneousBombs = curve.maxActiveBombs ?? (isLast45s ? Math.max(3, maxSimultaneous - 1) : 2);
+        // Keep wind-up Frames 1-3 within ~0.34s-0.38s (0.34s-0.42s) throughout the entire round
+        const missTempoScale = Math.max(0.90, Math.min(1.0, 1.0 - 0.10 * (curve.intensity || 0)));
 
-        // Bombs spawn from t=0: 18% -> 35% in Phase 1 (max 2), jumping to 50% -> 62% in Phase 2 (max 3)
-        const currentBombProb = curve.bombProb ?? ((time <= 45.0) ? 0.18 : 0.50);
-        let shouldSpawnBomb = Math.random() < currentBombProb;
+        let shouldSpawnBomb = false;
+        let forcePairGreen = false;
 
-        // Anti-flood & normal target prioritization guards:
-        // 1. Cap simultaneous active bombs (max 2 in first 45s, max 3 in final 45s)
-        if (activeBombs >= maxSimultaneousBombs) {
-            shouldSpawnBomb = false;
-        }
-        // 2. Ensure at least 1-2 normal green hittable targets remain on screen alongside bombs
-        if (activeMoles.length >= 1 && activeNormals < 1) {
-            shouldSpawnBomb = false;
-        } else if (maxSimultaneous >= 4 && activeMoles.length >= 2 && activeNormals < 2) {
-            shouldSpawnBomb = false;
-        }
-
-        // 3. Prevent back-to-back bomb spawns in the same hole
-        let candidateHoles = availableHoles;
-        if (shouldSpawnBomb) {
-            const nonRepeatHoles = availableHoles.filter(h => !h.lastSpawnWasBomb && h.id !== this.lastBombHoleId);
-            if (nonRepeatHoles.length > 0) {
-                candidateHoles = nonRepeatHoles;
+        if (isLast45s) {
+            // Last 45s: 100% bomb chance — every 2 characters popping must include 1 bomb
+            if (!this.phase2Entered || activeMoles.length === 0) {
+                this.phase2Entered = true;
+                this.phase2NextIsBomb = true;
+            }
+            if (this.phase2NextIsBomb) {
+                if (activeBombs >= maxSimultaneousBombs) {
+                    // Briefly defer rather than breaking the 1-in-2 bomb guarantee with 2 consecutive greens
+                    this.spawnTimer = Math.min(this.spawnTimer, 0.08);
+                    return;
+                }
+                shouldSpawnBomb = true;
+                const freeSlots = maxSimultaneous - activeMoles.length;
+                if (activeNormals === 0 && freeSlots >= 2 && availableHoles.length >= 2) {
+                    forcePairGreen = true;
+                    this.phase2NextIsBomb = true;
+                } else {
+                    this.phase2NextIsBomb = false;
+                }
             } else {
                 shouldSpawnBomb = false;
+                this.phase2NextIsBomb = true;
+            }
+        } else {
+            // First 45s: progressive bomb schedule (22% -> 42%, cap 2), keeping >=1-2 normal targets available
+            this.phase2Entered = false;
+            this.phase2NextIsBomb = true;
+            const currentBombProb = curve.bombProb ?? 0.22;
+            shouldSpawnBomb = Math.random() < currentBombProb;
+
+            if (activeBombs >= maxSimultaneousBombs) {
+                shouldSpawnBomb = false;
+            }
+            if (activeMoles.length >= 1 && activeNormals < 1) {
+                shouldSpawnBomb = false;
+            } else if (maxSimultaneous >= 4 && activeMoles.length >= 2 && activeNormals < 2) {
+                shouldSpawnBomb = false;
+            }
+            if (shouldSpawnBomb && !availableHoles.some(h => !h.lastSpawnWasBomb && h.id !== this.lastBombHoleId)) {
+                shouldSpawnBomb = false;
+            }
+            if (shouldSpawnBomb && activeNormals === 0 && (activeMoles.length + 1) < maxSimultaneous && availableHoles.length >= 2) {
+                forcePairGreen = true;
             }
         }
 
-        const chosenHole = candidateHoles[Math.floor(Math.random() * candidateHoles.length)];
-        const jitterHold = curve.holdDuration * (0.95 + Math.random() * 0.10);
-        // Keep wind-up Frames 1-3 within ~0.34s-0.38s (0.34s-0.42s) throughout the entire round
-        const missTempoScale = Math.max(0.90, Math.min(1.0, 1.0 - 0.10 * (curve.intensity || 0)));
-        const timings = {
-            popDuration: curve.popDuration,
-            holdDuration: jitterHold,
-            duckDuration: curve.duckDuration,
-            redRetreatDuration: curve.redRetreatDuration,
-            missTempoScale
-        };
+        const chosenHole = this.pickHoleForSpawn(availableHoles, shouldSpawnBomb);
+        this.spawnCharacterInHole(chosenHole, shouldSpawnBomb, curve, missTempoScale, 0.95);
 
-        chosenHole.mole.spawn(shouldSpawnBomb, jitterHold, timings);
-        chosenHole.lastSpawnWasBomb = shouldSpawnBomb;
-
-        if (shouldSpawnBomb) {
-            this.lastBombHoleId = chosenHole.id;
-            this.totalBombsSpawned++;
-
-            // Pair any bomb spawn with a hittable normal target nearby so skilled players stay supplied with hits
-            if (activeNormals === 0 && (activeMoles.length + 1) < maxSimultaneous && availableHoles.length >= 2) {
-                const partnerPool = availableHoles.filter(h => h.id !== chosenHole.id);
-                if (partnerPool.length > 0) {
-                    const partnerHole = partnerPool[Math.floor(Math.random() * partnerPool.length)];
-                    const partnerHold = curve.holdDuration * (0.96 + Math.random() * 0.10);
-                    partnerHole.mole.spawn(false, partnerHold, {
-                        popDuration: curve.popDuration,
-                        holdDuration: partnerHold,
-                        duckDuration: curve.duckDuration,
-                        redRetreatDuration: curve.redRetreatDuration,
-                        missTempoScale
-                    });
-                    partnerHole.lastSpawnWasBomb = false;
-                }
+        // Pair bomb spawn with a hittable normal target nearby so skilled players stay supplied with hits
+        if (forcePairGreen) {
+            const partnerPool = availableHoles.filter(h => h.id !== chosenHole.id);
+            if (partnerPool.length > 0) {
+                const partnerHole = partnerPool[Math.floor(Math.random() * partnerPool.length)];
+                this.spawnCharacterInHole(partnerHole, false, curve, missTempoScale, 0.96);
             }
         }
 
@@ -6480,10 +6517,10 @@ class GameManager {
             try { navigator.vibrate([80, 40, 80]); } catch (e) {}
         }
 
-        const safeCutoff = (this.totalDuration || 90.0) - (this.config.SAFE_PHASE_DURATION ?? 12.0); // > 78s = first 12s safe phase
+        const safeCutoff = (this.totalDuration || 90.0) - (this.config.SAFE_PHASE_DURATION ?? 6.0); // > 84s = first 6s safe phase
         const isSafePhase = this.gameTimeRemaining > safeCutoff;
 
-        // Safe Phase (first 12s, timeRemaining > 78): warning explosion & red retreat only!
+        // Safe Phase (first 6s, timeRemaining > 84): warning explosion & red retreat only!
         // Heart stays full (bombHitsInCycle = 0), no cooldown modal, and no time penalty.
         if (isSafePhase) {
             this.dispatchUIEvent('bombhit', {
@@ -6497,7 +6534,7 @@ class GameManager {
             return;
         }
 
-        // Active Phase (timeRemaining <= 78): 2-Hit Heart Cycle (Full -> Half -> Empty -> Cooldown)
+        // Active Phase (timeRemaining <= 84): 2-Hit Heart Cycle (Full -> Half -> Empty -> Cooldown)
         this.bombHitsInCycle = Math.min(2, this.bombHitsInCycle + 1);
         this.heartCrackLevel = this.bombHitsInCycle;
 

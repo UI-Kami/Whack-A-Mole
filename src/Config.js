@@ -14,21 +14,21 @@ export function computePacingCurve(elapsedSec = 0, hits = 0) {
     const hitP = Math.min(1.0, Math.max(0.0, safeHits / WIN_HITS));
     const intensity = Math.min(1.0, 0.78 * timeP + 0.22 * hitP);
 
-    // High-tempo continuous curves across 0.0 (1:30 start) -> 0.5 (mid-round) -> 1.0 (0:00 climax)
+    // High-tempo continuous curves tuned for ~30% win / ~70% lose challenge across 0.0 -> 0.5 -> 1.0
     const scrollMultiplier   = lerpCurve(1.90, 3.80, 6.50, intensity);
     const popDuration        = lerpCurve(0.22, 0.14, 0.07, intensity);
-    const holdDuration       = lerpCurve(0.68, 0.42, 0.18, intensity);
+    const holdDuration       = lerpCurve(0.60, 0.36, 0.16, intensity);
     const duckDuration       = lerpCurve(0.20, 0.13, 0.07, intensity);
-    const spawnInterval      = lerpCurve(0.62, 0.38, 0.20, intensity);
+    const spawnInterval      = lerpCurve(0.60, 0.36, 0.19, intensity);
     const redRetreatDuration = Math.max(0.20, duckDuration);
     const maxSimultaneous    = (intensity < 0.28) ? 3 : ((intensity < 0.62) ? 4 : 5);
 
-    // Bomb spawn schedule: 18% -> 35% (cap 2) in first 45s, 50% -> 62% (cap 3) in final 45s
-    const isFirstHalf = elapsed <= 45.0;
+    // Bomb spawn schedule: 22% -> 42% (cap 2) in first 45s; 100% 1-in-2 pair guarantee in last 45s
+    const isFirstHalf = elapsed < 45.0;
     const p1 = isFirstHalf ? (elapsed / 45.0) : 1.0;
     const p2 = isFirstHalf ? 0.0 : ((elapsed - 45.0) / 45.0);
-    const bombProb = isFirstHalf ? lerp(0.18, 0.35, p1) : lerp(0.50, 0.62, p2);
-    const maxActiveBombs = isFirstHalf ? 2 : 3;
+    const bombProb = isFirstHalf ? lerp(0.22, 0.42, p1) : 1.0;
+    const maxActiveBombs = isFirstHalf ? 2 : Math.max(3, maxSimultaneous - 1);
 
     return {
         phase: isFirstHalf ? 1 : 2,
@@ -79,28 +79,28 @@ export const CONFIG = {
     PHASE_FINAL_END: 90.0,
 
     // Spawning Rates along Continuous Curve
-    SPAWN_INTERVAL_WARMUP: 0.62,
-    SPAWN_INTERVAL_MIDDLE: 0.38,
-    SPAWN_INTERVAL_PRESSURE: 0.26,
-    SPAWN_INTERVAL_FINAL: 0.20,
+    SPAWN_INTERVAL_WARMUP: 0.60,
+    SPAWN_INTERVAL_MIDDLE: 0.36,
+    SPAWN_INTERVAL_PRESSURE: 0.25,
+    SPAWN_INTERVAL_FINAL: 0.19,
 
-    // Disguised Bomb Probabilities (18% -> 35% Phase 1, 50% -> 62% Phase 2)
-    SAFE_PHASE_DURATION: 12.0,
-    BOMB_PROB_SAFE: 0.18,
-    BOMB_PROB_START: 0.18,
-    BOMB_PROB_MAX: 0.62,
-    BOMB_PROB_WARMUP: 0.18,
-    BOMB_PROB_MIDDLE: 0.35,
-    BOMB_PROB_PRESSURE: 0.50,
-    BOMB_PROB_FINAL: 0.62,
+    // Disguised Bomb Probabilities (6s safe phase; 22% -> 42% first 45s; 100% 1-in-2 last 45s)
+    SAFE_PHASE_DURATION: 6.0,
+    BOMB_PROB_SAFE: 0.22,
+    BOMB_PROB_START: 0.22,
+    BOMB_PROB_MAX: 1.0,
+    BOMB_PROB_WARMUP: 0.22,
+    BOMB_PROB_MIDDLE: 0.42,
+    BOMB_PROB_PRESSURE: 1.0,
+    BOMB_PROB_FINAL: 1.0,
 
     // Mole 3-Phase Smooth Eased Animation Timings (Clamped dt <= 0.05s)
     MOLE_PEEK_TIME: 0.22,         // Brisk initial pop-out
     MOLE_POP_DURATION: 0.22,      // Unified initial pop-out duration
-    MOLE_IDLE_WARMUP: 0.68,       // Initial hold
-    MOLE_IDLE_MIDDLE: 0.42,
-    MOLE_IDLE_PRESSURE: 0.28,
-    MOLE_IDLE_FINAL: 0.18,
+    MOLE_IDLE_WARMUP: 0.60,       // Initial hold
+    MOLE_IDLE_MIDDLE: 0.36,
+    MOLE_IDLE_PRESSURE: 0.24,
+    MOLE_IDLE_FINAL: 0.16,
     MOLE_DUCK_DURATION: 0.20,     // Brisk initial pop-in retreat
     MOLE_HIT_RETREAT_TIME: 0.20,
     MOLE_RED_EXPLODE_TIME: 0.42,

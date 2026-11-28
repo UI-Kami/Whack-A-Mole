@@ -431,10 +431,10 @@ export class GameManager {
             try { navigator.vibrate([80, 40, 80]); } catch (e) {}
         }
 
-        const safeCutoff = (this.totalDuration || 90.0) - (this.config.SAFE_PHASE_DURATION ?? 12.0); // > 78s = first 12s safe phase
+        const safeCutoff = (this.totalDuration || 90.0) - (this.config.SAFE_PHASE_DURATION ?? 6.0); // > 84s = first 6s safe phase
         const isSafePhase = this.gameTimeRemaining > safeCutoff;
 
-        // Safe Phase (first 12s, timeRemaining > 78): warning explosion & red retreat only!
+        // Safe Phase (first 6s, timeRemaining > 84): warning explosion & red retreat only!
         // Heart stays full (bombHitsInCycle = 0), no cooldown modal, and no time penalty.
         if (isSafePhase) {
             this.dispatchUIEvent('bombhit', {
@@ -448,7 +448,7 @@ export class GameManager {
             return;
         }
 
-        // Active Phase (timeRemaining <= 78): 2-Hit Heart Cycle (Full -> Half -> Empty -> Cooldown)
+        // Active Phase (timeRemaining <= 84): 2-Hit Heart Cycle (Full -> Half -> Empty -> Cooldown)
         this.bombHitsInCycle = Math.min(2, this.bombHitsInCycle + 1);
         this.heartCrackLevel = this.bombHitsInCycle;
 

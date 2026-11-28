@@ -100,6 +100,8 @@ export class MoleSpawner {
         this.warmupBomb2Spawned = false;
         this.lastBombHoleId = -1;
         this.totalBombsSpawned = 0;
+        this.phase2Entered = false;
+        this.phase2NextIsBomb = true;
         this.lastMissWasBallAttack = false;
         this.speedFactor = 1.9;
         this.pacingCurve = computePacingCurve(0, 0);
@@ -275,6 +277,8 @@ export class MoleSpawner {
         this.warmupBomb2Spawned = false;
         this.lastBombHoleId = -1;
         this.totalBombsSpawned = 0;
+        this.phase2Entered = false;
+        this.phase2NextIsBomb = true;
         this.lastMissWasBallAttack = false;
         this.speedFactor = 1.9;
         this.pacingCurve = computePacingCurve(0, 0);
@@ -316,6 +320,38 @@ export class MoleSpawner {
         }
     }
 
+    pickHoleForSpawn(availableHoles, isBomb) {
+        if (!isBomb) {
+            return availableHoles[Math.floor(Math.random() * availableHoles.length)];
+        }
+        const nonRepeat = availableHoles.filter(h => !h.lastSpawnWasBomb && h.id !== this.lastBombHoleId);
+        if (nonRepeat.length > 0) {
+            return nonRepeat[Math.floor(Math.random() * nonRepeat.length)];
+        }
+        const notSameHole = availableHoles.filter(h => h.id !== this.lastBombHoleId);
+        if (notSameHole.length > 0) {
+            return notSameHole[Math.floor(Math.random() * notSameHole.length)];
+        }
+        return availableHoles[Math.floor(Math.random() * availableHoles.length)];
+    }
+
+    spawnCharacterInHole(hole, isBomb, curve, missTempoScale, holdMinMult = 0.95) {
+        const holdDur = curve.holdDuration * (holdMinMult + Math.random() * 0.10);
+        hole.mole.spawn(isBomb, holdDur, {
+            popDuration: curve.popDuration,
+            holdDuration: holdDur,
+            duckDuration: curve.duckDuration,
+            redRetreatDuration: curve.redRetreatDuration,
+            missTempoScale
+        });
+        hole.lastSpawnWasBomb = isBomb;
+        if (isBomb) {
+            this.lastBombHoleId = hole.id;
+            this.totalBombsSpawned++;
+        }
+        return hole;
+    }
+
     attemptSpawn() {
         const time = this.elapsedTimeline;
         const cachedCurve = this.pacingCurve;
@@ -339,69 +375,70 @@ export class MoleSpawner {
 
         const activeBombs = activeMoles.filter(h => h.mole.isBomb).length;
         const activeNormals = activeMoles.length - activeBombs;
-        const maxSimultaneousBombs = curve.maxActiveBombs ?? ((time < 45.0) ? 2 : 3);
+        const isLast45s = time >= 45.0;
+        const maxSimultaneousBombs = curve.maxActiveBombs ?? (isLast45s ? Math.max(3, maxSimultaneous - 1) : 2);
+        // Keep wind-up Frames 1-3 within ~0.34s-0.38s (0.34s-0.42s) throughout the entire round
+        const missTempoScale = Math.max(0.90, Math.min(1.0, 1.0 - 0.10 * (curve.intensity || 0)));
 
-        // Bombs spawn from t=0: 18% -> 35% in Phase 1 (max 2), jumping to 50% -> 62% in Phase 2 (max 3)
-        const currentBombProb = curve.bombProb ?? ((time <= 45.0) ? 0.18 : 0.50);
-        let shouldSpawnBomb = Math.random() < currentBombProb;
+        let shouldSpawnBomb = false;
+        let forcePairGreen = false;
 
-        // Anti-flood & normal target prioritization guards:
-        // 1. Cap simultaneous active bombs (max 2 in first 45s, max 3 in final 45s)
-        if (activeBombs >= maxSimultaneousBombs) {
-            shouldSpawnBomb = false;
-        }
-        // 2. Ensure at least 1-2 normal green hittable targets remain on screen alongside bombs
-        if (activeMoles.length >= 1 && activeNormals < 1) {
-            shouldSpawnBomb = false;
-        } else if (maxSimultaneous >= 4 && activeMoles.length >= 2 && activeNormals < 2) {
-            shouldSpawnBomb = false;
-        }
-
-        // 3. Prevent back-to-back bomb spawns in the same hole
-        let candidateHoles = availableHoles;
-        if (shouldSpawnBomb) {
-            const nonRepeatHoles = availableHoles.filter(h => !h.lastSpawnWasBomb && h.id !== this.lastBombHoleId);
-            if (nonRepeatHoles.length > 0) {
-                candidateHoles = nonRepeatHoles;
+        if (isLast45s) {
+            // Last 45s: 100% bomb chance — every 2 characters popping must include 1 bomb
+            if (!this.phase2Entered || activeMoles.length === 0) {
+                this.phase2Entered = true;
+                this.phase2NextIsBomb = true;
+            }
+            if (this.phase2NextIsBomb) {
+                if (activeBombs >= maxSimultaneousBombs) {
+                    // Briefly defer rather than breaking the 1-in-2 bomb guarantee with 2 consecutive greens
+                    this.spawnTimer = Math.min(this.spawnTimer, 0.08);
+                    return;
+                }
+                shouldSpawnBomb = true;
+                const freeSlots = maxSimultaneous - activeMoles.length;
+                if (activeNormals === 0 && freeSlots >= 2 && availableHoles.length >= 2) {
+                    forcePairGreen = true;
+                    this.phase2NextIsBomb = true;
+                } else {
+                    this.phase2NextIsBomb = false;
+                }
             } else {
                 shouldSpawnBomb = false;
+                this.phase2NextIsBomb = true;
+            }
+        } else {
+            // First 45s: progressive bomb schedule (22% -> 42%, cap 2), keeping >=1-2 normal targets available
+            this.phase2Entered = false;
+            this.phase2NextIsBomb = true;
+            const currentBombProb = curve.bombProb ?? 0.22;
+            shouldSpawnBomb = Math.random() < currentBombProb;
+
+            if (activeBombs >= maxSimultaneousBombs) {
+                shouldSpawnBomb = false;
+            }
+            if (activeMoles.length >= 1 && activeNormals < 1) {
+                shouldSpawnBomb = false;
+            } else if (maxSimultaneous >= 4 && activeMoles.length >= 2 && activeNormals < 2) {
+                shouldSpawnBomb = false;
+            }
+            if (shouldSpawnBomb && !availableHoles.some(h => !h.lastSpawnWasBomb && h.id !== this.lastBombHoleId)) {
+                shouldSpawnBomb = false;
+            }
+            if (shouldSpawnBomb && activeNormals === 0 && (activeMoles.length + 1) < maxSimultaneous && availableHoles.length >= 2) {
+                forcePairGreen = true;
             }
         }
 
-        const chosenHole = candidateHoles[Math.floor(Math.random() * candidateHoles.length)];
-        const jitterHold = curve.holdDuration * (0.95 + Math.random() * 0.10);
-        // Keep wind-up Frames 1-3 within ~0.34s-0.38s (0.34s-0.42s) throughout the entire round
-        const missTempoScale = Math.max(0.90, Math.min(1.0, 1.0 - 0.10 * (curve.intensity || 0)));
-        const timings = {
-            popDuration: curve.popDuration,
-            holdDuration: jitterHold,
-            duckDuration: curve.duckDuration,
-            redRetreatDuration: curve.redRetreatDuration,
-            missTempoScale
-        };
+        const chosenHole = this.pickHoleForSpawn(availableHoles, shouldSpawnBomb);
+        this.spawnCharacterInHole(chosenHole, shouldSpawnBomb, curve, missTempoScale, 0.95);
 
-        chosenHole.mole.spawn(shouldSpawnBomb, jitterHold, timings);
-        chosenHole.lastSpawnWasBomb = shouldSpawnBomb;
-
-        if (shouldSpawnBomb) {
-            this.lastBombHoleId = chosenHole.id;
-            this.totalBombsSpawned++;
-
-            // Pair any bomb spawn with a hittable normal target nearby so skilled players stay supplied with hits
-            if (activeNormals === 0 && (activeMoles.length + 1) < maxSimultaneous && availableHoles.length >= 2) {
-                const partnerPool = availableHoles.filter(h => h.id !== chosenHole.id);
-                if (partnerPool.length > 0) {
-                    const partnerHole = partnerPool[Math.floor(Math.random() * partnerPool.length)];
-                    const partnerHold = curve.holdDuration * (0.96 + Math.random() * 0.10);
-                    partnerHole.mole.spawn(false, partnerHold, {
-                        popDuration: curve.popDuration,
-                        holdDuration: partnerHold,
-                        duckDuration: curve.duckDuration,
-                        redRetreatDuration: curve.redRetreatDuration,
-                        missTempoScale
-                    });
-                    partnerHole.lastSpawnWasBomb = false;
-                }
+        // Pair bomb spawn with a hittable normal target nearby so skilled players stay supplied with hits
+        if (forcePairGreen) {
+            const partnerPool = availableHoles.filter(h => h.id !== chosenHole.id);
+            if (partnerPool.length > 0) {
+                const partnerHole = partnerPool[Math.floor(Math.random() * partnerPool.length)];
+                this.spawnCharacterInHole(partnerHole, false, curve, missTempoScale, 0.96);
             }
         }
 
