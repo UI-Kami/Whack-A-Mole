@@ -410,6 +410,12 @@ html, body {
     -webkit-backdrop-filter: blur(16px);
 }
 
+#lose-modal.modal-overlay {
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    transition: opacity 0.20s ease-out;
+}
+
 /* =====================================================================
    COOL-DOWN OVERLAY REDESIGN: Warm Frosted Blur + Larger English Window Asset
    Zero Continue/OK button; auto-dismisses after 3.0s while 1:30 timer ticks!
@@ -558,14 +564,88 @@ html, body {
     background: transparent;
 }
 
-/* Lose 2-Step Finale: Slide 1 Mystery Box + YOU LOSE -> Slide 2 THE REAL PUNCHLINE */
+/* Lose Interactive Mystery Box -> Step 1 ("YOU LOSE" + clip) -> Step 2 (Standalone Quote + Restart) */
+.lose-step1-wrap {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+}
+
+.lose-mystery-btn {
+    background: transparent;
+    border: none;
+    padding: 8px 16px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    outline: none;
+    pointer-events: auto;
+    transition: transform 0.16s cubic-bezier(0.22, 1.3, 0.36, 1);
+}
+
+.lose-mystery-btn:not(.opened):hover {
+    transform: scale(1.05);
+}
+
+.lose-mystery-btn:not(.opened):active {
+    transform: scale(0.95);
+}
+
+.lose-mystery-btn.opened {
+    cursor: default;
+    pointer-events: none;
+}
+
 .lose-hero-transparent {
-    height: 146px;
+    height: 184px;
     width: auto;
     object-fit: contain;
     image-rendering: pixelated;
     image-rendering: crisp-edges;
-    filter: drop-shadow(0 10px 24px rgba(239, 68, 68, 0.35)) drop-shadow(0 8px 16px rgba(20, 20, 22, 0.25));
+    filter: drop-shadow(0 12px 26px rgba(250, 204, 21, 0.45)) drop-shadow(0 8px 18px rgba(20, 20, 22, 0.28));
+}
+
+.lose-tap-prompt {
+    display: inline-block;
+    background: rgba(255, 255, 255, 0.96);
+    border: 3px solid var(--text-dark);
+    border-radius: 9999px;
+    padding: 8px 22px;
+    font-family: var(--font-en);
+    font-size: clamp(13px, 1.8vw, 17px);
+    font-weight: 900;
+    letter-spacing: 0.04em;
+    color: var(--text-dark);
+    box-shadow: 3px 3px 0px var(--text-dark);
+    animation: tapPromptPulse 1.1s ease-in-out infinite alternate;
+}
+
+@keyframes loseBoxPopIn {
+    0% { opacity: 0; transform: scale(0.45) translateY(28px); }
+    65% { opacity: 1; transform: scale(1.09) translateY(-6px); }
+    100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes loseBoxIdlePulse {
+    0% { transform: scale(1) translateY(0); }
+    100% { transform: scale(1.05) translateY(-7px); }
+}
+
+@keyframes loseBoxBurstOpen {
+    0% { transform: scale(0.92) rotate(-5deg); filter: drop-shadow(0 0 28px rgba(250, 204, 21, 0.9)); }
+    45% { transform: scale(1.16) rotate(4deg); filter: drop-shadow(0 0 36px rgba(239, 68, 68, 0.72)); }
+    100% { transform: scale(1.0) rotate(0deg); filter: drop-shadow(0 10px 24px rgba(239, 68, 68, 0.35)) drop-shadow(0 8px 16px rgba(20, 20, 22, 0.25)); }
+}
+
+@keyframes tapPromptPulse {
+    0% { transform: scale(1); }
+    100% { transform: scale(1.06); }
 }
 
 .lose-slide-stage {
@@ -770,20 +850,20 @@ html, body {
 #win-modal:not(.show) .win-glass-box,
 #win-modal:not(.show) #win-pb-box,
 #win-modal:not(.show) #btn-win-restart,
-#lose-modal:not(.show) #lose-hero-img,
+#lose-modal:not(.show) #lose-step1-wrap,
 #lose-modal:not(.show) .lose-slide-stage,
 #lose-modal:not(.show) #btn-lose-restart {
     opacity: 0;
 }
 
-#lose-modal.show #lose-hero-img {
+#lose-modal.show #lose-mystery-box:not(.opened) #lose-hero-img {
     animation:
-        winHeroEnter 0.45s cubic-bezier(0.22, 1.3, 0.36, 1) 0.04s both,
-        winHeroFloat 3.0s ease-in-out 0.55s infinite alternate;
+        loseBoxPopIn 0.48s cubic-bezier(0.22, 1.35, 0.36, 1) both,
+        loseBoxIdlePulse 1.55s ease-in-out 0.50s infinite alternate;
 }
 
-#lose-modal.show .lose-slide-stage {
-    animation: winCardRise 0.38s cubic-bezier(0.16, 1, 0.3, 1) 0.12s both;
+#lose-modal.show #lose-mystery-box.opened #lose-hero-img {
+    animation: loseBoxBurstOpen 0.45s cubic-bezier(0.22, 1.35, 0.36, 1) both;
 }
 
 /* Celebratory & Uplifting Win Choreography */
@@ -1535,14 +1615,19 @@ html, body {
             <div id="lose-cascade-layer" class="lose-cascade-layer"></div>
         </div>
 
-        <!-- Lose Two-Step Finale Overlay (Slide 1: Mystery Box YOU LOSE + Random Clip -> Slide 2: Standalone Sentence) -->
+        <!-- Lose Two-Step Mystery Box Finale (#lose-modal: Closed Box Tap -> Opened YOU LOSE + Clip -> Standalone Quote + Restart) -->
         <div id="lose-modal" class="modal-overlay" role="dialog" aria-modal="true">
             <div class="sequence-transparent-wrap">
-                <img id="lose-hero-img" class="lose-hero-transparent" src="" alt="Mystery Box" />
-                <div id="lose-slide-stage" class="lose-slide-stage">
-                    <div id="lose-slide-1" class="win-glass-box lose-slide1-card lose-slide-card">
+                <div id="lose-step1-wrap" class="lose-step1-wrap lose-slide-card">
+                    <button id="lose-mystery-box" type="button" class="lose-mystery-btn" aria-label="Open Mystery Box" title="Tap to Open">
+                        <img id="lose-hero-img" class="lose-hero-transparent" src="" alt="Mystery Box" />
+                        <span id="lose-tap-prompt" class="lose-tap-prompt font-en">TAP TO OPEN</span>
+                    </button>
+                    <div id="lose-slide-1" class="win-glass-box lose-slide1-card lose-slide-card" style="display:none;">
                         <h2 id="lose-slide1-title" class="sequence-title red">YOU LOSE</h2>
                     </div>
+                </div>
+                <div id="lose-slide-stage" class="lose-slide-stage">
                     <div id="lose-slide-2" class="lose-error-frame lose-slide-card" style="display:none;">
                         <img id="lose-window-img" class="cooldown-error-bg" src="" alt="Error Window" />
                         <div class="lose-error-inner">
@@ -1759,7 +1844,8 @@ const CONFIG = {
     FACTS: [],
 
     FINAL_END_MESSAGE: "Nobody means to hurt anyone. Somebody always gets hurt. That's how a joke works.",
-    LOSE_CLIP_KEYS: ['loseAudio1', 'loseAudio2', 'doraAudio'],
+    LOSE_CLIP_KEYS: ['doraAudio', 'loseAudio1', 'loseAudio2'],
+    LOSE_BOX_AUTO_OPEN_MS: 3000,
     LOSE_SLIDE_FALLBACK_MS: 4000,
 
     // End-of-Game Lose & Win Standalone Final Reflection Sentence (rendered with no header/title)
@@ -6969,6 +7055,9 @@ class GameManager {
     const loseCascadeLayer = document.getElementById('lose-cascade-layer');
 
     const loseModal = document.getElementById('lose-modal');
+    const loseStep1Wrap = document.getElementById('lose-step1-wrap');
+    const loseMysteryBox = document.getElementById('lose-mystery-box');
+    const loseTapPrompt = document.getElementById('lose-tap-prompt');
     const loseHeroImg = document.getElementById('lose-hero-img');
     const loseSlide1 = document.getElementById('lose-slide-1');
     const loseSlide2 = document.getElementById('lose-slide-2');
@@ -7448,10 +7537,31 @@ class GameManager {
         }
     }
 
+    let activeLoseBoxOpener = null;
+    if (loseMysteryBox) {
+        loseMysteryBox.addEventListener('click', () => {
+            if (activeLoseBoxOpener) activeLoseBoxOpener();
+        });
+    }
+
     function resetLoseSlidesState() {
+        if (loseStep1Wrap) {
+            loseStep1Wrap.classList.remove('slide-out', 'slide-enter');
+            loseStep1Wrap.style.display = 'flex';
+        }
+        if (loseMysteryBox) {
+            loseMysteryBox.classList.remove('opened');
+            loseMysteryBox.disabled = false;
+        }
+        if (loseHeroImg && typeof ASSETS_DATA !== 'undefined') {
+            loseHeroImg.src = ASSETS_DATA.mysteryClosed || ASSETS_DATA.mysteryOpen;
+        }
+        if (loseTapPrompt) {
+            loseTapPrompt.style.display = 'inline-block';
+        }
         if (loseSlide1) {
             loseSlide1.classList.remove('slide-out', 'slide-enter');
-            loseSlide1.style.display = 'flex';
+            loseSlide1.style.display = 'none';
         }
         if (loseSlide2) {
             loseSlide2.classList.remove('slide-out', 'slide-enter');
@@ -7465,6 +7575,7 @@ class GameManager {
 
     function clearLoseCrashSequence(preserveActiveAudio = false) {
         loseSequenceToken++;
+        activeLoseBoxOpener = null;
         for (let i = 0; i < loseCrashTimers.length; i++) {
             clearTimeout(loseCrashTimers[i]);
         }
@@ -7502,7 +7613,7 @@ class GameManager {
         return pts;
     }
 
-    // Lose End Sequence: Stage 1 Loading -> Stage 2 EROR! Cascade -> #lose-modal Slide 1 ("YOU LOSE" + audio) -> Slide 2 (Standalone Sentence)
+    // Lose End Sequence: Immediate #lose-modal with Closed Mystery Box ("TAP TO OPEN") -> Open ("YOU LOSE" + random voice clip) -> Slide 2 (Standalone Quote + Restart)
     window.addEventListener('gamelose', (e) => {
         const detail = (e && e.detail) ? e.detail : {};
         const msg = detail.message || CONFIG.FINAL_END_MESSAGE || "Nobody means to hurt anyone. Somebody always gets hurt. That's how a joke works.";
@@ -7514,6 +7625,7 @@ class GameManager {
         closeModal(pauseModal, true);
 
         const myToken = loseSequenceToken;
+        let boxOpened = false;
         let slide2ScheduledOrStarted = false;
 
         const transitionToLoseSlide2 = (delayMs = 0) => {
@@ -7521,12 +7633,16 @@ class GameManager {
             slide2ScheduledOrStarted = true;
             const runDissolve = () => {
                 if (myToken !== loseSequenceToken) return;
-                if (loseSlide1) loseSlide1.classList.add('slide-out');
+                if (loseStep1Wrap) loseStep1Wrap.classList.add('slide-out');
                 loseCrashTimers.push(setTimeout(() => {
                     if (myToken !== loseSequenceToken) return;
+                    if (loseStep1Wrap) {
+                        loseStep1Wrap.style.display = 'none';
+                        loseStep1Wrap.classList.remove('slide-out');
+                    }
                     if (loseSlide1) {
                         loseSlide1.style.display = 'none';
-                        loseSlide1.classList.remove('slide-out');
+                        loseSlide1.classList.remove('slide-enter');
                     }
                     if (loseTitle) {
                         loseTitle.textContent = '';
@@ -7554,71 +7670,52 @@ class GameManager {
             }
         };
 
-        // Stage 1: Animated magenta-header "Loading..." bar (0% -> 75% with 120ms stutter -> 100% over ~0.9s)
-        openModal(loseCrashOverlay, () => {
-            initLoadingTrackSegments();
-            setLoadingProgressSegments(0);
-            if (loseCascadeLayer) loseCascadeLayer.innerHTML = '';
-            if (loseLoadingBox) loseLoadingBox.style.display = 'block';
-        });
+        const openLoseMysteryBox = () => {
+            if (boxOpened || myToken !== loseSequenceToken) return;
+            boxOpened = true;
+            activeLoseBoxOpener = null;
 
-        for (let s = 1; s <= 12; s++) {
-            const delayMs = s * 48; // 48ms..576ms -> hits 75% (12/16)
-            loseCrashTimers.push(setTimeout(() => setLoadingProgressSegments(s), delayMs));
-        }
-        // ~120ms retro stutter at 75% (576ms -> 700ms), then snap rapidly to 100% (16/16) by ~860ms
-        for (let s = 13; s <= LOSE_LOADING_SEGMENTS; s++) {
-            const delayMs = 700 + (s - 12) * 38; // 738ms..852ms
-            loseCrashTimers.push(setTimeout(() => setLoadingProgressSegments(s), delayMs));
-        }
-
-        // Stage 2: Launch XP-style cascading "EROR!" windows (~32 windows @ 32ms intervals = ~1.05s)
-        const stage2Start = 900;
-        const totalStamps = 32;
-        const stampStepMs = 32;
-        const cascadePts = buildErorCascadePoints(totalStamps);
-        const erorSrc = (typeof ASSETS_DATA !== 'undefined')
-            ? (ASSETS_DATA.singleErrorWindow || ASSETS_DATA.windowErrorCascade)
-            : '';
-
-        loseCrashTimers.push(setTimeout(() => {
-            if (loseLoadingBox) loseLoadingBox.style.display = 'none';
-            for (let i = 0; i < totalStamps; i++) {
-                loseCrashTimers.push(setTimeout(() => {
-                    if (!loseCascadeLayer || !erorSrc) return;
-                    const stamp = document.createElement('img');
-                    stamp.src = erorSrc;
-                    stamp.alt = 'EROR!';
-                    stamp.className = 'lose-cascade-stamp';
-                    stamp.style.left = `${cascadePts[i].x.toFixed(1)}%`;
-                    stamp.style.top = `${cascadePts[i].y.toFixed(1)}%`;
-                    stamp.style.zIndex = String(10 + i);
-                    loseCascadeLayer.appendChild(stamp);
-                }, i * stampStepMs));
+            if (loseHeroImg && typeof ASSETS_DATA !== 'undefined') {
+                loseHeroImg.src = ASSETS_DATA.mysteryOpen || ASSETS_DATA.mysteryClosed;
             }
-        }, stage2Start));
+            if (loseMysteryBox) {
+                loseMysteryBox.classList.add('opened');
+                loseMysteryBox.disabled = true;
+            }
+            if (loseTapPrompt) {
+                loseTapPrompt.style.display = 'none';
+            }
+            if (loseSlide1) {
+                loseSlide1.style.display = 'flex';
+                loseSlide1.classList.remove('slide-enter');
+                void loseSlide1.offsetWidth;
+                loseSlide1.classList.add('slide-enter');
+            }
+            if (btnLoseRestart) {
+                btnLoseRestart.style.display = 'none';
+            }
 
-        // Stage 3 -> Slide 1: Mystery Box + "YOU LOSE" + random lose audio clip (no Restart button yet)
-        const stage3Start = stage2Start + totalStamps * stampStepMs + 60; // ~1984ms
-        loseCrashTimers.push(setTimeout(() => {
+            const fallbackMs = CONFIG.LOSE_SLIDE_FALLBACK_MS || 4000;
+            if (game && game.audioManager && game.audioManager.playClip) {
+                game.audioManager.playClip(loseClipKey, {
+                    onEnded: () => transitionToLoseSlide2(0),
+                    onFallback: () => transitionToLoseSlide2(fallbackMs)
+                });
+            } else {
+                transitionToLoseSlide2(fallbackMs);
+            }
+        };
+
+        activeLoseBoxOpener = openLoseMysteryBox;
+
+        openModal(loseModal, () => {
             if (myToken !== loseSequenceToken) return;
-            openModal(loseModal, () => {
-                if (myToken !== loseSequenceToken) return;
-                resetLoseSlidesState();
-                if (loseHeroImg && typeof ASSETS_DATA !== 'undefined') {
-                    loseHeroImg.src = ASSETS_DATA.mysteryClosed || ASSETS_DATA.mysteryOpen;
-                }
-                const fallbackMs = CONFIG.LOSE_SLIDE_FALLBACK_MS || 4000;
-                if (game && game.audioManager && game.audioManager.playClip) {
-                    game.audioManager.playClip(loseClipKey, {
-                        onEnded: () => transitionToLoseSlide2(0),
-                        onFallback: () => transitionToLoseSlide2(fallbackMs)
-                    });
-                } else {
-                    transitionToLoseSlide2(fallbackMs);
-                }
-            });
-        }, stage3Start));
+            resetLoseSlidesState();
+            const autoOpenMs = CONFIG.LOSE_BOX_AUTO_OPEN_MS || 3000;
+            loseCrashTimers.push(setTimeout(() => {
+                openLoseMysteryBox();
+            }, autoOpenMs));
+        });
     });
 
     if (btnLoseRestart) {

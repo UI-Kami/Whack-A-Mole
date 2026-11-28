@@ -185,14 +185,19 @@ $middleHtml = @'
             <div id="lose-cascade-layer" class="lose-cascade-layer"></div>
         </div>
 
-        <!-- Lose Two-Step Finale Overlay (Slide 1: Mystery Box YOU LOSE + Random Clip -> Slide 2: Standalone Sentence) -->
+        <!-- Lose Two-Step Mystery Box Finale (#lose-modal: Closed Box Tap -> Opened YOU LOSE + Clip -> Standalone Quote + Restart) -->
         <div id="lose-modal" class="modal-overlay" role="dialog" aria-modal="true">
             <div class="sequence-transparent-wrap">
-                <img id="lose-hero-img" class="lose-hero-transparent" src="" alt="Mystery Box" />
-                <div id="lose-slide-stage" class="lose-slide-stage">
-                    <div id="lose-slide-1" class="win-glass-box lose-slide1-card lose-slide-card">
+                <div id="lose-step1-wrap" class="lose-step1-wrap lose-slide-card">
+                    <button id="lose-mystery-box" type="button" class="lose-mystery-btn" aria-label="Open Mystery Box" title="Tap to Open">
+                        <img id="lose-hero-img" class="lose-hero-transparent" src="" alt="Mystery Box" />
+                        <span id="lose-tap-prompt" class="lose-tap-prompt font-en">TAP TO OPEN</span>
+                    </button>
+                    <div id="lose-slide-1" class="win-glass-box lose-slide1-card lose-slide-card" style="display:none;">
                         <h2 id="lose-slide1-title" class="sequence-title red">YOU LOSE</h2>
                     </div>
+                </div>
+                <div id="lose-slide-stage" class="lose-slide-stage">
                     <div id="lose-slide-2" class="lose-error-frame lose-slide-card" style="display:none;">
                         <img id="lose-window-img" class="cooldown-error-bg" src="" alt="Error Window" />
                         <div class="lose-error-inner">
@@ -304,6 +309,9 @@ $uiWiring = @'
     const loseCascadeLayer = document.getElementById('lose-cascade-layer');
 
     const loseModal = document.getElementById('lose-modal');
+    const loseStep1Wrap = document.getElementById('lose-step1-wrap');
+    const loseMysteryBox = document.getElementById('lose-mystery-box');
+    const loseTapPrompt = document.getElementById('lose-tap-prompt');
     const loseHeroImg = document.getElementById('lose-hero-img');
     const loseSlide1 = document.getElementById('lose-slide-1');
     const loseSlide2 = document.getElementById('lose-slide-2');
@@ -783,10 +791,31 @@ $uiWiring = @'
         }
     }
 
+    let activeLoseBoxOpener = null;
+    if (loseMysteryBox) {
+        loseMysteryBox.addEventListener('click', () => {
+            if (activeLoseBoxOpener) activeLoseBoxOpener();
+        });
+    }
+
     function resetLoseSlidesState() {
+        if (loseStep1Wrap) {
+            loseStep1Wrap.classList.remove('slide-out', 'slide-enter');
+            loseStep1Wrap.style.display = 'flex';
+        }
+        if (loseMysteryBox) {
+            loseMysteryBox.classList.remove('opened');
+            loseMysteryBox.disabled = false;
+        }
+        if (loseHeroImg && typeof ASSETS_DATA !== 'undefined') {
+            loseHeroImg.src = ASSETS_DATA.mysteryClosed || ASSETS_DATA.mysteryOpen;
+        }
+        if (loseTapPrompt) {
+            loseTapPrompt.style.display = 'inline-block';
+        }
         if (loseSlide1) {
             loseSlide1.classList.remove('slide-out', 'slide-enter');
-            loseSlide1.style.display = 'flex';
+            loseSlide1.style.display = 'none';
         }
         if (loseSlide2) {
             loseSlide2.classList.remove('slide-out', 'slide-enter');
@@ -800,6 +829,7 @@ $uiWiring = @'
 
     function clearLoseCrashSequence(preserveActiveAudio = false) {
         loseSequenceToken++;
+        activeLoseBoxOpener = null;
         for (let i = 0; i < loseCrashTimers.length; i++) {
             clearTimeout(loseCrashTimers[i]);
         }
@@ -837,7 +867,7 @@ $uiWiring = @'
         return pts;
     }
 
-    // Lose End Sequence: Stage 1 Loading -> Stage 2 EROR! Cascade -> #lose-modal Slide 1 ("YOU LOSE" + audio) -> Slide 2 (Standalone Sentence)
+    // Lose End Sequence: Immediate #lose-modal with Closed Mystery Box ("TAP TO OPEN") -> Open ("YOU LOSE" + random voice clip) -> Slide 2 (Standalone Quote + Restart)
     window.addEventListener('gamelose', (e) => {
         const detail = (e && e.detail) ? e.detail : {};
         const msg = detail.message || CONFIG.FINAL_END_MESSAGE || "Nobody means to hurt anyone. Somebody always gets hurt. That's how a joke works.";
@@ -849,6 +879,7 @@ $uiWiring = @'
         closeModal(pauseModal, true);
 
         const myToken = loseSequenceToken;
+        let boxOpened = false;
         let slide2ScheduledOrStarted = false;
 
         const transitionToLoseSlide2 = (delayMs = 0) => {
@@ -856,12 +887,16 @@ $uiWiring = @'
             slide2ScheduledOrStarted = true;
             const runDissolve = () => {
                 if (myToken !== loseSequenceToken) return;
-                if (loseSlide1) loseSlide1.classList.add('slide-out');
+                if (loseStep1Wrap) loseStep1Wrap.classList.add('slide-out');
                 loseCrashTimers.push(setTimeout(() => {
                     if (myToken !== loseSequenceToken) return;
+                    if (loseStep1Wrap) {
+                        loseStep1Wrap.style.display = 'none';
+                        loseStep1Wrap.classList.remove('slide-out');
+                    }
                     if (loseSlide1) {
                         loseSlide1.style.display = 'none';
-                        loseSlide1.classList.remove('slide-out');
+                        loseSlide1.classList.remove('slide-enter');
                     }
                     if (loseTitle) {
                         loseTitle.textContent = '';
@@ -889,71 +924,52 @@ $uiWiring = @'
             }
         };
 
-        // Stage 1: Animated magenta-header "Loading..." bar (0% -> 75% with 120ms stutter -> 100% over ~0.9s)
-        openModal(loseCrashOverlay, () => {
-            initLoadingTrackSegments();
-            setLoadingProgressSegments(0);
-            if (loseCascadeLayer) loseCascadeLayer.innerHTML = '';
-            if (loseLoadingBox) loseLoadingBox.style.display = 'block';
-        });
+        const openLoseMysteryBox = () => {
+            if (boxOpened || myToken !== loseSequenceToken) return;
+            boxOpened = true;
+            activeLoseBoxOpener = null;
 
-        for (let s = 1; s <= 12; s++) {
-            const delayMs = s * 48; // 48ms..576ms -> hits 75% (12/16)
-            loseCrashTimers.push(setTimeout(() => setLoadingProgressSegments(s), delayMs));
-        }
-        // ~120ms retro stutter at 75% (576ms -> 700ms), then snap rapidly to 100% (16/16) by ~860ms
-        for (let s = 13; s <= LOSE_LOADING_SEGMENTS; s++) {
-            const delayMs = 700 + (s - 12) * 38; // 738ms..852ms
-            loseCrashTimers.push(setTimeout(() => setLoadingProgressSegments(s), delayMs));
-        }
-
-        // Stage 2: Launch XP-style cascading "EROR!" windows (~32 windows @ 32ms intervals = ~1.05s)
-        const stage2Start = 900;
-        const totalStamps = 32;
-        const stampStepMs = 32;
-        const cascadePts = buildErorCascadePoints(totalStamps);
-        const erorSrc = (typeof ASSETS_DATA !== 'undefined')
-            ? (ASSETS_DATA.singleErrorWindow || ASSETS_DATA.windowErrorCascade)
-            : '';
-
-        loseCrashTimers.push(setTimeout(() => {
-            if (loseLoadingBox) loseLoadingBox.style.display = 'none';
-            for (let i = 0; i < totalStamps; i++) {
-                loseCrashTimers.push(setTimeout(() => {
-                    if (!loseCascadeLayer || !erorSrc) return;
-                    const stamp = document.createElement('img');
-                    stamp.src = erorSrc;
-                    stamp.alt = 'EROR!';
-                    stamp.className = 'lose-cascade-stamp';
-                    stamp.style.left = `${cascadePts[i].x.toFixed(1)}%`;
-                    stamp.style.top = `${cascadePts[i].y.toFixed(1)}%`;
-                    stamp.style.zIndex = String(10 + i);
-                    loseCascadeLayer.appendChild(stamp);
-                }, i * stampStepMs));
+            if (loseHeroImg && typeof ASSETS_DATA !== 'undefined') {
+                loseHeroImg.src = ASSETS_DATA.mysteryOpen || ASSETS_DATA.mysteryClosed;
             }
-        }, stage2Start));
+            if (loseMysteryBox) {
+                loseMysteryBox.classList.add('opened');
+                loseMysteryBox.disabled = true;
+            }
+            if (loseTapPrompt) {
+                loseTapPrompt.style.display = 'none';
+            }
+            if (loseSlide1) {
+                loseSlide1.style.display = 'flex';
+                loseSlide1.classList.remove('slide-enter');
+                void loseSlide1.offsetWidth;
+                loseSlide1.classList.add('slide-enter');
+            }
+            if (btnLoseRestart) {
+                btnLoseRestart.style.display = 'none';
+            }
 
-        // Stage 3 -> Slide 1: Mystery Box + "YOU LOSE" + random lose audio clip (no Restart button yet)
-        const stage3Start = stage2Start + totalStamps * stampStepMs + 60; // ~1984ms
-        loseCrashTimers.push(setTimeout(() => {
+            const fallbackMs = CONFIG.LOSE_SLIDE_FALLBACK_MS || 4000;
+            if (game && game.audioManager && game.audioManager.playClip) {
+                game.audioManager.playClip(loseClipKey, {
+                    onEnded: () => transitionToLoseSlide2(0),
+                    onFallback: () => transitionToLoseSlide2(fallbackMs)
+                });
+            } else {
+                transitionToLoseSlide2(fallbackMs);
+            }
+        };
+
+        activeLoseBoxOpener = openLoseMysteryBox;
+
+        openModal(loseModal, () => {
             if (myToken !== loseSequenceToken) return;
-            openModal(loseModal, () => {
-                if (myToken !== loseSequenceToken) return;
-                resetLoseSlidesState();
-                if (loseHeroImg && typeof ASSETS_DATA !== 'undefined') {
-                    loseHeroImg.src = ASSETS_DATA.mysteryClosed || ASSETS_DATA.mysteryOpen;
-                }
-                const fallbackMs = CONFIG.LOSE_SLIDE_FALLBACK_MS || 4000;
-                if (game && game.audioManager && game.audioManager.playClip) {
-                    game.audioManager.playClip(loseClipKey, {
-                        onEnded: () => transitionToLoseSlide2(0),
-                        onFallback: () => transitionToLoseSlide2(fallbackMs)
-                    });
-                } else {
-                    transitionToLoseSlide2(fallbackMs);
-                }
-            });
-        }, stage3Start));
+            resetLoseSlidesState();
+            const autoOpenMs = CONFIG.LOSE_BOX_AUTO_OPEN_MS || 3000;
+            loseCrashTimers.push(setTimeout(() => {
+                openLoseMysteryBox();
+            }, autoOpenMs));
+        });
     });
 
     if (btnLoseRestart) {

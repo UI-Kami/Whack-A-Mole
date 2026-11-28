@@ -150,7 +150,8 @@ export const CONFIG = {
     FACTS: [],
 
     FINAL_END_MESSAGE: "Nobody means to hurt anyone. Somebody always gets hurt. That's how a joke works.",
-    LOSE_CLIP_KEYS: ['loseAudio1', 'loseAudio2', 'doraAudio'],
+    LOSE_CLIP_KEYS: ['doraAudio', 'loseAudio1', 'loseAudio2'],
+    LOSE_BOX_AUTO_OPEN_MS: 3000,
     LOSE_SLIDE_FALLBACK_MS: 4000,
 
     // End-of-Game Lose & Win Standalone Final Reflection Sentence (rendered with no header/title)
